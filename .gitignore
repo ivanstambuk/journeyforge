@@ -12,6 +12,8 @@
 
 # Package Files #
 *.jar
+# Keep Gradle wrapper JAR under version control for CI
+!gradle/wrapper/gradle-wrapper.jar
 *.war
 *.nar
 *.ear
