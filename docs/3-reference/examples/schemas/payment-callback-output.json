@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "payment-callback output",
+  "type": "object",
+  "properties": {
+    "status": { "type": "string", "enum": ["SUCCESS", "FAILED"] },
+    "paymentId": { "type": "string" },
+    "amount": { "type": "number" },
+    "currency": { "type": "string" },
+    "reason": { "type": "string" }
+  },
+  "additionalProperties": true
+}

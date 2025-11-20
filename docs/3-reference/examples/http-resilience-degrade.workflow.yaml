@@ -1,0 +1,60 @@
+apiVersion: v1
+kind: Workflow
+metadata:
+  name: http-resilience-degrade
+  version: 0.1.0
+spec:
+  apis:
+    serviceA: { openApiRef: apis/serviceA.openapi.yaml }
+  inputSchemaRef: schemas/http-resilience-degrade-input.json
+  outputSchemaRef: schemas/http-resilience-degrade-output.json
+  policies:
+    httpResilience:
+      default: standard
+      definitions:
+        standard:
+          maxAttempts: 3
+          retryOn: [NETWORK_ERROR, HTTP_5XX]
+          backoff:
+            initialDelayMs: 200
+            maxDelayMs: 2000
+            factor: 2.0
+  start: call_upstream
+  states:
+    call_upstream:
+      type: task
+      task:
+        kind: httpCall
+        operationRef: serviceA.unstableOperation
+        params:
+          headers: { Accept: application/json }
+        timeoutMs: 2000
+        resultVar: api
+        resiliencePolicyRef: standard
+      next: decide
+
+    decide:
+      type: choice
+      choices:
+        - when:
+            predicate:
+              lang: dataweave
+              expr: |
+                context.api.ok == true
+          next: success
+        - when:
+            predicate:
+              lang: dataweave
+              expr: |
+                context.api.ok == false
+          next: degraded
+      default: degraded
+
+    success:
+      type: succeed
+      outputVar: api
+
+    degraded:
+      type: fail
+      errorCode: DEGRADED_UPSTREAM
+      reason: "Upstream unstableOperation failed after retries"

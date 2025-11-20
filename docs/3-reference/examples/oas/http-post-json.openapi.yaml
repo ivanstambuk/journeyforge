@@ -1,0 +1,77 @@
+openapi: 3.1.0
+info:
+  title: JourneyForge – http-post-json
+  version: 0.1.0
+servers:
+  - url: /api/v1
+tags:
+  - name: http-post-json
+paths:
+  /journeys/http-post-json/start:
+    post:
+      summary: Start http-post-json journey
+      tags: [http-post-json]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/JourneyStartRequest"
+      responses:
+        '202':
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JourneyStartResponse"
+  /journeys/{journeyId}:
+    get:
+      summary: Get journey status
+      tags: [http-post-json]
+      parameters:
+        - in: path
+          name: journeyId
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JourneyStatus"
+  /journeys/{journeyId}/result:
+    get:
+      summary: Retrieve final outcome
+      tags: [http-post-json]
+      parameters:
+        - in: path
+          name: journeyId
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Final outcome
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JourneyOutcome"
+        '409':
+          description: Journey not terminal yet
+components:
+  schemas:
+    JourneyStartRequest:
+      type: object
+      required: [context]
+      properties:
+        context:
+          $ref: '../schemas/http-post-json-input.json'
+
+    JourneyStartResponse:
+      $ref: '../../../openapi/journeys.openapi.yaml#/components/schemas/JourneyStartResponse'
+    JourneyStatus:
+      $ref: '../../../openapi/journeys.openapi.yaml#/components/schemas/JourneyStatus'
+    JourneyStepRequest:
+      $ref: '../../../openapi/journeys.openapi.yaml#/components/schemas/JourneyStepRequest'
+    JourneyOutcome:
+      $ref: '../../../openapi/journeys.openapi.yaml#/components/schemas/JourneyOutcome'

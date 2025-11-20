@@ -1,0 +1,82 @@
+openapi: 3.1.0
+info:
+  title: JourneyForge – auth-user-info
+  version: 0.1.0
+servers:
+  - url: /api/v1
+tags:
+  - name: auth-user-info
+paths:
+  /journeys/auth-user-info/start:
+    post:
+      summary: Start auth-user-info journey
+      tags: [auth-user-info]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/JourneyStartRequest"
+      responses:
+        '202':
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JourneyStartResponse"
+  /journeys/{journeyId}:
+    get:
+      summary: Get journey status
+      tags: [auth-user-info]
+      parameters:
+        - in: path
+          name: journeyId
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JourneyStatus"
+  /journeys/{journeyId}/result:
+    get:
+      summary: Retrieve final outcome
+      tags: [auth-user-info]
+      parameters:
+        - in: path
+          name: journeyId
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Final outcome
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JourneyOutcome"
+        '409':
+          description: Journey not terminal yet
+components:
+  schemas:
+    JourneyStartRequest:
+      type: object
+      required: [context]
+      properties:
+        context:
+          $ref: '../schemas/auth-user-info-input.json'
+
+    JourneyStartResponse:
+      $ref: '../../../openapi/journeys.openapi.yaml#/components/schemas/JourneyStartResponse'
+    JourneyStatus:
+      $ref: '../../../openapi/journeys.openapi.yaml#/components/schemas/JourneyStatus'
+    JourneyStepRequest:
+      $ref: '../../../openapi/journeys.openapi.yaml#/components/schemas/JourneyStepRequest'
+    JourneyOutcome:
+      allOf:
+        - $ref: '../../../openapi/journeys.openapi.yaml#/components/schemas/JourneyOutcome'
+      properties:
+        output:
+          $ref: '../schemas/auth-user-info-output.json'
+

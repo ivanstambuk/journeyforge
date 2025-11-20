@@ -1,0 +1,84 @@
+openapi: 3.1.0
+info: { title: Items API, version: 1.0.0 }
+servers: [ { url: https://api.example.com } ]
+paths:
+  /items/{id}:
+    get:
+      operationId: getItemById
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { type: object } } } }
+        '404': { description: Not Found }
+    put:
+      operationId: updateItemById
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object }
+      responses:
+        '200': { description: Updated }
+        '204': { description: No Content }
+    delete:
+      operationId: deleteItemById
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { description: Deleted }
+        '204': { description: No Content }
+  /items:
+    post:
+      operationId: createItem
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                id: { type: string }
+                name: { type: string }
+      responses:
+        '201': { description: Created, content: { application/json: { schema: { type: object } } } }
+  /trace:
+    get:
+      operationId: getTrace
+      parameters:
+        - in: header
+          name: traceparent
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { type: object } } } }
+  /slow/{id}:
+    get:
+      operationId: getSlowById
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { type: object } } } }
+  /cache/{key}:
+    delete:
+      operationId: purgeCacheByKey
+      parameters:
+        - in: path
+          name: key
+          required: true
+          schema: { type: string }
+      responses:
+        '204': { description: No Content }

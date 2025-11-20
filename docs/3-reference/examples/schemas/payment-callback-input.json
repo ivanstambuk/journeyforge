@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "payment-callback input context",
+  "type": "object",
+  "required": ["paymentId", "amount", "currency"],
+  "properties": {
+    "paymentId": { "type": "string" },
+    "amount": { "type": "number" },
+    "currency": { "type": "string" }
+  },
+  "additionalProperties": true
+}

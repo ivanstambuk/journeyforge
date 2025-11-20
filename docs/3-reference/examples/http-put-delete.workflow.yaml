@@ -1,0 +1,83 @@
+apiVersion: v1
+kind: Workflow
+metadata:
+  name: http-put-delete
+  version: 0.1.0
+spec:
+  inputSchemaRef: schemas/http-put-delete-input.json
+  outputSchemaRef: schemas/http-put-delete-output.json
+  apis:
+    items: { openApiRef: apis/items.openapi.yaml }
+    users: { openApiRef: apis/users.openapi.yaml }
+    accounts: { openApiRef: apis/accounts.openapi.yaml }
+    serviceA: { openApiRef: apis/serviceA.openapi.yaml }
+    serviceB: { openApiRef: apis/serviceB.openapi.yaml }
+  start: update
+  states:
+    update:
+      type: task
+      task:
+        kind: httpCall
+        operationRef: items.updateItemById
+        params:
+          path: { id: "${context.id}" }
+          headers: { Accept: application/json }
+        body:
+          mapper:
+            lang: dataweave
+            expr: |
+              {
+                name: context.newName
+              }
+        params:
+          headers: { Accept: application/json }
+        timeoutMs: 5000
+        resultVar: put
+      next: decide_update
+
+    decide_update:
+      type: choice
+      choices:
+        - when:
+            predicate:
+              lang: dataweave
+              expr: |
+                context.put.ok == true and (context.put.status == 200 or context.put.status == 204)
+          next: delete
+      default: update_failed
+
+    delete:
+      type: task
+      task:
+        kind: httpCall
+        method: DELETE
+        url: "https://api.example.com/items/${context.id}"
+        headers: { Accept: application/json }
+        timeoutMs: 5000
+        resultVar: del
+      next: decide_delete
+
+    decide_delete:
+      type: choice
+      choices:
+        - when:
+            predicate:
+              lang: dataweave
+              expr: |
+                context.del.ok == true and (context.del.status == 200 or context.del.status == 204)
+          next: done
+      default: delete_failed
+
+    done:
+      type: succeed
+      outputVar: del
+
+    update_failed:
+      type: fail
+      errorCode: UPDATE_FAILED
+      reason: "PUT did not return 200/204 or failed"
+
+    delete_failed:
+      type: fail
+      errorCode: DELETE_FAILED
+      reason: "DELETE did not return 200/204 or failed"

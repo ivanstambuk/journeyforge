@@ -1,0 +1,77 @@
+# Use Case – Trace & Header Propagation
+
+Status: Draft | Last updated: 2025-11-20
+
+## Problem
+
+Propagate inbound tracing or correlation headers (for example W3C / OpenTelemetry `traceparent`) to all downstream HTTP calls without rewriting every `task.headers` block.
+
+## Relevant DSL Features
+
+- `spec.httpBindings.start.headersToContext` and `headersPassthrough`.
+- `spec.httpBindings.steps.*` for step‑level bindings.
+- HTTP `task` headers.
+
+## Example – Header interpolation
+
+Workflow: `http-header-interpolation.workflow.yaml`
+
+```yaml
+apiVersion: v1
+kind: Workflow
+metadata:
+  name: http-header-interpolation
+  version: 0.1.0
+spec:
+  inputSchemaRef: schemas/http-header-interpolation-input.json
+  outputSchemaRef: schemas/http-header-interpolation-output.json
+  apis:
+    items:
+      openApiRef: apis/items.openapi.yaml
+    users:
+      openApiRef: apis/users.openapi.yaml
+    accounts:
+      openApiRef: apis/accounts.openapi.yaml
+    serviceA:
+      openApiRef: apis/serviceA.openapi.yaml
+    serviceB:
+      openApiRef: apis/serviceB.openapi.yaml
+  start: call
+  states:
+    call:
+      type: task
+      task:
+        kind: httpCall
+        method: GET
+        url: "https://api.example.com/trace"
+        headers:
+          Accept: application/json
+          traceparent: "${context.traceparent}"
+        timeoutMs: 5000
+        resultVar: api
+      next: decide
+
+    decide:
+      type: choice
+      choices:
+        - when:
+            predicate:
+              lang: dataweave
+              expr: |
+                context.api.ok == true and context.api.body.traceparent == context.traceparent
+          next: ok
+      default: not_ok
+
+    ok:
+      type: succeed
+      outputVar: api
+
+    not_ok:
+      type: fail
+      errorCode: TRACE_MISMATCH
+      reason: "Trace id not echoed by service or call failed"
+```
+
+Related files:
+- OpenAPI: `http-header-interpolation.openapi.yaml`
+- Schemas: `http-header-interpolation-input.json`, `http-header-interpolation-output.json`

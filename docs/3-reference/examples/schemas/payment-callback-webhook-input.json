@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "payment-callback webhook input",
+  "type": "object",
+  "required": ["paymentId", "status"],
+  "properties": {
+    "paymentId": { "type": "string" },
+    "status": { "type": "string", "enum": ["SUCCESS", "FAILED"] },
+    "reason": { "type": "string" }
+  },
+  "additionalProperties": true
+}

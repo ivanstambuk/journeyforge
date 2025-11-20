@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "event-publish-kafka input context",
+  "type": "object",
+  "required": ["orderId", "amount", "status"],
+  "properties": {
+    "orderId": { "type": "string" },
+    "amount": { "type": "number" },
+    "status": { "type": "string" },
+    "traceparent": { "type": "string" }
+  },
+  "additionalProperties": true
+}

@@ -1,0 +1,173 @@
+openapi: 3.1.0
+info:
+  title: JourneyForge – Journeys API (Generic)
+  version: 0.1.0
+servers:
+  - url: /api/v1
+paths:
+  /journeys/{workflowName}/start:
+    post:
+      summary: Start a new journey instance
+      tags: [journeys]
+      parameters:
+        - in: path
+          name: workflowName
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JourneyStartRequest'
+      responses:
+        '202':
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JourneyStartResponse'
+  /journeys/{journeyId}:
+    get:
+      summary: Get journey status
+      tags: [journeys]
+      parameters:
+        - in: path
+          name: journeyId
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Current status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JourneyStatus'
+  /journeys/{journeyId}/result:
+    get:
+      summary: Retrieve final outcome once completed
+      tags: [journeys]
+      parameters:
+        - in: path
+          name: journeyId
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Final outcome (when terminal)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JourneyOutcome'
+        '409':
+          description: Journey not terminal yet
+  /journeys/{journeyId}/steps/{stepId}:
+    post:
+      summary: Post an event to an external-input step
+      tags: [journeys]
+      parameters:
+        - in: path
+          name: journeyId
+          required: true
+          schema: { type: string }
+        - in: path
+          name: stepId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JourneyStepRequest'
+      responses:
+        '200':
+          description: Updated journey status after applying the step event
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JourneyStatus'
+        '409':
+          description: Journey is not in a compatible state for this step
+components:
+  schemas:
+    JourneyStartRequest:
+      type: object
+      required: [context]
+      properties:
+        context:
+          type: object
+          additionalProperties: true
+    JourneyStartResponse:
+      type: object
+      required: [journeyId, workflowName, statusUrl]
+      properties:
+        journeyId: { type: string }
+        workflowName: { type: string }
+        statusUrl: { type: string, format: uri }
+        _links:
+          description: |
+            Optional hypermedia links (HAL-style) describing related resources and next actions.
+            Presence is controlled per-workflow via spec.httpSurface.links.enabled; when enabled,
+            runtimes typically include at least `self` and `result` links.
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/Link'
+    JourneyStatus:
+      type: object
+      required: [journeyId, workflowName, phase, currentState, updatedAt]
+      properties:
+        journeyId: { type: string }
+        workflowName: { type: string }
+        phase: { type: string, enum: [Running, Succeeded, Failed] }
+        currentState: { type: string }
+        updatedAt: { type: string, format: date-time }
+        _links:
+          description: |
+            Optional hypermedia links (HAL-style) describing related resources and next actions.
+            When links are enabled for a workflow, runtimes SHOULD include at least `self` and `result`,
+            and MAY include links for active step endpoints. For step links, the relation name MUST equal
+            the external-input state id (for example `waitForApproval`, `confirm`). When the journey is
+            Running and user-cancellable, runtimes SHOULD also expose a `cancel` link pointing to the
+            canonical cancellation step `/api/v1/journeys/{journeyId}/steps/cancel` with method POST.
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/Link'
+    JourneyStepRequest:
+      type: object
+      required: [eventType]
+      properties:
+        eventType: { type: string }
+        payload:
+          type: object
+          additionalProperties: true
+    JourneyOutcome:
+      type: object
+      required: [journeyId, workflowName, phase]
+      properties:
+        journeyId: { type: string }
+        workflowName: { type: string }
+        phase: { type: string, enum: [Succeeded, Failed] }
+        output: {}
+        error:
+          type: object
+          properties:
+            code: { type: string }
+            reason: { type: string }
+        _links:
+          description: |
+            Optional hypermedia links (HAL-style) describing related resources (for example `self`)
+            when a journey is terminal. Presence is controlled per-workflow via spec.httpSurface.links.enabled.
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/Link'
+    Link:
+      type: object
+      required: [href]
+      properties:
+        href:
+          type: string
+          description: Target URI for this link
+        method:
+          type: string
+          description: HTTP method to use when following this link (for example GET, POST, DELETE)

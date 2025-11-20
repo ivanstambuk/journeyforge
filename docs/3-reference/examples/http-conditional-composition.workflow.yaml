@@ -1,0 +1,82 @@
+apiVersion: v1
+kind: Workflow
+metadata:
+  name: http-conditional-composition
+  version: 0.1.0
+spec:
+  inputSchemaRef: schemas/http-conditional-composition-input.json
+  outputSchemaRef: schemas/http-conditional-composition-output.json
+  apis:
+    items: { openApiRef: apis/items.openapi.yaml }
+    users: { openApiRef: apis/users.openapi.yaml }
+    accounts: { openApiRef: apis/accounts.openapi.yaml }
+    serviceA: { openApiRef: apis/serviceA.openapi.yaml }
+    serviceB: { openApiRef: apis/serviceB.openapi.yaml }
+  start: route
+  states:
+    route:
+      type: choice
+      choices:
+        - when:
+            predicate:
+              lang: dataweave
+              expr: |
+                context.useBeta == true
+          next: call_beta
+      default: call_default
+
+    call_default:
+      type: task
+      task:
+        kind: httpCall
+        operationRef: items.createItem
+        params:
+          headers: { Accept: application/json }
+        body:
+          mapper:
+            lang: dataweave
+            expr: |
+              {
+                id: context.inputId default: null,
+                name: context.name default: null
+              }
+        timeoutMs: 5000
+        resultVar: api
+      next: decide
+
+    call_beta:
+      type: task
+      task:
+        kind: httpCall
+        method: POST
+        url: "https://beta.api.example.com/items"
+        headers:
+          Content-Type: application/json
+          Accept: application/json
+          X-Env: "beta"
+          X-Feature-Flag: "${context.featureFlag}"
+        body: |
+          {"id": "${context.id}", "name": "${context.name}-beta"}
+        timeoutMs: 5000
+        resultVar: api
+      next: decide
+
+    decide:
+      type: choice
+      choices:
+        - when:
+            predicate:
+              lang: dataweave
+              expr: |
+                context.api.ok == true and (context.api.status == 200 or context.api.status == 201)
+          next: done
+      default: failed
+
+    done:
+      type: succeed
+      outputVar: api
+
+    failed:
+      type: fail
+      errorCode: CREATE_FAILED
+      reason: "POST did not return success"

@@ -1,0 +1,81 @@
+openapi: 3.1.0
+info:
+  title: JourneyForge – http-timeout-branch
+  version: 0.1.0
+servers:
+  - url: /api/v1
+tags:
+  - name: http-timeout-branch
+paths:
+  /journeys/http-timeout-branch/start:
+    post:
+      summary: Start http-timeout-branch journey
+      tags: [http-timeout-branch]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/JourneyStartRequest"
+      responses:
+        '202':
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JourneyStartResponse"
+  /journeys/{journeyId}:
+    get:
+      summary: Get journey status
+      tags: [http-timeout-branch]
+      parameters:
+        - in: path
+          name: journeyId
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JourneyStatus"
+  /journeys/{journeyId}/result:
+    get:
+      summary: Retrieve final outcome
+      tags: [http-timeout-branch]
+      parameters:
+        - in: path
+          name: journeyId
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Final outcome
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JourneyOutcome"
+        '409':
+          description: Journey not terminal yet
+components:
+  schemas:
+    JourneyStartRequest:
+      type: object
+      required: [context]
+      properties:
+        context:
+          $ref: '../schemas/http-timeout-branch-input.json'
+
+    JourneyStartResponse:
+      $ref: '../../../openapi/journeys.openapi.yaml#/components/schemas/JourneyStartResponse'
+    JourneyStatus:
+      $ref: '../../../openapi/journeys.openapi.yaml#/components/schemas/JourneyStatus'
+    JourneyStepRequest:
+      $ref: '../../../openapi/journeys.openapi.yaml#/components/schemas/JourneyStepRequest'
+    JourneyOutcome:
+      allOf:
+        - $ref: '../../../openapi/journeys.openapi.yaml#/components/schemas/JourneyOutcome'
+      properties:
+        output:
+          $ref: '../schemas/http-timeout-branch-output.json'

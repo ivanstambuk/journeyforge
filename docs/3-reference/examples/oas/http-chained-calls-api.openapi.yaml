@@ -1,0 +1,47 @@
+openapi: 3.1.0
+info:
+  title: JourneyForge – http-chained-calls (Api)
+  version: 0.1.0
+servers:
+  - url: /api/v1
+tags:
+  - name: http-chained-calls-api
+paths:
+  /apis/http-chained-calls:
+    post:
+      summary: Execute http-chained-calls as a synchronous API
+      tags: [http-chained-calls-api]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Input'
+      responses:
+        "200":
+          description: Account created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Output'
+        "4XX":
+          description: Error (mapped from fail/error outcomes)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+components:
+  schemas:
+    Input:
+      $ref: "../schemas/http-chained-calls-input.json"
+    Output:
+      $ref: "../schemas/http-chained-calls-output.json"
+    Error:
+      type: object
+      properties:
+        code:
+          type: string
+        reason:
+          type: string
+      additionalProperties: true
+

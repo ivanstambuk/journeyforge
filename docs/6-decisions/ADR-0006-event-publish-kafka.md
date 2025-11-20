@@ -1,0 +1,89 @@
+# ADR-0006 – Event Publish Tasks for Kafka
+
+Date: 2025-11-20 | Status: Proposed
+
+## Context
+
+JourneyForge workflows sometimes need to emit events to external systems (for example, Kafka topics) as part of their execution:
+- Notify downstream systems that an order has changed.
+- Emit audit or activity events.
+- Drive other services via event-driven architectures.
+
+Today, the DSL supports HTTP side effects via `task` with `kind: httpCall` (including `mode: notify` for fire-and-forget HTTP). However:
+- HTTP is not always the right transport; many teams use Kafka or other brokers as their primary integration channel.
+- Modelling event emission as an HTTP call to a gateway is possible but hides intent and couples the workflow to a particular HTTP façade.
+
+We want a first-class way to describe “publish an event to Kafka” while:
+- Reusing the existing `task` pattern and DataWeave mappers.
+- Keeping the state machine surface small.
+
+## Decision
+
+We extend `task` to support a new `kind: eventPublish` with Kafka as the initial transport.
+
+Shape:
+
+```yaml
+type: task
+task:
+  kind: eventPublish
+  eventPublish:
+    transport: kafka                 # initial implementation: only "kafka"
+    topic: orders.events             # required
+    key:                             # optional – mapper for Kafka key
+      mapper:
+        lang: dataweave
+        expr|exprRef: <expression>
+    value:                           # required – mapper for event payload
+      mapper:
+        lang: dataweave
+        expr|exprRef: <expression>
+    headers:                         # optional – Kafka record headers
+      <k>: <string|interpolated>
+    keySchemaRef: <string>           # optional – JSON Schema for the key
+    valueSchemaRef: <string>         # optional but recommended – JSON Schema for the payload
+next: <stateId>
+```
+
+Semantics:
+- The engine evaluates `key.mapper` (when present) and `value.mapper` with `context` bound to the current workflow context.
+- It publishes a record to Kafka with `{topic, key, value, headers}`:
+  - Cluster and connection details are configured at deployment/runtime, not in the DSL.
+  - Serialisation (e.g. JSON, Avro) is a runtime concern; the DSL describes logical JSON objects.
+- The task does not produce a `resultVar`; the workflow cannot branch on publish outcomes.
+- On successful publish, execution continues to `next`.
+- On repeated publish failure (after any configured retries), runtimes may:
+  - Treat this as a runtime error that fails the journey/API call, or
+  - Apply operator-configured policies; the DSL does not expose partial success states.
+
+Schema integration:
+- `eventPublish.valueSchemaRef` points at a JSON Schema that describes the payload shape (for example `schemas/order-updated-event.json`).
+  - Runtimes SHOULD validate the mapped payload against this schema before publishing.
+  - Tooling MAY use it for schema registry integration or IDE support.
+- `eventPublish.keySchemaRef` plays the same role for the key when used.
+
+Validation rules:
+- `task.kind` may be `httpCall` or `eventPublish`.
+- For `kind: eventPublish`:
+  - `eventPublish.transport` is required and must be `kafka` in the initial version.
+  - `eventPublish.topic` is required and non-empty.
+  - `eventPublish.value.mapper` is required with `lang: dataweave` and `expr` or `exprRef`.
+  - `eventPublish.key.mapper` (when present) must follow the same mapper rules.
+  - `eventPublish.headers` (when present) is a map from header name to string/interpolated value.
+  - `eventPublish.keySchemaRef` / `eventPublish.valueSchemaRef` (when present) must be non-empty strings.
+- `resultVar`, `errorMapping`, and `resiliencePolicyRef` MUST NOT be used with `kind: eventPublish`.
+
+## Consequences
+
+Positive:
+- Workflows can emit Kafka events as first-class side effects, without having to route through HTTP proxies just to reach Kafka.
+- The DSL stays compact by reusing the `task` pattern and DataWeave mappers.
+- Schema-conscious workflows can validate event payloads and integrate cleanly with schema registries and event consumers.
+
+Negative / trade-offs:
+- Runtimes must integrate with Kafka (or provide an abstraction that maps `eventPublish` to a configured broker).
+- Because `eventPublish` does not expose outcomes to the DSL, debugging failed publishes relies on logs/metrics rather than control-flow states.
+
+Future work:
+- Extend `transport` beyond `kafka` (e.g., `sns`, `sqs`, `pubsub`) while keeping the logical shape of `eventPublish` consistent.
+- Add higher-level patterns for “exactly-once” or transactional publishing when the underlying platform supports it.

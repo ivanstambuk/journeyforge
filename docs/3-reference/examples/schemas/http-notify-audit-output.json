@@ -1,0 +1,10 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "http-notify-audit output",
+  "type": "object",
+  "properties": {
+    "orderId": { "type": "string" }
+  },
+  "additionalProperties": true
+}
+

@@ -1,0 +1,79 @@
+apiVersion: v1
+kind: Workflow
+metadata:
+  name: http-chained-calls
+  version: 0.1.0
+spec:
+  apis:
+    users: { openApiRef: apis/users.openapi.yaml }
+    accounts: { openApiRef: apis/accounts.openapi.yaml }
+  inputSchemaRef: schemas/http-chained-calls-input.json
+  outputSchemaRef: schemas/http-chained-calls-output.json
+  start: lookup
+  states:
+    lookup:
+      type: task
+      task:
+        kind: httpCall
+        operationRef: users.getUserById
+        params:
+          path: { userId: "${context.userId}" }
+          headers: { Accept: application/json }
+        timeoutMs: 5000
+        resultVar: a
+      next: route
+
+    route:
+      type: choice
+      choices:
+        - when:
+            predicate:
+              lang: dataweave
+              expr: |
+                context.a.ok == true and context.a.body.active == true
+          next: create
+      default: inactive
+
+    create:
+      type: task
+      task:
+        kind: httpCall
+        operationRef: accounts.createAccount
+        params:
+          headers: { Accept: application/json }
+        body:
+          mapper:
+            lang: dataweave
+            expr: |
+              {
+                ownerId: context.userId,
+                email: context.a.body.email
+              }
+        timeoutMs: 5000
+        resultVar: b
+      next: decide_create
+
+    decide_create:
+      type: choice
+      choices:
+        - when:
+            predicate:
+              lang: dataweave
+              expr: |
+                context.b.ok == true and context.b.status == 201
+          next: done
+      default: create_failed
+
+    done:
+      type: succeed
+      outputVar: b
+
+    inactive:
+      type: fail
+      errorCode: USER_INACTIVE
+      reason: "User not active; create is not allowed"
+
+    create_failed:
+      type: fail
+      errorCode: CREATE_FAILED
+      reason: "Account creation failed or did not return 201"

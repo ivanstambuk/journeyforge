@@ -1,0 +1,63 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT_DIR=$(git rev-parse --show-toplevel)
+MAX_FILE_SIZE_BYTES=$((1024 * 1024)) # 1 MB
+
+log() { echo "[pre-commit] $*" >&2; }
+die() { log "$*"; exit 1; }
+require_command() { command -v "$1" >/dev/null 2>&1 || die "$2"; }
+
+collect_staged_files() {
+  mapfile -t STAGED_FILES < <(git diff --cached --name-only --diff-filter=AM)
+  if (( ${#STAGED_FILES[@]} == 0 )); then
+    log "No staged changes detected; skipping hook."
+    exit 0
+  fi
+}
+
+validate_environment() {
+  [[ -n ${JAVA_HOME:-} ]] || die "JAVA_HOME must point to a Java 25 JDK before committing."
+}
+
+enforce_staged_file_guards() {
+  local -a large_files=()
+  for file in "${STAGED_FILES[@]}"; do
+    [[ -f "$file" ]] || continue
+    local size_bytes
+    size_bytes=$(wc -c <"$file")
+    if (( size_bytes > MAX_FILE_SIZE_BYTES )); then
+      large_files+=("$file")
+    fi
+  done
+  if (( ${#large_files[@]} > 0 )); then
+    log "Files exceed 1 MB:"
+    printf '  - %s\n' "${large_files[@]}" >&2
+    die "Remove or split large files before committing."
+  fi
+}
+
+run_gradle() {
+  log "Running spotlessApply + check"
+  "$ROOT_DIR"/gradlew --no-daemon --no-configuration-cache spotlessApply check
+}
+
+run_gitleaks() {
+  if command -v gitleaks >/dev/null 2>&1; then
+    log "Running gitleaks secret scan"
+    gitleaks protect --no-banner --redact --staged --source "$ROOT_DIR"
+  else
+    log "gitleaks not installed; skipping local secret scan"
+  fi
+}
+
+main() {
+  collect_staged_files
+  validate_environment
+  enforce_staged_file_guards
+  run_gradle
+  run_gitleaks
+  log "Pre-commit checks passed."
+}
+
+main "$@"

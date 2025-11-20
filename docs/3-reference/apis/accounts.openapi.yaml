@@ -1,0 +1,18 @@
+openapi: 3.1.0
+info: { title: Accounts API, version: 1.0.0 }
+servers: [ { url: https://api.example.com } ]
+paths:
+  /accounts:
+    post:
+      operationId: createAccount
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                ownerId: { type: string }
+                email: { type: string, format: email }
+      responses:
+        '201': { description: Created, content: { application/json: { schema: { type: object } } } }

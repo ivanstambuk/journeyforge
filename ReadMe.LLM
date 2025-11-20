@@ -1,0 +1,27 @@
+# JourneyForge – LLM Guide
+
+Compact orientation for AI coding assistants.
+
+## 1. Scope and Constraints
+- Spec‑first API journey orchestrator (YAML/JSON).
+- Java 25. HTTP‑centric first; additional connectors later (LDAP/JDBC/Kafka).
+- Two façades over time: admin plane and runtime plane; optional UI bridge.
+
+## 2. Modules and Entry Points (initial)
+- `journeyforge-runtime-core`: runtime services and execution loop (TBD).
+- `journeyforge-connectors-http`: HTTP executor + policies (TBD).
+- `app`: temporary CLI runner for local execution (main class `org.example.App` until CLI is scaffolded).
+
+## 3. Development Workflow (SDD)
+- Start with a feature spec under `docs/4-architecture/features/<NNN>/spec.md` using templates.
+- Track ambiguities in `docs/4-architecture/open-questions.md`.
+- Keep increments small; run `spotlessApply check` frequently.
+
+## 4. Useful References
+- DSL Reference: `docs/3-reference/dsl.md`
+- DSL Style Guide: `docs/4-architecture/spec-guidelines/dsl-style.md`
+- Project constitution: `docs/6-decisions/project-constitution.md`
+- Roadmap: `docs/4-architecture/roadmap.md`
+- Templates: `docs/templates/*`
+
+DataWeave: JourneyForge uses DataWeave 2.x as the canonical expression language (predicates now; transforms later).

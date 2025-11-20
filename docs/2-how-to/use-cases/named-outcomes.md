@@ -1,0 +1,76 @@
+# Use Case – Named Outcomes & Reporting
+
+Status: Draft | Last updated: 2025-11-20
+
+## Problem
+
+Classify terminal outcomes with a stable vocabulary:
+- Distinguish low‑amount vs high‑amount approvals.
+- Identify failures due to specific business rules.
+
+## Relevant DSL Features
+
+- `spec.outcomes` with `when.phase` and predicates.
+- `fail.errorCode` conventions.
+
+## Example – named-outcomes
+
+Workflow: `named-outcomes.workflow.yaml`
+
+```yaml
+apiVersion: v1
+kind: Workflow
+metadata:
+  name: named-outcomes
+  version: 0.1.0
+spec:
+  inputSchemaRef: schemas/named-outcomes-input.json
+  outputSchemaRef: schemas/named-outcomes-output.json
+  outcomes:
+    SucceededLowAmount:
+      when:
+        phase: Succeeded
+        predicate:
+          lang: dataweave
+          expr: |
+            context.amount <= 1000
+    SucceededHighAmount:
+      when:
+        phase: Succeeded
+        predicate:
+          lang: dataweave
+          expr: |
+            context.amount > 1000
+    FailedBusinessRule:
+      when:
+        phase: Failed
+        predicate:
+          lang: dataweave
+          expr: |
+            context.error.code == 'BUSINESS_RULE_FAILED'
+  start: checkAmount
+  states:
+    checkAmount:
+      type: choice
+      choices:
+        - when:
+            predicate:
+              lang: dataweave
+              expr: |
+                context.amount <= 1000
+          next: approve
+      default: reject
+
+    approve:
+      type: succeed
+      outputVar: amount
+
+    reject:
+      type: fail
+      errorCode: BUSINESS_RULE_FAILED
+      reason: "Amount above approved limit"
+```
+
+Related files:
+- OpenAPI: `named-outcomes.openapi.yaml`
+- Schemas: `named-outcomes-input.json`, `named-outcomes-output.json`

@@ -1,0 +1,2005 @@
+## 🧠 Context synthesis
+
+You are essentially sketching a **spec-first, Java-based API workflow orchestrator** with:
+
+* A strong bias toward **API-only integration** (HTTP, LDAP, JDBC, Kafka, webhooks), not generic ETL.
+* A **spec/DSL in YAML or JSON** as the primary source of truth, very much in the spirit of:
+
+  * Kong Datakit’s YAML workflows for connecting and transforming third-party APIs. ([Kong Docs][1])
+  * Amazon States Language (ASL) style state machines (Task/Choice/Parallel/Wait/etc.). ([AWS Documentation][2])
+  * OpenAPI Arazzo: use-case oriented workflows as sequences of API calls described in YAML/JSON. ([openapis.org][3])
+* A **runtime engine** that executes those specs with:
+
+  * Rich **HTTP client resiliency policies** (retries, timeouts, bulkheads, connection pools, circuit breakers).
+  * **Authentication policies** (OAuth2, mTLS, API keys) reusable across calls.
+  * **Fork/join** and **multiplexing** (parallel fan-out + aggregation).
+  * **Caching**, error aggregation (RFC-style error codes), and compensation paths.
+* A **journey / workflow instance model**:
+
+  * “Journey token” (likely JWT) propagated via headers (e.g. baggage).
+  * Sub-journeys / nested workflows.
+  * Triggers via HTTP, events, webhooks, admin commands.
+* A **dual façade**:
+
+  * API façade: everything controllable via HTTP/JSON.
+  * UI façade: visual designer (React Flow / Atlas / maybe also TUI) as just another client of the API façades.
+* Explicit attention to **enterprise features**:
+
+  * Versioned flows, environment support, telemetry, log streaming, admin API, RBAC.
+  * Self-service vs admin flows.
+  * Standalone Docker runnable.
+
+Implementation baseline you want: **Java, latest LTS**. As of September 2025, that is **Java 25 (LTS)**, with 21 and 17 as older LTS lines. ([Oracle][4])
+
+---
+
+## 🧭 Product vision & differentiators
+
+At a high level, this can position itself as:
+
+> **“Spec-first API journey orchestrator for HTTP-centric systems, with RFP-grade features, strong resiliency, and OpenAPI/Arazzo alignment.”**
+
+Relative to existing engines:
+
+* Compared to **n8n / Node-RED / NiFi / Activepieces / Windmill / Kestra**:
+
+  * They tend to be “node catalogs with UIs”. You want the **spec** (YAML/JSON) to be first-class, with the UI acting as a notebook on top of the spec.
+  * You are strongly HTTP/API oriented (including identity flavoured patterns), less focused on arbitrary scripting / human tasks.
+* Compared to **Temporal / Cadence / SWF / Step Functions / Cloud Workflows**:
+
+  * Temporal argues “workflow should be code, not graphs”. You want something in between: **spec-as-source**, data-driven, with a declarative orchestration graph that is still inspectable and exportable (Arazzo, OpenAPI, etc.).
+  * You are more interested in **API façade and portability** than in a fully managed distributed runtime.
+* Compared to **Kong Datakit**:
+
+  * Datakit is a plugin inside Kong Gateway that lets you define workflows combining and transforming API responses, including auth and caching. ([Kong Docs][1])
+  * You want a **standalone engine**, not tied to a specific gateway, with broader connectors (LDAP, JDBC, Kafka) and identity-oriented concerns (journey tokens, JWT validation, sub-journeys).
+
+So the differentiator is:
+
+* **Spec-first** (YAML/JSON, human-readable, RFP-friendly).
+* **HTTP/API-centric, but multi-connector** (LDAP/JDBC/Kafka).
+* **Explicit resiliency and auth policy abstractions**.
+* **Self-contained engine in Java 25**, embeddable and runnable as a service.
+* **OpenAPI/Arazzo-aware**, not just an ad-hoc DSL.
+
+---
+
+## 🏗️ High-level architecture
+
+You already hinted at the two façades; the overall structure could be:
+
+1. **Spec & Model Layer**
+
+   * Workflow DSL (YAML/JSON) with:
+
+     * Workflow definitions (name, version, description, tags, RBAC).
+     * Steps: task types (http, ldap, jdbc, kafka, transform, branch, parallel, wait, webhook, subworkflow).
+     * Policies: httpResiliencyPolicy, authPolicy, cachePolicy, retryPolicy.
+     * Error model, compensation, timeouts, deadlines.
+   * OpenAPI and Arazzo integration:
+
+     * Import OAS documents.
+     * Reference operations as `<apiName>.<operationId>`.
+     * Export/derive Arazzo workflows for documentation and tooling.
+
+2. **Runtime Engine**
+
+   * Workflow interpreter that executes the DSL:
+
+     * State machine runtime (influenced by ASL).
+     * Execution contexts (“journeys”) with variables, headers, claims, tokens.
+     * Scheduler for timers, wait states, long-running flows.
+     * Execution graph supporting sequential, parallel, and conditional paths.
+
+3. **Connector Layer**
+
+   * HTTP, LDAP, JDBC, Kafka, filesystem, embedded DB.
+   * JSON/XML transforms via JOLT / JSONata / DataWeave-style expressions.
+   * JWT validation, webhooks, event subscriptions.
+
+4. **Policy & Governance Layer**
+
+   * Resiliency policies (retry, circuit breaker, bulkhead, connection pools).
+   * Auth policies (OAuth2, mTLS, API key, custom header).
+   * Versioning & environment (dev / test / prod) handling.
+   * Telemetry hooks (OpenTelemetry traces/metrics/logs).
+
+5. **Façades**
+
+   * **API façade**:
+
+     * Admin APIs: manage workflow definitions, versions, deployments, environments.
+     * Runtime APIs: start/stop/query journeys, push events, resume waits, register webhooks.
+     * Introspection & export APIs (OpenAPI, Arazzo, JSON schema for specs).
+   * **UI façade(s)**:
+
+     * React Flow or Atlas-based browser UI over the APIs.
+     * Optional TUI for local ops / debugging.
+
+---
+
+## 🧾 Workflow spec design (YAML/JSON, spec-first)
+
+### Design influences
+
+You have three strong reference points:
+
+* **Amazon States Language (ASL)**: JSON spec for state machines (Task, Choice, Wait, Parallel, Map, etc.). ([AWS Documentation][2])
+* **Kong Datakit YAML**: defines API workflows including auth, caching, and response transformations. ([Kong Docs][1])
+* **Arazzo**: defines API use-case workflows as sequences of API calls, in YAML/JSON, integrated with OpenAPI. ([openapis.org][3])
+
+A reasonable direction:
+
+1. **Top-level workflow spec**
+
+```yaml
+apiVersion: v1
+kind: Workflow
+metadata:
+  name: payment-authorization
+  version: 1.2.0
+  tags: [payments, authz]
+  environment: default
+  rbac:
+    allowedRoles: [payments-orchestrator, admin]
+spec:
+  inputSchemaRef: schemas/payment-authz-input.json
+  outputSchemaRef: schemas/payment-authz-output.json
+  journeyToken:
+    strategy: jwt
+    header: X-Journey-Token
+  start: validate-input
+  states:
+    validate-input:
+      type: transform
+      mapper: jsonata
+      expressionRef: transforms/normalizePaymentRequest.jsonata
+      next: risk-score
+
+    risk-score:
+      type: httpCall
+      operationRef: risk-api.scorePayment
+      authPolicyRef: oauth2-risk
+      resiliencyPolicyRef: http-default
+      onError:
+        - when: transient
+          retryPolicyRef: retry-transient
+        - when: permanent
+          next: failed
+      next: authorize-core
+
+    authorize-core:
+      type: parallel
+      branches:
+        - name: limits-check
+          start: limits-check-call
+          states:
+            limits-check-call:
+              type: httpCall
+              operationRef: core-api.checkLimits
+              authPolicyRef: mtls-core
+              next: branch-end
+        - name: fraud-check
+          start: fraud-call
+          states:
+            fraud-call:
+              type: httpCall
+              operationRef: fraud-api.check
+              authPolicyRef: oauth2-fraud
+              next: branch-end
+      join:
+        strategy: allOf
+        mapperRef: transforms/aggregateDecision.jsonata
+      next: decision
+
+    decision:
+      type: choice
+      choices:
+        - condition: "${context.fraud.decision == 'REJECT'}"
+          next: rejected
+        - condition: "${context.limits.decision == 'REJECT'}"
+          next: rejected
+      default: approved
+
+    approved:
+      type: success
+
+    rejected:
+      type: fail
+      errorCode: PAYMENT_REJECTED
+      reason: "Limits or fraud check rejected the payment"
+
+    failed:
+      type: fail
+      errorCode: TECHNICAL_FAILURE
+```
+
+Key points illustrated:
+
+* **Spec is the “source code”** for the workflow.
+* Each `state` has:
+
+  * `type` (httpCall, transform, choice, parallel, wait, subworkflow, etc.).
+  * Support for `operationRef` that binds to OpenAPI `<apiName>.<operationId>`.
+  * `authPolicyRef` and `resiliencyPolicyRef` to detach concerns.
+  * `onError` block with structured retry policies.
+* `parallel` + `join` express fork/join semantics.
+* `journeyToken` configured at workflow level.
+
+2. **OpenAPI integration**
+
+You can maintain a distinct catalog:
+
+```yaml
+apis:
+  risk-api:
+    openApiRef: oas/risk-api.yaml
+  core-api:
+    openApiRef: oas/core-api.yaml
+  fraud-api:
+    openApiRef: oas/fraud-api.yaml
+```
+
+`operationRef: risk-api.scorePayment` would resolve to the OpenAPI document, infer HTTP method, path, request/response schemas, and default headers.
+
+3. **Arazzo export**
+
+From a workflow spec, you can generate an Arazzo “use-case” document that describes the same journey in Arazzo’s terms. This is mostly an exporter: spec → Arazzo YAML. ([openapis.org][3])
+
+4. **Versioning**
+
+* Workflow identity: `(name, version)` with semantic versioning.
+* Deployed “revisions” with environment mapping (e.g. `payment-authorization@1.2.0` in `dev`, `staging`, `prod`).
+* Immutable specs once deployed; you activate new versions, but don’t patch live ones.
+
+---
+
+## 🔌 Connectors & policy abstractions
+
+### HTTP connector
+
+Features aligned with your notes and with Datakit’s capabilities:
+
+* Connection pool limits, backlog queue, timeouts. ([Kong Docs][5])
+* Request/response mapping:
+
+  * Map workflow context fields to query params, path params, headers, and body.
+  * Map response JSON/XML back into context (with JSONPath, JSONata, JOLT, XSLT if you really want).
+* Resilience hooks:
+
+  * Retry policies (exponential backoff, jitter, max attempts).
+  * Bulkhead/thread pools per target host or logical group.
+  * Circuit breaker.
+* Auth policies:
+
+  * OAuth2 client credentials + token caching (per env).
+  * MTLS (keystore/ truststore / SNI / ALPN settings).
+  * API key (header/query).
+  * Custom header injection (e.g. internal tokens).
+
+Conceptually:
+
+```yaml
+httpPolicies:
+  resiliency:
+    http-default:
+      type: resilience4j
+      timeoutMillis: 3000
+      retry:
+        maxAttempts: 3
+        backoff: exponential
+        initialIntervalMillis: 200
+      circuitBreaker:
+        failureRateThreshold: 50
+  auth:
+    oauth2-risk:
+      type: oauth2-client-credentials
+      tokenUrl: https://idp.example.com/oauth2/token
+      clientId: risk-orchestrator
+      clientSecretRef: secret://oauth/risk-orchestrator
+    mtls-core:
+      type: mtls
+      keystoreRef: secret://tls/core-keystore
+      truststoreRef: secret://tls/core-truststore
+      protocols: [TLSv1.3]
+```
+
+### LDAP connector
+
+* Basic operations: add, modify, delete, search.
+* Connection pooling + timeouts; TLS/mTLS.
+* Mapping between DSL and LDAP filters / entries.
+* Typical use: user/device lookup, attribute enrichment, group checks.
+
+### JDBC connector
+
+* Configurable connection pools (HikariCP or similar).
+* Parameterized queries, updates, stored procedures.
+* Row mappers → JSON objects inserted into workflow context.
+* Optional transactional semantics for “compensation paths”.
+
+### Kafka / messaging
+
+* Producer steps: publish messages to topics.
+* Consumer integration for event-driven workflows:
+
+  * Event triggers to start or resume workflows.
+  * Correlation via journey token or application key.
+
+### Webhooks & events
+
+* Inbound HTTP endpoints (like n8n’s webhooks) for:
+
+  * Starting workflows for self-service flows.
+  * Resuming workflows waiting for callback from external systems.
+* Outbound webhooks: explicit “callback” steps with auth policies.
+
+---
+
+## 🌍 Runtime model: journeys, tokens, sub-journeys
+
+### Journey instance model
+
+Each run of a workflow is a **journey**:
+
+* `journeyId`: UUID.
+* `workflowRef`: `(name, version)`.
+* `status`: RUNNING, WAITING, SUCCEEDED, FAILED, COMPENSATING, CANCELLED.
+* `context`: nested JSON document capturing inputs, outputs, transient state.
+* `token`: JWT or opaque ID propagated in headers (X-Journey-Token, baggage, etc.).
+* Metadata: environment, initiatedBy (user/admin/system), tags (from claims/headers).
+
+Persistence backends:
+
+* Filesystem (simple JSON per journey) for local dev.
+* Embedded DB (H2, SQLite).
+* JDBC DB (Postgres/MySQL) for production, supporting pagination, queries on tags, status, etc.
+
+### Sub-journeys and libraries
+
+You want a “library for subjourneys”:
+
+* Any workflow can be declared `reusable: true`.
+* Steps of type `subworkflow` invoke another workflow:
+
+```yaml
+    kyc-check:
+      type: subworkflow
+      workflowRef: kyc-verification@1
+      inputMapperRef: transforms/mapToKycInput.jsonata
+      mode: sync   # or async
+      timeout: PT30S
+      next: kyc-result
+```
+
+* **Sync mode**: parent waits until subworkflow completes; result injected into parent context.
+* **Async mode**:
+
+  * Parent may either:
+
+    * Fire-and-forget and proceed.
+    * Wait in a `waitForEvent` state that resumes when subworkflow emits an event.
+
+### Compensation and long-running flows
+
+* **Compensation path**:
+
+  * For each step that changes external state, you can optionally define a compensating step.
+  * On failure at some point, engine walks back through completed steps and invokes their compensations in reverse order.
+* **Wait states**:
+
+  * Time-based (e.g. Wait PT5M).
+  * Event-based (webhook, Kafka message, manual admin action).
+* This aligns with long-running SAGA-like flows rather than strictly blocking server threads.
+
+---
+
+## ⚙️ Java 25 implementation strategy
+
+### Language & runtime
+
+* Target **Java 25 (LTS)**: most recent LTS with up-to-date language/runtime features. ([Oracle][4])
+* Use:
+
+  * Virtual threads (Project Loom) for handling large numbers of concurrent HTTP calls and long-running waits without tying up platform threads.
+  * `java.net.http.HttpClient` or a Netty-based client for HTTP connector.
+  * Sealed interfaces and records for internal DSL models.
+
+### Technology choices
+
+* Build system: multi-module **Gradle**.
+* Core libs (candidate set):
+
+  * JSON/YAML: Jackson + Jackson YAML, or Jackson + SnakeYAML.
+  * Resilience: Resilience4j or Failsafe.
+  * HTTP: JDK HttpClient, OkHttp, or Netty client (with pluggable adapter).
+  * JDBC: HikariCP + bare JDBC or jOOQ/MyBatis depending on taste.
+  * LDAP: UnboundID / SDK of choice.
+  * Kafka: official Kafka client or a pluggable interface.
+  * Telemetry: OpenTelemetry SDK.
+
+### Internal architecture
+
+* **Model module**: POJOs/records representing workflows, states, policies.
+* **Interpreter module**: state machine engine; scheduler; concurrency model.
+* **Connectors module**: HTTP/LDAP/JDBC/Kafka/Webhook.
+* **Persistence module**: journey store implementations + interface.
+* **Facade API module**: REST controllers (e.g. Spring Boot or Micronaut) + OpenAPI spec.
+* **CLI/TUI module**: optional JLine-based shell for local interactions.
+
+Spring Boot gives the fastest path to a REST API and Actuator metrics, but you may also want a leaner framework to keep the core engine “library-like” and not Spring-tied.
+
+---
+
+## 📦 GitHub repo structure proposal
+
+Something along these lines:
+
+```text
+api-workflow-orchestrator/
+  README.md
+  LICENSE
+  docs/
+    0-overview/
+    1-vision/
+    2-architecture/
+    3-spec/
+    4-rfp-checklist/
+    examples/
+      payments/
+      identity/
+  orchestrator-bom/             # optional Maven/Gradle platform for version alignment
+  orchestrator-model/           # workflow spec models (records, enums), validation
+  orchestrator-spec-parser/     # YAML/JSON parsing, schema validation
+  orchestrator-runtime/         # interpreter, scheduler, state machine core
+  orchestrator-connectors-http/
+  orchestrator-connectors-ldap/
+  orchestrator-connectors-jdbc/
+  orchestrator-connectors-kafka/
+  orchestrator-persistence-core/
+  orchestrator-persistence-file/
+  orchestrator-persistence-jdbc/
+  orchestrator-policies/        # auth + resiliency policies
+  orchestrator-api/             # REST API facade
+  orchestrator-admin-api/       # admin endpoints, RBAC
+  orchestrator-cli/             # optional CLI/TUI
+  orchestrator-ui-bridge/       # API contracts specifically for UI (graph model)
+  samples/
+    simple-http-flow/
+    payments-saga/
+    iam-journey-demo/
+  buildSrc/                     # shared Gradle logic if needed
+```
+
+Later, you can split off **`orchestrator-ui-react`** (React Flow / Atlas) into a separate repo that consumes `orchestrator-api`.
+
+---
+
+## 🚀 MVP roadmap (incremental slices)
+
+Given the large scope, it is safer to explicitly carve out stages.
+
+### Milestone 0 – Skeleton
+
+* Multi-module Gradle project targeting Java 25.
+* Basic docs: vision, non-goals, project principles.
+* `orchestrator-model` with a minimal workflow DSL (just sequential HTTP calls).
+* YAML parsing + JSON Schema validation for specs.
+
+### Milestone 1 – Core HTTP engine
+
+* `orchestrator-runtime` executing a single workflow spec:
+
+  * `Task` (httpCall) and `Choice`.
+  * Context propagation, basic error handling.
+* HTTP connector:
+
+  * Timeouts, connection pooling, simple retry.
+* Simple CLI:
+
+  * `orchestrator run spec.yaml --input input.json`.
+
+### Milestone 2 – API façade + journeys
+
+* REST API to:
+
+  * Register workflow definitions.
+  * Start journeys and query status.
+* Persistence for journey state (filesystem or embedded DB).
+* Journey token (UUID header) + ability to query “my open journeys”.
+
+### Milestone 3 – Policies & auth
+
+* Resiliency policies (retry, circuit breaker, bulkhead) as separate objects.
+* Auth policies (OAuth2 client credentials, API key, mTLS).
+* Attach policies to httpCall steps.
+
+### Milestone 4 – Parallelism & subworkflows
+
+* Parallel branches with join strategies (allOf, anyOf).
+* Sub-workflow invocation (sync first, async later).
+* Basic compensation path support.
+
+### Milestone 5 – Advanced connectors & transforms
+
+* LDAP & JDBC connectors.
+* JSON/XML transforms via JSONata/JOLT.
+* Kafka/event triggers and webhooks.
+
+### Milestone 6 – UI façade integrations
+
+* Expose a graph model over API suitable for React Flow/Atlas.
+* Minimal React prototype that:
+
+  * Loads a spec.
+  * Edits nodes/edges.
+  * Writes back spec changes.
+
+### Milestone 7 – Enterprise features
+
+* Versioned flows with environment mappings.
+* Telemetry (OpenTelemetry traces, metrics, log streaming).
+* RBAC and SSO integration for admin APIs.
+* RFP checklist mapping: mark off features vs spec sections.
+
+---
+
+## ⚖️ Criticism & controversies
+
+A few design tensions you should consciously manage:
+
+1. **Graph vs code vs spec**
+
+   * Temporal’s “fallacy of the graph” argument is real: complex logic in diagrams becomes unmaintainable; code has better tooling and refactoring support.
+   * You are choosing an intermediate path:
+
+     * Not free-form code.
+     * Not purely visual.
+     * But a structured spec (YAML/JSON) akin to Amazon States Language or Arazzo.
+   * This still risks creating a **second programming language** with its own bugs and limitations. Keep the DSL as small and orthogonal as possible.
+
+2. **Reinventing vs integrating**
+
+   * Much of what you want exists in pieces:
+
+     * Datakit already does HTTP API workflows inside Kong. ([Kong Docs][1])
+     * ASL + Step Functions, Arazzo, Temporal, etc.
+   * The value proposition must be clear:
+
+     * Standalone, self-hosted.
+     * Spec-first with OpenAPI/Arazzo focus.
+     * Oriented to identity/API journeys (JWT validation, journey token, RBAC tags, etc.).
+   * Otherwise it risks being “just another workflow engine”.
+
+3. **Java + spec-first friction**
+
+   * Java is excellent as a runtime core (performance, tooling, ecosystem).
+   * But spec-first systems inevitably require good **tooling around the spec**:
+
+     * LSP / VS Code integration.
+     * JSON Schema for validation.
+     * Libraries for code-generation and analysis.
+   * You will need to invest in these to avoid the spec becoming unwieldy.
+
+4. **Feature bloat vs focused core**
+
+   * Your notes contain almost an entire RFP: resiliency, auth, Kafka, LDAP, JDBC, caching, HATEOAS/HAL, environment management, telemetry, TUI, UI, MCP, Arazzo, etc.
+   * Without a disciplined core, the project will sprawl.
+   * A realistic model is:
+
+     * Hard core: state machine + HTTP connector + policies.
+     * Everything else is modular and optional.
+
+5. **State & consistency**
+
+   * With JDBC, LDAP, Kafka, HTTP, etc., you are building a SAGA orchestrator at least implicitly.
+   * Compensation, idempotency, exactly-once vs at-least-once semantics, and partial failures will be both unavoidable and messy.
+   * The spec must encode enough semantics for operators to reason about these behaviours, not just declare happy paths.
+
+---
+
+## 📊 Summary table
+
+| Area                      | Proposed Direction                                                                             | Key Influences / Notes                                                              |
+| ------------------------- | ---------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| Language & runtime        | Java 25 LTS, virtual threads, Gradle multi-module                                              | Java 25 is latest LTS as of 2025. ([Oracle][4])                                     |
+| Core paradigm             | Spec-first workflows in YAML/JSON, state-machine style                                         | Amazon States Language, Arazzo, Kong Datakit                                        |
+| Workflow semantics        | States: httpCall, transform, choice, parallel, wait, subworkflow, fail/success                 | ASL and Arazzo-style workflows ([AWS Documentation][2])                             |
+| API façade                | REST APIs for definition mgmt, journey control, introspection                                  | OpenAPI-described admin & runtime APIs                                              |
+| UI façade                 | React Flow/Atlas web UI + optional TUI, both consuming API façade                              | Visual designer is secondary to spec                                                |
+| Connectors                | HTTP, LDAP, JDBC, Kafka, webhooks, filesystem/DB persistence                                   | HTTP first, others as plug-ins                                                      |
+| Policies                  | Externalised resiliency & auth policies attached by reference                                  | Similar conceptually to Datakit’s config and Resilience4j patterns ([Kong Docs][1]) |
+| Transforms                | JSON/XML transforms via JSONata, JOLT, DataWeave-like syntax                                   | JSONata/JOLT/DataWeave ecosystem                                                    |
+| Journey model             | Journey instances with JWT/UUID tokens, tags, open-journeys query, sub-workflows, compensation | SAGA-like semantics, long-running flows                                             |
+| Persistence               | Pluggable: filesystem, embedded DB, JDBC DB                                                    | Simple first, pluggable later                                                       |
+| Versioning & environments | Versioned workflows, environment bindings (dev/test/prod), immutable deployed specs            | RFP/enterprise expectations                                                         |
+| Telemetry & governance    | OpenTelemetry integration, log streaming, RBAC for admin APIs, RFP checklist in docs           | Enterprise positioning                                                              |
+| MVP slice                 | Core HTTP engine + basic spec + runtime + simple CLI/API                                       | Additional connectors and UI later                                                  |
+| Main risks                | DSL complexity, overlap with existing engines, SAGA semantics complexity, feature bloat        | Needs a disciplined, minimal core                                                   |
+
+If you want, the next step can be a concrete **initial repo blueprint** (README outline, first Gradle modules, and one minimal workflow spec + engine stub) that you can drop into a GitHub repo and start iterating on.
+
+[1]: https://developer.konghq.com/plugins/datakit/?utm_source=chatgpt.com "Datakit - Plugin - Kong Docs"
+[2]: https://docs.aws.amazon.com/step-functions/latest/dg/concepts-amazon-states-language.html?utm_source=chatgpt.com "Using Amazon States Language to define Step Functions ..."
+[3]: https://www.openapis.org/arazzo-specification?utm_source=chatgpt.com "Arazzo Specification"
+[4]: https://www.oracle.com/java/technologies/downloads/?utm_source=chatgpt.com "Java Downloads"
+[5]: https://developer.konghq.com/plugins/datakit/reference/?utm_source=chatgpt.com "Datakit - Configuration Reference - Plugin - Kong Docs"
+
+----
+
+## 🧠 Context synthesis
+
+You are essentially sketching a **spec-first, Java-based API workflow orchestrator** with:
+
+* A strong bias toward **API-only integration** (HTTP, LDAP, JDBC, Kafka, webhooks), not generic ETL.
+* A **spec/DSL in YAML or JSON** as the primary source of truth, very much in the spirit of:
+
+  * Kong Datakit’s YAML workflows for connecting and transforming third-party APIs. ([Kong Docs][1])
+  * Amazon States Language (ASL) style state machines (Task/Choice/Parallel/Wait/etc.). ([AWS Documentation][2])
+  * OpenAPI Arazzo: use-case oriented workflows as sequences of API calls described in YAML/JSON. ([openapis.org][3])
+* A **runtime engine** that executes those specs with:
+
+  * Rich **HTTP client resiliency policies** (retries, timeouts, bulkheads, connection pools, circuit breakers).
+  * **Authentication policies** (OAuth2, mTLS, API keys) reusable across calls.
+  * **Fork/join** and **multiplexing** (parallel fan-out + aggregation).
+  * **Caching**, error aggregation (RFC-style error codes), and compensation paths.
+* A **journey / workflow instance model**:
+
+  * “Journey token” (likely JWT) propagated via headers (e.g. baggage).
+  * Sub-journeys / nested workflows.
+  * Triggers via HTTP, events, webhooks, admin commands.
+* A **dual façade**:
+
+  * API façade: everything controllable via HTTP/JSON.
+  * UI façade: visual designer (React Flow / Atlas / maybe also TUI) as just another client of the API façades.
+* Explicit attention to **enterprise features**:
+
+  * Versioned flows, environment support, telemetry, log streaming, admin API, RBAC.
+  * Self-service vs admin flows.
+  * Standalone Docker runnable.
+
+Implementation baseline you want: **Java, latest LTS**. As of September 2025, that is **Java 25 (LTS)**, with 21 and 17 as older LTS lines. ([Oracle][4])
+
+---
+
+## 🧭 Product vision & differentiators
+
+At a high level, this can position itself as:
+
+> **“Spec-first API journey orchestrator for HTTP-centric systems, with RFP-grade features, strong resiliency, and OpenAPI/Arazzo alignment.”**
+
+Relative to existing engines:
+
+* Compared to **n8n / Node-RED / NiFi / Activepieces / Windmill / Kestra**:
+
+  * They tend to be “node catalogs with UIs”. You want the **spec** (YAML/JSON) to be first-class, with the UI acting as a notebook on top of the spec.
+  * You are strongly HTTP/API oriented (including identity flavoured patterns), less focused on arbitrary scripting / human tasks.
+* Compared to **Temporal / Cadence / SWF / Step Functions / Cloud Workflows**:
+
+  * Temporal argues “workflow should be code, not graphs”. You want something in between: **spec-as-source**, data-driven, with a declarative orchestration graph that is still inspectable and exportable (Arazzo, OpenAPI, etc.).
+  * You are more interested in **API façade and portability** than in a fully managed distributed runtime.
+* Compared to **Kong Datakit**:
+
+  * Datakit is a plugin inside Kong Gateway that lets you define workflows combining and transforming API responses, including auth and caching. ([Kong Docs][1])
+  * You want a **standalone engine**, not tied to a specific gateway, with broader connectors (LDAP, JDBC, Kafka) and identity-oriented concerns (journey tokens, JWT validation, sub-journeys).
+
+So the differentiator is:
+
+* **Spec-first** (YAML/JSON, human-readable, RFP-friendly).
+* **HTTP/API-centric, but multi-connector** (LDAP/JDBC/Kafka).
+* **Explicit resiliency and auth policy abstractions**.
+* **Self-contained engine in Java 25**, embeddable and runnable as a service.
+* **OpenAPI/Arazzo-aware**, not just an ad-hoc DSL.
+
+---
+
+## 🏗️ High-level architecture
+
+You already hinted at the two façades; the overall structure could be:
+
+1. **Spec & Model Layer**
+
+   * Workflow DSL (YAML/JSON) with:
+
+     * Workflow definitions (name, version, description, tags, RBAC).
+     * Steps: task types (http, ldap, jdbc, kafka, transform, branch, parallel, wait, webhook, subworkflow).
+     * Policies: httpResiliencyPolicy, authPolicy, cachePolicy, retryPolicy.
+     * Error model, compensation, timeouts, deadlines.
+   * OpenAPI and Arazzo integration:
+
+     * Import OAS documents.
+     * Reference operations as `<apiName>.<operationId>`.
+     * Export/derive Arazzo workflows for documentation and tooling.
+
+2. **Runtime Engine**
+
+   * Workflow interpreter that executes the DSL:
+
+     * State machine runtime (influenced by ASL).
+     * Execution contexts (“journeys”) with variables, headers, claims, tokens.
+     * Scheduler for timers, wait states, long-running flows.
+     * Execution graph supporting sequential, parallel, and conditional paths.
+
+3. **Connector Layer**
+
+   * HTTP, LDAP, JDBC, Kafka, filesystem, embedded DB.
+   * JSON/XML transforms via JOLT / JSONata / DataWeave-style expressions.
+   * JWT validation, webhooks, event subscriptions.
+
+4. **Policy & Governance Layer**
+
+   * Resiliency policies (retry, circuit breaker, bulkhead, connection pools).
+   * Auth policies (OAuth2, mTLS, API key, custom header).
+   * Versioning & environment (dev / test / prod) handling.
+   * Telemetry hooks (OpenTelemetry traces/metrics/logs).
+
+5. **Façades**
+
+   * **API façade**:
+
+     * Admin APIs: manage workflow definitions, versions, deployments, environments.
+     * Runtime APIs: start/stop/query journeys, push events, resume waits, register webhooks.
+     * Introspection & export APIs (OpenAPI, Arazzo, JSON schema for specs).
+   * **UI façade(s)**:
+
+     * React Flow or Atlas-based browser UI over the APIs.
+     * Optional TUI for local ops / debugging.
+
+---
+
+## 🧾 Workflow spec design (YAML/JSON, spec-first)
+
+### Design influences
+
+You have three strong reference points:
+
+* **Amazon States Language (ASL)**: JSON spec for state machines (Task, Choice, Wait, Parallel, Map, etc.). ([AWS Documentation][2])
+* **Kong Datakit YAML**: defines API workflows including auth, caching, and response transformations. ([Kong Docs][1])
+* **Arazzo**: defines API use-case workflows as sequences of API calls, in YAML/JSON, integrated with OpenAPI. ([openapis.org][3])
+
+A reasonable direction:
+
+1. **Top-level workflow spec**
+
+```yaml
+apiVersion: v1
+kind: Workflow
+metadata:
+  name: payment-authorization
+  version: 1.2.0
+  tags: [payments, authz]
+  environment: default
+  rbac:
+    allowedRoles: [payments-orchestrator, admin]
+spec:
+  inputSchemaRef: schemas/payment-authz-input.json
+  outputSchemaRef: schemas/payment-authz-output.json
+  journeyToken:
+    strategy: jwt
+    header: X-Journey-Token
+  start: validate-input
+  states:
+    validate-input:
+      type: transform
+      mapper: jsonata
+      expressionRef: transforms/normalizePaymentRequest.jsonata
+      next: risk-score
+
+    risk-score:
+      type: httpCall
+      operationRef: risk-api.scorePayment
+      authPolicyRef: oauth2-risk
+      resiliencyPolicyRef: http-default
+      onError:
+        - when: transient
+          retryPolicyRef: retry-transient
+        - when: permanent
+          next: failed
+      next: authorize-core
+
+    authorize-core:
+      type: parallel
+      branches:
+        - name: limits-check
+          start: limits-check-call
+          states:
+            limits-check-call:
+              type: httpCall
+              operationRef: core-api.checkLimits
+              authPolicyRef: mtls-core
+              next: branch-end
+        - name: fraud-check
+          start: fraud-call
+          states:
+            fraud-call:
+              type: httpCall
+              operationRef: fraud-api.check
+              authPolicyRef: oauth2-fraud
+              next: branch-end
+      join:
+        strategy: allOf
+        mapperRef: transforms/aggregateDecision.jsonata
+      next: decision
+
+    decision:
+      type: choice
+      choices:
+        - condition: "${context.fraud.decision == 'REJECT'}"
+          next: rejected
+        - condition: "${context.limits.decision == 'REJECT'}"
+          next: rejected
+      default: approved
+
+    approved:
+      type: success
+
+    rejected:
+      type: fail
+      errorCode: PAYMENT_REJECTED
+      reason: "Limits or fraud check rejected the payment"
+
+    failed:
+      type: fail
+      errorCode: TECHNICAL_FAILURE
+```
+
+Key points illustrated:
+
+* **Spec is the “source code”** for the workflow.
+* Each `state` has:
+
+  * `type` (httpCall, transform, choice, parallel, wait, subworkflow, etc.).
+  * Support for `operationRef` that binds to OpenAPI `<apiName>.<operationId>`.
+  * `authPolicyRef` and `resiliencyPolicyRef` to detach concerns.
+  * `onError` block with structured retry policies.
+* `parallel` + `join` express fork/join semantics.
+* `journeyToken` configured at workflow level.
+
+2. **OpenAPI integration**
+
+You can maintain a distinct catalog:
+
+```yaml
+apis:
+  risk-api:
+    openApiRef: oas/risk-api.yaml
+  core-api:
+    openApiRef: oas/core-api.yaml
+  fraud-api:
+    openApiRef: oas/fraud-api.yaml
+```
+
+`operationRef: risk-api.scorePayment` would resolve to the OpenAPI document, infer HTTP method, path, request/response schemas, and default headers.
+
+3. **Arazzo export**
+
+From a workflow spec, you can generate an Arazzo “use-case” document that describes the same journey in Arazzo’s terms. This is mostly an exporter: spec → Arazzo YAML. ([openapis.org][3])
+
+4. **Versioning**
+
+* Workflow identity: `(name, version)` with semantic versioning.
+* Deployed “revisions” with environment mapping (e.g. `payment-authorization@1.2.0` in `dev`, `staging`, `prod`).
+* Immutable specs once deployed; you activate new versions, but don’t patch live ones.
+
+---
+
+## 🔌 Connectors & policy abstractions
+
+### HTTP connector
+
+Features aligned with your notes and with Datakit’s capabilities:
+
+* Connection pool limits, backlog queue, timeouts. ([Kong Docs][5])
+* Request/response mapping:
+
+  * Map workflow context fields to query params, path params, headers, and body.
+  * Map response JSON/XML back into context (with JSONPath, JSONata, JOLT, XSLT if you really want).
+* Resilience hooks:
+
+  * Retry policies (exponential backoff, jitter, max attempts).
+  * Bulkhead/thread pools per target host or logical group.
+  * Circuit breaker.
+* Auth policies:
+
+  * OAuth2 client credentials + token caching (per env).
+  * MTLS (keystore/ truststore / SNI / ALPN settings).
+  * API key (header/query).
+  * Custom header injection (e.g. internal tokens).
+
+Conceptually:
+
+```yaml
+httpPolicies:
+  resiliency:
+    http-default:
+      type: resilience4j
+      timeoutMillis: 3000
+      retry:
+        maxAttempts: 3
+        backoff: exponential
+        initialIntervalMillis: 200
+      circuitBreaker:
+        failureRateThreshold: 50
+  auth:
+    oauth2-risk:
+      type: oauth2-client-credentials
+      tokenUrl: https://idp.example.com/oauth2/token
+      clientId: risk-orchestrator
+      clientSecretRef: secret://oauth/risk-orchestrator
+    mtls-core:
+      type: mtls
+      keystoreRef: secret://tls/core-keystore
+      truststoreRef: secret://tls/core-truststore
+      protocols: [TLSv1.3]
+```
+
+### LDAP connector
+
+* Basic operations: add, modify, delete, search.
+* Connection pooling + timeouts; TLS/mTLS.
+* Mapping between DSL and LDAP filters / entries.
+* Typical use: user/device lookup, attribute enrichment, group checks.
+
+### JDBC connector
+
+* Configurable connection pools (HikariCP or similar).
+* Parameterized queries, updates, stored procedures.
+* Row mappers → JSON objects inserted into workflow context.
+* Optional transactional semantics for “compensation paths”.
+
+### Kafka / messaging
+
+* Producer steps: publish messages to topics.
+* Consumer integration for event-driven workflows:
+
+  * Event triggers to start or resume workflows.
+  * Correlation via journey token or application key.
+
+### Webhooks & events
+
+* Inbound HTTP endpoints (like n8n’s webhooks) for:
+
+  * Starting workflows for self-service flows.
+  * Resuming workflows waiting for callback from external systems.
+* Outbound webhooks: explicit “callback” steps with auth policies.
+
+---
+
+## 🌍 Runtime model: journeys, tokens, sub-journeys
+
+### Journey instance model
+
+Each run of a workflow is a **journey**:
+
+* `journeyId`: UUID.
+* `workflowRef`: `(name, version)`.
+* `status`: RUNNING, WAITING, SUCCEEDED, FAILED, COMPENSATING, CANCELLED.
+* `context`: nested JSON document capturing inputs, outputs, transient state.
+* `token`: JWT or opaque ID propagated in headers (X-Journey-Token, baggage, etc.).
+* Metadata: environment, initiatedBy (user/admin/system), tags (from claims/headers).
+
+Persistence backends:
+
+* Filesystem (simple JSON per journey) for local dev.
+* Embedded DB (H2, SQLite).
+* JDBC DB (Postgres/MySQL) for production, supporting pagination, queries on tags, status, etc.
+
+### Sub-journeys and libraries
+
+You want a “library for subjourneys”:
+
+* Any workflow can be declared `reusable: true`.
+* Steps of type `subworkflow` invoke another workflow:
+
+```yaml
+    kyc-check:
+      type: subworkflow
+      workflowRef: kyc-verification@1
+      inputMapperRef: transforms/mapToKycInput.jsonata
+      mode: sync   # or async
+      timeout: PT30S
+      next: kyc-result
+```
+
+* **Sync mode**: parent waits until subworkflow completes; result injected into parent context.
+* **Async mode**:
+
+  * Parent may either:
+
+    * Fire-and-forget and proceed.
+    * Wait in a `waitForEvent` state that resumes when subworkflow emits an event.
+
+### Compensation and long-running flows
+
+* **Compensation path**:
+
+  * For each step that changes external state, you can optionally define a compensating step.
+  * On failure at some point, engine walks back through completed steps and invokes their compensations in reverse order.
+* **Wait states**:
+
+  * Time-based (e.g. Wait PT5M).
+  * Event-based (webhook, Kafka message, manual admin action).
+* This aligns with long-running SAGA-like flows rather than strictly blocking server threads.
+
+---
+
+## ⚙️ Java 25 implementation strategy
+
+### Language & runtime
+
+* Target **Java 25 (LTS)**: most recent LTS with up-to-date language/runtime features. ([Oracle][4])
+* Use:
+
+  * Virtual threads (Project Loom) for handling large numbers of concurrent HTTP calls and long-running waits without tying up platform threads.
+  * `java.net.http.HttpClient` or a Netty-based client for HTTP connector.
+  * Sealed interfaces and records for internal DSL models.
+
+### Technology choices
+
+* Build system: multi-module **Gradle**.
+* Core libs (candidate set):
+
+  * JSON/YAML: Jackson + Jackson YAML, or Jackson + SnakeYAML.
+  * Resilience: Resilience4j or Failsafe.
+  * HTTP: JDK HttpClient, OkHttp, or Netty client (with pluggable adapter).
+  * JDBC: HikariCP + bare JDBC or jOOQ/MyBatis depending on taste.
+  * LDAP: UnboundID / SDK of choice.
+  * Kafka: official Kafka client or a pluggable interface.
+  * Telemetry: OpenTelemetry SDK.
+
+### Internal architecture
+
+* **Model module**: POJOs/records representing workflows, states, policies.
+* **Interpreter module**: state machine engine; scheduler; concurrency model.
+* **Connectors module**: HTTP/LDAP/JDBC/Kafka/Webhook.
+* **Persistence module**: journey store implementations + interface.
+* **Facade API module**: REST controllers (e.g. Spring Boot or Micronaut) + OpenAPI spec.
+* **CLI/TUI module**: optional JLine-based shell for local interactions.
+
+Spring Boot gives the fastest path to a REST API and Actuator metrics, but you may also want a leaner framework to keep the core engine “library-like” and not Spring-tied.
+
+---
+
+## 📦 GitHub repo structure proposal
+
+Something along these lines:
+
+```text
+api-workflow-orchestrator/
+  README.md
+  LICENSE
+  docs/
+    0-overview/
+    1-vision/
+    2-architecture/
+    3-spec/
+    4-rfp-checklist/
+    examples/
+      payments/
+      identity/
+  orchestrator-bom/             # optional Maven/Gradle platform for version alignment
+  orchestrator-model/           # workflow spec models (records, enums), validation
+  orchestrator-spec-parser/     # YAML/JSON parsing, schema validation
+  orchestrator-runtime/         # interpreter, scheduler, state machine core
+  orchestrator-connectors-http/
+  orchestrator-connectors-ldap/
+  orchestrator-connectors-jdbc/
+  orchestrator-connectors-kafka/
+  orchestrator-persistence-core/
+  orchestrator-persistence-file/
+  orchestrator-persistence-jdbc/
+  orchestrator-policies/        # auth + resiliency policies
+  orchestrator-api/             # REST API facade
+  orchestrator-admin-api/       # admin endpoints, RBAC
+  orchestrator-cli/             # optional CLI/TUI
+  orchestrator-ui-bridge/       # API contracts specifically for UI (graph model)
+  samples/
+    simple-http-flow/
+    payments-saga/
+    iam-journey-demo/
+  buildSrc/                     # shared Gradle logic if needed
+```
+
+Later, you can split off **`orchestrator-ui-react`** (React Flow / Atlas) into a separate repo that consumes `orchestrator-api`.
+
+---
+
+## 🚀 MVP roadmap (incremental slices)
+
+Given the large scope, it is safer to explicitly carve out stages.
+
+### Milestone 0 – Skeleton
+
+* Multi-module Gradle project targeting Java 25.
+* Basic docs: vision, non-goals, project principles.
+* `orchestrator-model` with a minimal workflow DSL (just sequential HTTP calls).
+* YAML parsing + JSON Schema validation for specs.
+
+### Milestone 1 – Core HTTP engine
+
+* `orchestrator-runtime` executing a single workflow spec:
+
+  * `Task` (httpCall) and `Choice`.
+  * Context propagation, basic error handling.
+* HTTP connector:
+
+  * Timeouts, connection pooling, simple retry.
+* Simple CLI:
+
+  * `orchestrator run spec.yaml --input input.json`.
+
+### Milestone 2 – API façade + journeys
+
+* REST API to:
+
+  * Register workflow definitions.
+  * Start journeys and query status.
+* Persistence for journey state (filesystem or embedded DB).
+* Journey token (UUID header) + ability to query “my open journeys”.
+
+### Milestone 3 – Policies & auth
+
+* Resiliency policies (retry, circuit breaker, bulkhead) as separate objects.
+* Auth policies (OAuth2 client credentials, API key, mTLS).
+* Attach policies to httpCall steps.
+
+### Milestone 4 – Parallelism & subworkflows
+
+* Parallel branches with join strategies (allOf, anyOf).
+* Sub-workflow invocation (sync first, async later).
+* Basic compensation path support.
+
+### Milestone 5 – Advanced connectors & transforms
+
+* LDAP & JDBC connectors.
+* JSON/XML transforms via JSONata/JOLT.
+* Kafka/event triggers and webhooks.
+
+### Milestone 6 – UI façade integrations
+
+* Expose a graph model over API suitable for React Flow/Atlas.
+* Minimal React prototype that:
+
+  * Loads a spec.
+  * Edits nodes/edges.
+  * Writes back spec changes.
+
+### Milestone 7 – Enterprise features
+
+* Versioned flows with environment mappings.
+* Telemetry (OpenTelemetry traces, metrics, log streaming).
+* RBAC and SSO integration for admin APIs.
+* RFP checklist mapping: mark off features vs spec sections.
+
+---
+
+## ⚖️ Criticism & controversies
+
+A few design tensions you should consciously manage:
+
+1. **Graph vs code vs spec**
+
+   * Temporal’s “fallacy of the graph” argument is real: complex logic in diagrams becomes unmaintainable; code has better tooling and refactoring support.
+   * You are choosing an intermediate path:
+
+     * Not free-form code.
+     * Not purely visual.
+     * But a structured spec (YAML/JSON) akin to Amazon States Language or Arazzo.
+   * This still risks creating a **second programming language** with its own bugs and limitations. Keep the DSL as small and orthogonal as possible.
+
+2. **Reinventing vs integrating**
+
+   * Much of what you want exists in pieces:
+
+     * Datakit already does HTTP API workflows inside Kong. ([Kong Docs][1])
+     * ASL + Step Functions, Arazzo, Temporal, etc.
+   * The value proposition must be clear:
+
+     * Standalone, self-hosted.
+     * Spec-first with OpenAPI/Arazzo focus.
+     * Oriented to identity/API journeys (JWT validation, journey token, RBAC tags, etc.).
+   * Otherwise it risks being “just another workflow engine”.
+
+3. **Java + spec-first friction**
+
+   * Java is excellent as a runtime core (performance, tooling, ecosystem).
+   * But spec-first systems inevitably require good **tooling around the spec**:
+
+     * LSP / VS Code integration.
+     * JSON Schema for validation.
+     * Libraries for code-generation and analysis.
+   * You will need to invest in these to avoid the spec becoming unwieldy.
+
+4. **Feature bloat vs focused core**
+
+   * Your notes contain almost an entire RFP: resiliency, auth, Kafka, LDAP, JDBC, caching, HATEOAS/HAL, environment management, telemetry, TUI, UI, MCP, Arazzo, etc.
+   * Without a disciplined core, the project will sprawl.
+   * A realistic model is:
+
+     * Hard core: state machine + HTTP connector + policies.
+     * Everything else is modular and optional.
+
+5. **State & consistency**
+
+   * With JDBC, LDAP, Kafka, HTTP, etc., you are building a SAGA orchestrator at least implicitly.
+   * Compensation, idempotency, exactly-once vs at-least-once semantics, and partial failures will be both unavoidable and messy.
+   * The spec must encode enough semantics for operators to reason about these behaviours, not just declare happy paths.
+
+---
+
+## 📊 Summary table
+
+| Area                      | Proposed Direction                                                                             | Key Influences / Notes                                                              |
+| ------------------------- | ---------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| Language & runtime        | Java 25 LTS, virtual threads, Gradle multi-module                                              | Java 25 is latest LTS as of 2025. ([Oracle][4])                                     |
+| Core paradigm             | Spec-first workflows in YAML/JSON, state-machine style                                         | Amazon States Language, Arazzo, Kong Datakit                                        |
+| Workflow semantics        | States: httpCall, transform, choice, parallel, wait, subworkflow, fail/success                 | ASL and Arazzo-style workflows ([AWS Documentation][2])                             |
+| API façade                | REST APIs for definition mgmt, journey control, introspection                                  | OpenAPI-described admin & runtime APIs                                              |
+| UI façade                 | React Flow/Atlas web UI + optional TUI, both consuming API façade                              | Visual designer is secondary to spec                                                |
+| Connectors                | HTTP, LDAP, JDBC, Kafka, webhooks, filesystem/DB persistence                                   | HTTP first, others as plug-ins                                                      |
+| Policies                  | Externalised resiliency & auth policies attached by reference                                  | Similar conceptually to Datakit’s config and Resilience4j patterns ([Kong Docs][1]) |
+| Transforms                | JSON/XML transforms via JSONata, JOLT, DataWeave-like syntax                                   | JSONata/JOLT/DataWeave ecosystem                                                    |
+| Journey model             | Journey instances with JWT/UUID tokens, tags, open-journeys query, sub-workflows, compensation | SAGA-like semantics, long-running flows                                             |
+| Persistence               | Pluggable: filesystem, embedded DB, JDBC DB                                                    | Simple first, pluggable later                                                       |
+| Versioning & environments | Versioned workflows, environment bindings (dev/test/prod), immutable deployed specs            | RFP/enterprise expectations                                                         |
+| Telemetry & governance    | OpenTelemetry integration, log streaming, RBAC for admin APIs, RFP checklist in docs           | Enterprise positioning                                                              |
+| MVP slice                 | Core HTTP engine + basic spec + runtime + simple CLI/API                                       | Additional connectors and UI later                                                  |
+| Main risks                | DSL complexity, overlap with existing engines, SAGA semantics complexity, feature bloat        | Needs a disciplined, minimal core                                                   |
+
+If you want, the next step can be a concrete **initial repo blueprint** (README outline, first Gradle modules, and one minimal workflow spec + engine stub) that you can drop into a GitHub repo and start iterating on.
+
+[1]: https://developer.konghq.com/plugins/datakit/?utm_source=chatgpt.com "Datakit - Plugin - Kong Docs"
+[2]: https://docs.aws.amazon.com/step-functions/latest/dg/concepts-amazon-states-language.html?utm_source=chatgpt.com "Using Amazon States Language to define Step Functions ..."
+[3]: https://www.openapis.org/arazzo-specification?utm_source=chatgpt.com "Arazzo Specification"
+[4]: https://www.oracle.com/java/technologies/downloads/?utm_source=chatgpt.com "Java Downloads"
+[5]: https://developer.konghq.com/plugins/datakit/reference/?utm_source=chatgpt.com "Datakit - Configuration Reference - Plugin - Kong Docs"
+
+----
+
+## 🧠 Design direction: standalone engine, Datakit + ASL–inspired
+
+You now want:
+
+* A **standalone Java engine** (no Conductor, no Camunda).
+* A **spec-first DSL** that:
+
+  * Feels like **Datakit** (nodes, resources) ([Kong Docs][1])
+  * Has control-flow semantics close to **Amazon States Language (ASL)** (Task, Choice, Parallel, Wait, Succeed, Fail, data paths, JSONPath/JSONata). ([AWS Documentation][2])
+* Clear separation of:
+
+  * **Admin plane** (definitions, policies, environments).
+  * **Runtime plane** (journeys / executions).
+
+Below is a concrete synthesis: a DSL shape, engine architecture, admin/runtime APIs, and implementation plan.
+
+---
+
+## 📚 What to borrow from Datakit and ASL
+
+### From Datakit (Kong)
+
+Key ideas from the Datakit plugin that are directly useful:
+
+* **Node-centric configuration**
+
+  * A Datakit workflow is a list of `node` objects; each node represents a small operation:
+
+    * `call` – third-party HTTP call.
+    * `jq` – data transformation.
+    * `cache` – conditional cache read/write.
+    * `branch` – conditional branching.
+    * `exit` – return directly to client.
+    * `property` – get/set gateway context values.
+    * `static` – static input values. ([Kong Docs][1])
+
+* **Node I/O wiring by name**
+
+  * Node outputs are connected to other node inputs by referencing node `name` and optionally named outputs such as `API.body` or `API.headers`. ([Kong Docs][1])
+  * Nodes can declare:
+
+    * `input: OTHER_NODE`
+    * or `outputs: { body: BODY_NODE, headers: HEADERS_NODE }` to route different parts of output. ([Kong Docs][1])
+
+* **Resources section**
+
+  * Shared resources (e.g., cache and Vault secrets) are configured once at `resources.*` and referenced from nodes (e.g., `resources.cache`, `resources.vault`). ([Kong Docs][1])
+
+* **HTTP-centric workflow examples**
+
+  * Typical Datakit flows: multiplexing calls to multiple APIs, caching, header manipulations, and combining responses with JQ. ([Kong Docs][1])
+
+These map almost 1:1 to what your orchestrator needs: node-level operations, a resource catalog, and a YAML spec.
+
+### From Amazon States Language (ASL)
+
+ASL provides the control-flow and data-flow semantics you want:
+
+* **State machine with named states**
+
+  * A `StateMachine` has `StartAt` and a map of `States`. ([AWS Documentation][2])
+  * State types: `Task`, `Choice`, `Parallel`, `Map`, `Wait`, `Pass`, `Succeed`, `Fail`. ([AWS Documentation][3])
+
+* **Data paths & query language**
+
+  * Common fields like `InputPath`, `OutputPath`, `ResultPath`, `ResultSelector` controlling how each state reads/writes context.
+  * `QueryLanguage` can be `JSONPath` or `JSONata`, and `$` in expressions refers to current context, with subtle differences per state type. ([AWS Documentation][3])
+
+* **Wait & Parallel semantics**
+
+  * `Wait` delays progression either by relative seconds or absolute timestamp. ([AWS Documentation][4])
+  * `Parallel` executes multiple branches concurrently and joins when all finish. ([AWS Documentation][5])
+
+* **Assign** (extended spec)
+
+  * `Assign` lets states (and catchers and choice rules) assign variables in the machine context in one shot. ([states-language.net][6])
+
+These semantics are more mature than anything you would invent ad-hoc. It is rational to intentionally **mirror ASL concepts** but adapt names and structure to a Datakit-style YAML.
+
+---
+
+## 🧾 Proposed DSL v0: Datakit-style nodes + ASL-style control
+
+### Top-level structure
+
+Aim: keep it Datakit-like at the top level, but embed an ASL-flavoured state machine.
+
+Draft:
+
+```yaml
+apiVersion: ork.io/v1
+kind: Workflow
+metadata:
+  name: animal-facts
+  version: 1.0.0
+  description: "Combine cat and dog facts into a single payload"
+  tags: [example, demo]
+  environment: default
+
+resources:
+  httpClients:
+    catFacts:
+      baseUrl: https://cat-facts.example.com
+      connectionPool:
+        maxConnections: 100
+      timeouts:
+        connectMillis: 500
+        readMillis: 2000
+    dogFacts:
+      baseUrl: https://dog-facts.example.com
+  caches:
+    factsCache:
+      strategy: redis
+      uri: redis://cache:6379/0
+  vault:
+    # arbitrary secret references; resolved by implementation
+    catApiKey: "{vault://env/CAT_API_KEY}"
+    dogApiKey: "{vault://env/DOG_API_KEY}"
+
+policies:
+  httpResiliency:
+    default:
+      timeoutMillis: 2000
+      retry:
+        maxAttempts: 3
+        backoff: exponential
+        initialMillis: 100
+    aggressive:
+      timeoutMillis: 5000
+      retry:
+        maxAttempts: 5
+        backoff: exponential
+        initialMillis: 200
+  httpAuth:
+    catService:
+      type: header
+      header: X-Api-Key
+      valueFrom: resources.vault.catApiKey
+    dogService:
+      type: header
+      header: X-Api-Key
+      valueFrom: resources.vault.dogApiKey
+
+stateMachine:
+  startAt: MaybeFromCache
+  queryLanguage: JSONata     # or JSONPath; same idea as ASL QueryLanguage :contentReference[oaicite:13]{index=13}
+  states:
+
+    MaybeFromCache:
+      type: Task
+      operation:
+        kind: cacheGet
+        cacheRef: factsCache
+        keyExpr: "animalType & ':' & locale"   # JSONata/JSONPath over $.input
+      resultPath: "$.cache"                    # ASL-style ResultPath
+      next: CacheHit?
+
+    CacheHit?:
+      type: Choice
+      queryLanguage: JSONata
+      choices:
+        - condition: "$.cache.value != null"
+          next: FromCache
+      default: FetchBoth
+
+    FromCache:
+      type: Succeed
+      outputPath: "$.cache.value"
+
+    FetchBoth:
+      type: Parallel
+      branches:
+        - startAt: GetCat
+          states:
+            GetCat:
+              type: Task
+              operation:
+                kind: httpCall
+                httpClientRef: catFacts
+                authPolicyRef: catService
+                resiliencyPolicyRef: default
+                request:
+                  method: GET
+                  pathTemplate: "/fact"
+                  query:
+                    locale: "$.input.locale"
+              resultPath: "$.cat"
+              end: true
+        - startAt: GetDog
+          states:
+            GetDog:
+              type: Task
+              operation:
+                kind: httpCall
+                httpClientRef: dogFacts
+                authPolicyRef: dogService
+                resiliencyPolicyRef: default
+                request:
+                  method: GET
+                  pathTemplate: "/fact"
+                  query:
+                    locale: "$.input.locale"
+              resultPath: "$.dog"
+              end: true
+      resultSelector:     # ASL-style ResultSelector :contentReference[oaicite:14]{index=14}
+        combined:
+          cat: "$[0].cat"
+          dog: "$[1].dog"
+      resultPath: "$.combined"
+      next: ToCache
+
+    ToCache:
+      type: Task
+      operation:
+        kind: cachePut
+        cacheRef: factsCache
+        keyExpr: "animalType & ':' & locale"
+        valueExpr: "$.combined"
+        ttlSeconds: 60
+      next: Done
+
+    Done:
+      type: Succeed
+      outputPath: "$.combined"
+```
+
+Core patterns:
+
+* **Datakit-style resources**: `resources.httpClients`, `resources.caches`, `resources.vault`. ([Kong Docs][1])
+* **ASL-style state machine**: `startAt`, `states`, `type` = `Task`, `Choice`, `Parallel`, `Succeed`. ([AWS Documentation][2])
+* **Task operations**: `operation.kind` is your Datakit-style node type:
+
+  * `httpCall`, `cacheGet`, `cachePut`, `transform`, `ldap`, `jdbc`, `webhook`, etc.
+* **Data path semantics**: `resultPath`, `resultSelector`, `outputPath` echo ASL semantics. ([AWS Documentation][3])
+* **Query language**: `JSONata` or `JSONPath` as in the ASL spec extension. ([states-language.net][6])
+
+This is **v0 of the DSL**. It intentionally does not include every feature from your notes (LDAP, JDBC, Kafka, compensation, sub-workflows) but the shape scales.
+
+---
+
+## 🧱 DSL building blocks: catalog
+
+### State types (aligned with ASL)
+
+At minimum, keep the ASL core:
+
+* `Task` – perform work (`operation.kind` defines connector).
+* `Choice` – conditional branch.
+* `Parallel` – run branches concurrently, join at end.
+* `Wait` – delay execution (seconds or timestamp).
+* `Pass` – purely pass/transform data.
+* `Succeed` – successful terminal state.
+* `Fail` – failure terminal state.
+* `Map` – run sub-workflows over array items (optional in v0; useful later). ([AWS Documentation][3])
+
+Add two orchestrator-specific ones:
+
+* `SubWorkflow` – invoke another workflow spec (sync or async).
+* `WebhookWait` – specialisation of `Wait` that resumes upon external callback.
+
+### Operation kinds (Datakit-style)
+
+Under `Task.operation.kind`, you can define the “node types” similar to Datakit’s `type` list. ([Kong Docs][1])
+
+Initial set:
+
+* `httpCall`
+* `transform` (JSONata/JOLT/JQ/DataWeave-style)
+* `cacheGet` / `cachePut`
+* `ldap`
+* `jdbcQuery` / `jdbcUpdate`
+* `jwtValidate`
+* `webhookCall`
+* `static` (inject static values)
+* `property` (internal context manipulation; might be redundant with `Pass` + `Assign`)
+
+The spec for `httpCall` tasks will carry auth/resilience policy references and mapping:
+
+```yaml
+operation:
+  kind: httpCall
+  httpClientRef: riskApi
+  authPolicyRef: riskClientCreds
+  resiliencyPolicyRef: default
+  request:
+    method: POST
+    pathTemplate: "/score"
+    headers:
+      X-Journey-Token: "$.meta.journeyToken"
+    bodyExpr: "$.input.payload"     # JSONata/JSONPath expression
+  response:
+    expectStatus: 2xx
+    captureBody: true
+    captureHeaders: false
+```
+
+### Resources and policies
+
+Inspired by Datakit’s `resources.*` (cache, vault) ([Kong Docs][1]) and generalized:
+
+* `resources.httpClients` – base URLs, pools, TLS.
+* `resources.caches` – backing store & options (Redis, memory).
+* `resources.datastores` – JDBC / embedded DBs.
+* `resources.ldapServers`.
+* `resources.vault` – secret references.
+
+Policies:
+
+* `policies.httpResiliency` – timeouts, retries, circuit breaker, bulkhead.
+* `policies.httpAuth` – OAuth2 token source, API key, mTLS, header injection.
+* Later: `policies.cache`, `policies.jwtValidation`, etc.
+
+States reference policies by name, so you can assign them centrally and reuse.
+
+---
+
+## ⚙️ Engine architecture: standalone Java state machine
+
+### Core model
+
+In Java terms (Java 25, records, sealed types):
+
+* `WorkflowDefinition`
+
+  * `Metadata metadata`
+  * `Resources resources`
+  * `Policies policies`
+  * `StateMachine stateMachine`
+
+* `StateMachine`
+
+  * `String startAt`
+  * `Map<String, State> states`
+  * `QueryLanguage queryLanguage`
+
+* `sealed interface State permits TaskState, ChoiceState, ParallelState, WaitState, PassState, SucceedState, FailState, MapState, SubWorkflowState, WebhookWaitState { … }`
+
+* `record TaskState(String name, Operation operation, Paths paths, Catchers catchers, String next)`
+  where `Paths` contains `inputPath`, `resultPath`, `outputPath`, `assign`, `resultSelector`.
+
+Execution context:
+
+* `WorkflowInstance`
+
+  * `UUID id`
+  * `String workflowName`
+  * `String version`
+  * `String currentStateName`
+  * `JsonNode context` (Jackson tree)
+  * `Status status` (RUNNING, WAITING, SUCCEEDED, FAILED, COMPENSATING, CANCELLED)
+  * `Instant startedAt`, `Instant updatedAt`
+  * `Map<String,String> tags` (journey token, subject, etc.)
+
+### Execution pipeline
+
+A minimal synchronous execution loop:
+
+1. Load `WorkflowDefinition` and `WorkflowInstance`.
+2. Fetch current `State`.
+3. Apply **input mapping**:
+
+   * `effectiveInput = applyInputPath(instance.context)` using JSONPath/JSONata. ([AWS Documentation][7])
+4. Execute state-specific logic:
+
+   * For `Task` with `operation.kind=httpCall`:
+
+     * Build HTTP request using `effectiveInput` and `operation.request`.
+     * Apply auth + resiliency policies.
+     * Receive response and build `taskResult` JSON.
+   * For `Choice`:
+
+     * Evaluate each `condition` expression; pick `next`.
+   * For `Parallel`:
+
+     * Spawn branch executions (virtual threads), each with own subtree of states and `effectiveInput`.
+5. Apply **resultSelector** (if any) to `taskResult` to shape it. ([AWS Documentation][3])
+6. Merge into main context via **resultPath** (ASL semantics). ([AWS Documentation][3])
+7. Apply **assign** (if present) to set additional variables. ([states-language.net][6])
+8. Apply **outputPath** to produce next state’s input view. ([AWS Documentation][3])
+9. Determine `next` state:
+
+   * `Choice` by conditions.
+   * `Parallel` by configured `next`.
+   * `Wait` by scheduling a wakeup and marking instance `WAITING`.
+   * Terminal states: mark `SUCCEEDED` or `FAILED`.
+10. Persist `WorkflowInstance` after each step.
+
+Concurrency model:
+
+* Use **virtual threads** (Project Loom) to execute many workflow instances concurrently without exhausting platform threads.
+* For `Parallel` and `Map`, use Java 25 structured concurrency primitives to join branches with proper cancellation semantics.
+
+### Wait & event handling
+
+* `WaitState` with `seconds` or `untilTimestamp`:
+
+  * Engine persists instance as `WAITING` and writes a scheduled event to a `TimerStore` (e.g., DB table with due timestamps).
+  * Background scheduler scans due timers and enqueues resume tasks.
+
+* `WebhookWaitState`:
+
+  * Engine persists a correlation id and journey token.
+  * External callback hitting `POST /runtime/journeys/{id}/events` resumes the state.
+
+---
+
+## 🛰️ Persistence & storage
+
+Minimal baseline:
+
+* `WorkflowDefinitionStore`
+
+  * Stores canonical workflow specs (YAML) plus parsed model (`WorkflowDefinition`) keyed by `(name, version)`.
+  * Backed by filesystem, then database later.
+
+* `WorkflowInstanceStore`
+
+  * Stores instances with `id`, `workflowRef`, `status`, `stateName`, `context`, `createdAt`, `updatedAt`.
+  * Backed initially by embedded DB (H2/SQLite), later by Postgres or similar.
+
+* `TimerStore`
+
+  * Stores scheduled events for `Wait` / `WebhookWait` states with due timestamps.
+  * Background worker runs periodically to enqueue resumes.
+
+This is deliberately minimal but enough for:
+
+* Long-running workflows.
+* Query APIs (“my open journeys”) with filters by subject, workflow, tags.
+
+---
+
+## 🌐 Connectors & resiliency
+
+### HTTP client layer
+
+Implement a dedicated `HttpClientManager` that:
+
+* Maintains connection pools per base URL (Hikari-like, but for HTTP).
+* For each outbound request:
+
+  * Applies the selected resiliency policy:
+
+    * Timeouts.
+    * Retries with exponential backoff.
+    * Optional circuit breaker / bulkhead.
+  * Applies the selected auth policy:
+
+    * OAuth2 client credentials (token cache).
+    * API key header.
+    * mTLS configuration (keystore/truststore).
+
+States simply reference policies by name:
+
+```yaml
+operation:
+  kind: httpCall
+  httpClientRef: riskApi
+  authPolicyRef: riskClientCreds
+  resiliencyPolicyRef: default
+```
+
+### LDAP, JDBC, Kafka
+
+Spec shape (examples; v0 doesn’t need full detail but shape should be compatible):
+
+```yaml
+operation:
+  kind: ldap
+  ldapRef: mainDirectory
+  action: search
+  baseDn: "ou=users,dc=example,dc=com"
+  filter: "(uid=${$.input.username})"
+  attributes: ["cn", "memberOf"]
+
+operation:
+  kind: jdbcQuery
+  datasourceRef: auditDb
+  sql: "SELECT * FROM audit_log WHERE user_id = :userId"
+  params:
+    userId: "$.meta.subjectId"
+
+operation:
+  kind: kafkaPublish
+  producerRef: eventsBus
+  topic: "journey-events"
+  keyExpr: "$.meta.journeyId"
+  valueExpr: "$"
+```
+
+Each connector implementation uses resiliency and telemetry consistently.
+
+---
+
+## 🛡️ Admin vs runtime APIs
+
+### Administrative plane (control plane)
+
+Responsibilities:
+
+* Managing workflow definitions and versions.
+* Managing resources and policies.
+* Performing validation and dry-run compilation (DSL → internal model).
+* Governance (RBAC, approvals, environment promotion).
+
+Example endpoints:
+
+* **Workflow definitions**
+
+  * `POST /admin/workflows`
+
+    * Body: YAML or JSON spec.
+    * Behaviour: validate, assign `(name, version)`, persist.
+  * `GET /admin/workflows` (list).
+  * `GET /admin/workflows/{name}/versions` (list).
+  * `GET /admin/workflows/{name}/versions/{version}` (retrieve spec + parsed info).
+
+* **Policies & resources**
+
+  * `POST /admin/policies/http-resiliency`
+  * `POST /admin/policies/http-auth`
+  * `POST /admin/resources/http-client`
+  * `POST /admin/resources/cache`
+  * etc.
+
+* **Validation & preview**
+
+  * `POST /admin/workflows/validate` – schema + semantic validation.
+  * `POST /admin/workflows/plan` – show state graph, detect unreachable states, etc.
+
+Security:
+
+* Strict RBAC & SSO; typically accessible only to platform/IAM teams.
+
+### Runtime plane (data plane)
+
+Responsibilities:
+
+* Executing workflows (journeys).
+* Exposing operational state to clients.
+* Receiving events and webhooks that affect running journeys.
+
+Example endpoints:
+
+* **Start journey**
+
+  * `POST /runtime/workflows/{name}/executions`
+
+    * Body: `{ "version": "1.0.0", "input": { ... } }` (version optional; default active).
+    * Returns: `{ "journeyId": "...", "status": "RUNNING", "token": "<JWT or opaque>" }`.
+
+* **Get journey**
+
+  * `GET /runtime/executions/{journeyId}`
+
+    * Returns high-level state (status, currentStage, history, output if done).
+
+* **Send event / resume**
+
+  * `POST /runtime/executions/{journeyId}/events`
+
+    * Body: event payload, type, correlation key.
+    * Used for `Wait` + `WebhookWait` semantics.
+
+* **Cancel journey**
+
+  * `POST /runtime/executions/{journeyId}/cancel`
+
+* **Query journeys**
+
+  * `GET /runtime/executions?subjectId=...&status=RUNNING&workflow=...`
+
+    * For “my open journeys”.
+
+Security:
+
+* Normal client auth (OAuth2, MTLS, API key).
+* Checks that callers can only operate on authorised workflows/journeys.
+
+The runtime plane never exposes internal `stateName` or DSL details unless you want introspection; those can be subject to stricter scopes.
+
+---
+
+## 🧬 Implementation plan in Java
+
+### Modules
+
+Updated multi-module structure:
+
+```text
+api-workflow-orchestrator/
+  orchestrator-model/            # DSL model classes (records, enums)
+  orchestrator-schema/           # JSON Schema + validators
+  orchestrator-parser/           # YAML/JSON parsing -> model
+  orchestrator-runtime-core/     # state machine engine, execution loop
+  orchestrator-connectors-http/
+  orchestrator-connectors-ldap/
+  orchestrator-connectors-jdbc/
+  orchestrator-connectors-kafka/
+  orchestrator-persistence-core/ # interfaces
+  orchestrator-persistence-jdbc/ # Postgres, etc.
+  orchestrator-persistence-embedded/
+  orchestrator-admin-service/    # admin plane REST (Spring Boot/Micronaut)
+  orchestrator-runtime-service/  # runtime plane REST
+  orchestrator-ui-bridge/        # simplified graph API for React Flow/Atlas
+  examples/
+    animal-facts/
+    payments-saga/
+```
+
+### MVP slices
+
+1. **v0.1 – Spec & synchronous runner**
+
+   * Implement basic DSL schema (Task, Choice, Succeed, Fail).
+   * HTTP connector with minimal resiliency.
+   * YAML parser → model → synchronous runner (no persistence).
+   * CLI or unit tests run workflows.
+
+2. **v0.2 – Persistence & runtime service**
+
+   * Introduce `WorkflowInstanceStore`.
+   * Runtime REST API:
+
+     * Start journey.
+     * Get journey status.
+   * `Succeed`/`Fail` only; no Wait/Parallel yet.
+
+3. **v0.3 – Wait & timers**
+
+   * Add `Wait` state with seconds.
+   * `TimerStore` + scheduler.
+   * Workflows that poll backends with wait loops.
+
+4. **v0.4 – Parallel**
+
+   * Add `Parallel` state with branches.
+   * Virtual threads + structured concurrency.
+   * Context merging semantics.
+
+5. **v0.5 – Resources & policies**
+
+   * `resources.*` from spec.
+   * `policies.httpResiliency` and `policies.httpAuth`.
+   * HTTP calls honour policies.
+
+6. **v0.6 – Cache, transform, and Choice**
+
+   * Implement `cacheGet`, `cachePut` operations.
+   * `transform` with JSONata.
+   * Full `Choice` semantics.
+
+Later increments: LDAP, JDBC, Kafka, SubWorkflow, WebhookWait, compensation, etc.
+
+---
+
+## ⚖️ Criticism & controversies
+
+Several non-trivial issues deserve explicit skepticism.
+
+1. **Re-implementing a subset of Step Functions**
+
+   * ASL semantics are non-trivial: data paths, result selectors, assign, error handling, retries, parallel branches, etc. ([AWS Documentation][2])
+   * Recreating this behaviour in your own engine means:
+
+     * Bug-compatibility issues (your behaviour vs AWS docs).
+     * Edge cases with nested paths, failure handling, partial outputs.
+   * Mitigation:
+
+     * Be explicit that you are **ASL-inspired**, not ASL-compatible.
+     * Keep data-path features to a minimal, well-tested subset first.
+
+2. **DSL complexity and cognitive load**
+
+   * Combining Datakit’s node-style configuration with ASL’s state semantics risks creating a **dense DSL**:
+
+     * Too many knobs (`InputPath`, `OutputPath`, `ResultSelector`, `Assign`, `keyExpr`, `valueExpr`, etc.).
+   * Operators will struggle if you don’t provide:
+
+     * Good validation and error messages.
+     * Visualisation (React Flow) synced with the spec.
+     * Strong examples and templates.
+   * You must push complexity down into **libraries** and keep the DSL as small as possible.
+
+3. **Engine vs gateway overlap**
+
+   * Datakit exists already *inside* Kong; your orchestrator overlaps conceptually:
+
+     * Node types: call, cache, branch, jq/transform, exit. ([Kong Docs][1])
+   * The justification for a separate engine must be:
+
+     * Independence from a specific gateway.
+     * Richer workflow semantics (Parallel, Wait, Map, SubWorkflow).
+     * IAM-centric use cases (journey tokens, JWT validation, directory/datastore integration).
+   * If your DSL degenerates into “Datakit-but-not-in-Kong”, the project looks redundant.
+
+4. **Operational complexity**
+
+   * A standalone engine with timers, persistence, parallelism, and a runtime API is a non-trivial distributed system:
+
+     * You must handle crashes, restarts, exactly-once vs at-least-once semantics.
+     * Waits and long-running flows introduce subtle correctness issues.
+   * To avoid “Temporal-lite” complexity, be explicit:
+
+     * At-least-once semantics, idempotent operations strongly recommended.
+     * Retry + compensation semantics codified in DSL.
+
+5. **Lock-in to JSONata / JSONPath**
+
+   * JSONata is powerful and fits the ASL talent (AWS Step Functions now supports JSONata for transformations). ([AWS Documentation][3])
+   * However:
+
+     * It adds another language layer to test.
+     * It may not be as familiar as JSONPath or JQ for some teams.
+   * A pragmatic approach:
+
+     * Make the query language explicit (`JSONPath`, `JSONata`, maybe `JQ` later).
+     * Provide a small “standard library” or cookbook.
+
+---
+
+## 📊 Summary table
+
+| Aspect                       | Design choice                                                                                             | Influence / Rationale                                                       |
+| ---------------------------- | --------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| Core style                   | Standalone Java engine, spec-first YAML/JSON                                                              | Avoid Conductor/Camunda; full control over semantics                        |
+| Top-level spec               | `Workflow` with `metadata`, `resources`, `policies`, `stateMachine`                                       | Datakit’s resources + ASL’s state machine ([Kong Docs][1])                  |
+| Control-flow                 | States: `Task`, `Choice`, `Parallel`, `Wait`, `Pass`, `Succeed`, `Fail` (+ optional `Map`, `SubWorkflow`) | Directly modelled on Amazon States Language ([AWS Documentation][2])        |
+| Data-flow                    | `InputPath`, `ResultPath`, `ResultSelector`, `OutputPath`, `Assign`, `queryLanguage`                      | ASL data-path semantics with JSONPath/JSONata ([states-language.net][6])    |
+| Node / operation abstraction | `Task.operation.kind` = `httpCall`, `cacheGet`, `cachePut`, `transform`, `ldap`, `jdbcQuery`, etc.        | Datakit node types (call, cache, jq, branch, exit, static) ([Kong Docs][1]) |
+| Resources                    | `resources.httpClients`, `resources.caches`, `resources.vault`, `resources.datastores`, `resources.ldap`  | Datakit `resources.cache`, `resources.vault`, generalised ([Kong Docs][1])  |
+| Policies                     | `policies.httpResiliency`, `policies.httpAuth`, later others                                              | Encodes retries, timeouts, auth separately from tasks                       |
+| Runtime model                | `WorkflowInstance` with JSON context, status, current state; persisted between steps                      | Classic state machine execution with ASL-like semantics                     |
+| Concurrency                  | Virtual threads, structured concurrency for `Parallel` and `Map`                                          | Leverages Java 25 capabilities for large-scale orchestration                |
+| Wait & events                | `Wait` state + `TimerStore`; `WebhookWait` triggered by runtime events                                    | ASL Wait semantics plus event-driven resumes ([AWS Documentation][4])       |
+| Admin vs runtime API         | `/admin/...` for definitions/policies; `/runtime/...` for journeys/executions                             | Explicit control/data plane split                                           |
+| Main risks                   | Re-implementing ASL semantics; DSL complexity; operational overhead                                       | Needs disciplined DSL scope, strong validation, good tooling                |
+
+This gives you a coherent, ASL-inspired but Datakit-flavoured blueprint for a standalone Java orchestrator. Next logical step is to harden the **DSL schema v0** (JSON Schema) and define the **exact Java model types** that mirror it, so you can start a real repo and incrementally implement the runtime.
+
+[1]: https://developer.konghq.com/plugins/datakit/ "Datakit - Plugin | Kong Docs"
+[2]: https://docs.aws.amazon.com/step-functions/latest/dg/concepts-amazon-states-language.html?utm_source=chatgpt.com "Using Amazon States Language to define Step Functions ..."
+[3]: https://docs.aws.amazon.com/step-functions/latest/dg/statemachine-structure.html?utm_source=chatgpt.com "State machine structure in Amazon States Language for ..."
+[4]: https://docs.aws.amazon.com/step-functions/latest/dg/state-wait.html?utm_source=chatgpt.com "Wait workflow state - AWS Step Functions"
+[5]: https://docs.aws.amazon.com/step-functions/latest/dg/state-parallel.html?utm_source=chatgpt.com "Parallel workflow state - AWS Step Functions"
+[6]: https://states-language.net/?utm_source=chatgpt.com "Amazon States Language"
+[7]: https://docs.aws.amazon.com/step-functions/latest/dg/workflow-variables.html?utm_source=chatgpt.com "Passing data between states with variables"

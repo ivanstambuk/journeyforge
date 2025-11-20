@@ -1,0 +1,76 @@
+openapi: 3.1.0
+info:
+  title: JourneyForge – choice-multi-branch
+  version: 0.1.0
+servers:
+  - url: /api/v1
+tags:
+  - name: choice-multi-branch
+paths:
+  /journeys/choice-multi-branch/start:
+    post:
+      summary: Start choice-multi-branch journey
+      tags: [choice-multi-branch]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [context]
+              properties:
+                context:
+                  $ref: '../schemas/choice-multi-branch-input.json'
+      responses:
+        '202':
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JourneyStartResponse'
+  /journeys/{journeyId}:
+    get:
+      summary: Get journey status
+      tags: [choice-multi-branch]
+      parameters:
+        - in: path
+          name: journeyId
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JourneyStatus'
+  /journeys/{journeyId}/result:
+    get:
+      summary: Retrieve final outcome
+      tags: [choice-multi-branch]
+      parameters:
+        - in: path
+          name: journeyId
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Final outcome
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JourneyOutcome'
+        '409':
+          description: Journey not terminal yet
+components:
+  schemas:
+    JourneyStartResponse:
+      $ref: '../../../openapi/journeys.openapi.yaml#/components/schemas/JourneyStartResponse'
+    JourneyStatus:
+      $ref: '../../../openapi/journeys.openapi.yaml#/components/schemas/JourneyStatus'
+    JourneyOutcome:
+      allOf:
+        - $ref: '../../../openapi/journeys.openapi.yaml#/components/schemas/JourneyOutcome'
+      properties:
+        output:
+          $ref: '../schemas/choice-multi-branch-output.json'

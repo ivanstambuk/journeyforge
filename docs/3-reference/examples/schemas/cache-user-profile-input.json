@@ -1,0 +1,11 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "cache-user-profile input context",
+  "type": "object",
+  "required": ["userId"],
+  "properties": {
+    "userId": { "type": "string" },
+    "country": { "type": "string" }
+  },
+  "additionalProperties": true
+}

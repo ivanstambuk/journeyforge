@@ -1,0 +1,99 @@
+openapi: 3.1.0
+info:
+  title: JourneyForge – sync-wrapper-wait
+  version: 0.1.0
+servers:
+  - url: /api/v1
+tags:
+  - name: sync-wrapper-wait
+paths:
+  /journeys/sync-wrapper-wait/start:
+    post:
+      summary: Start sync-wrapper-wait journey
+      tags: [sync-wrapper-wait]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/JourneyStartRequest"
+      responses:
+        '202':
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JourneyStartResponse"
+  /journeys/{journeyId}:
+    get:
+      summary: Get journey status
+      tags: [sync-wrapper-wait]
+      parameters:
+        - in: path
+          name: journeyId
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JourneyStatus"
+  /journeys/{journeyId}/result:
+    get:
+      summary: Retrieve final outcome
+      tags: [sync-wrapper-wait]
+      parameters:
+        - in: path
+          name: journeyId
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Final outcome
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JourneyOutcome"
+        '409':
+          description: Journey not terminal yet
+  /journeys/{journeyId}/steps/waitStep:
+    post:
+      summary: Submit completion event
+      tags: [sync-wrapper-wait]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SyncWrapperWaitInput"
+      responses:
+        '200':
+          description: Updated journey status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JourneyStatus"
+components:
+  schemas:
+    JourneyStartRequest:
+      type: object
+      required: [context]
+      properties:
+        context:
+          $ref: '../schemas/sync-wrapper-wait-input.json'
+
+    JourneyStartResponse:
+      $ref: '../../../openapi/journeys.openapi.yaml#/components/schemas/JourneyStartResponse'
+    JourneyStatus:
+      $ref: '../../../openapi/journeys.openapi.yaml#/components/schemas/JourneyStatus'
+    JourneyOutcome:
+      allOf:
+        - $ref: '../../../openapi/journeys.openapi.yaml#/components/schemas/JourneyOutcome'
+      properties:
+        output:
+          $ref: '../schemas/sync-wrapper-wait-output.json'
+    SyncWrapperWaitInput:
+      $ref: '../schemas/sync-wrapper-wait-input.json'
+

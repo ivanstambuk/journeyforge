@@ -1,0 +1,63 @@
+apiVersion: v1
+kind: Workflow
+metadata:
+  name: transform-pipeline
+  version: 0.1.0
+spec:
+  inputSchemaRef: schemas/transform-pipeline-input.json
+  outputSchemaRef: schemas/transform-pipeline-output.json
+  start: normalise
+  states:
+    normalise:
+      type: transform
+      transform:
+        mapper:
+          lang: dataweave
+          expr: |
+            {
+              order: {
+                id: context.id,
+                amount: context.amount,
+                currency: context.currency default: 'USD'
+              }
+            }
+        target:
+          kind: context
+          path: ''
+      next: enrich
+
+    enrich:
+      type: transform
+      transform:
+        mapper:
+          lang: dataweave
+          expr: |
+            context ++ {
+              order: context.order ++ {
+                tax: (context.amount * 0.25)
+              }
+            }
+        target:
+          kind: context
+          path: ''
+      next: project
+
+    project:
+      type: transform
+      transform:
+        mapper:
+          lang: dataweave
+          expr: |
+            {
+              id: context.order.id,
+              total: context.order.amount + context.order.tax,
+              currency: context.order.currency
+            }
+        target:
+          kind: var
+        resultVar: summary
+      next: done
+
+    done:
+      type: succeed
+      outputVar: summary
