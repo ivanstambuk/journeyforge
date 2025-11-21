@@ -7,8 +7,36 @@ metadata:
 spec:
   apis:
     payments: { openApiRef: apis/payments.openapi.yaml }
-  inputSchemaRef: schemas/payment-callback-input.json
-  outputSchemaRef: schemas/payment-callback-output.json
+  input:
+    schema:
+      title: payment-callback input context
+      type: object
+      required: [paymentId, amount, currency]
+      properties:
+        paymentId:
+          type: string
+        amount:
+          type: number
+        currency:
+          type: string
+      additionalProperties: true
+  output:
+    schema:
+      title: payment-callback output
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [SUCCESS, FAILED]
+        paymentId:
+          type: string
+        amount:
+          type: number
+        currency:
+          type: string
+        reason:
+          type: string
+      additionalProperties: true
   start: authorize
   states:
     authorize:
@@ -34,7 +62,38 @@ spec:
     waitForCallback:
       type: webhook
       webhook:
-        inputSchemaRef: schemas/payment-callback-webhook-input.json
+        input:
+          schema:
+            title: payment-callback webhook input
+            type: object
+            required: [paymentId, status]
+            properties:
+              paymentId:
+                type: string
+              status:
+                type: string
+                enum: [SUCCESS, FAILED]
+              reason:
+                type: string
+            additionalProperties: true
+        response:
+          outputVar: callbackResponse
+          schema:
+            title: payment-callback step response
+            type: object
+            description: Additional top-level fields returned from the waitForCallback webhook step.
+            properties:
+              paymentId:
+                type: string
+                description: The payment id associated with this callback.
+              status:
+                type: string
+                enum: [SUCCESS, FAILED]
+                description: Callback status as reported by the payment provider.
+              reason:
+                type: string
+                description: Optional failure reason when status is FAILED.
+            additionalProperties: true
         security:
           kind: sharedSecretHeader
           header: X-Webhook-Secret
@@ -43,7 +102,14 @@ spec:
           mapper:
             lang: dataweave
             expr: |
-              context ++ { 'webhook': payload }
+              context ++ {
+                webhook: payload,
+                callbackResponse: {
+                  paymentId: payload.paymentId,
+                  status: payload.status,
+                  reason: payload.reason
+                }
+              }
         on:
           - when:
               predicate:

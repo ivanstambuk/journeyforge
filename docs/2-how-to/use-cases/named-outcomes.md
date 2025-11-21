@@ -24,8 +24,16 @@ metadata:
   name: named-outcomes
   version: 0.1.0
 spec:
-  inputSchemaRef: schemas/named-outcomes-input.json
-  outputSchemaRef: schemas/named-outcomes-output.json
+  input:
+    schema:
+      type: object
+      required: [amount]
+      properties:
+        amount: { type: number }
+      additionalProperties: true
+  output:
+    schema:
+      type: number
   outcomes:
     SucceededLowAmount:
       when:
@@ -73,4 +81,3 @@ spec:
 
 Related files:
 - OpenAPI: `named-outcomes.openapi.yaml`
-- Schemas: `named-outcomes-input.json`, `named-outcomes-output.json`

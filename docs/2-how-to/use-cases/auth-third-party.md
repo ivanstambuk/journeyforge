@@ -65,8 +65,31 @@ spec:
     users:
       openApiRef: apis/users.openapi.yaml
 
-  inputSchemaRef: schemas/auth-user-info-input.json
-  outputSchemaRef: schemas/auth-user-info-output.json
+  input:
+    schema:
+      type: object
+      additionalProperties: true
+      properties:
+        traceparent:
+          type: string
+          description: Optional override for W3C traceparent header; if omitted, middleware may inject it.
+  output:
+    schema:
+      type: object
+      properties:
+        status: { type: integer }
+        ok: { type: boolean }
+        headers:
+          type: object
+          additionalProperties: { type: string }
+        body: {}
+        error:
+          type: object
+          properties:
+            type: { type: string }
+            message: { type: string }
+          additionalProperties: true
+      additionalProperties: true
 
   start: normaliseAuth
 
@@ -160,8 +183,6 @@ spec:
     backend:
       openApiRef: apis/backend.openapi.yaml
 
-  inputSchemaRef: schemas/auth-outbound-client-credentials-input.json
-  outputSchemaRef: schemas/auth-outbound-client-credentials-output.json
 
   start: callBackend
 

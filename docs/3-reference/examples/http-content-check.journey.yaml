@@ -4,8 +4,36 @@ metadata:
   name: http-content-check
   version: 0.1.0
 spec:
-  inputSchemaRef: schemas/http-content-check-input.json
-  outputSchemaRef: schemas/http-content-check-output.json
+  input:
+    schema:
+      type: object
+      required: [inputId]
+      additionalProperties: true
+      properties:
+        inputId:
+          type: string
+  output:
+    schema:
+      type: object
+      properties:
+        status:
+          type: integer
+        ok:
+          type: boolean
+        headers:
+          type: object
+          additionalProperties:
+            type: string
+        body: {}
+        error:
+          type: object
+          properties:
+            type:
+              type: string
+            message:
+              type: string
+          additionalProperties: true
+      additionalProperties: true
   apis:
     items: { openApiRef: apis/items.openapi.yaml }
     users: { openApiRef: apis/users.openapi.yaml }

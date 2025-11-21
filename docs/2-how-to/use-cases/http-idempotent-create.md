@@ -29,8 +29,14 @@ spec:
   apis:
     items:
       openApiRef: apis/items.openapi.yaml
-  inputSchemaRef: schemas/http-idempotent-create-input.json
-  outputSchemaRef: schemas/http-idempotent-create-output.json
+  input:
+    schema:
+      type: object
+      required: [id, name]
+      properties:
+        id: { type: string }
+        name: { type: string }
+      additionalProperties: true
   start: checkExisting
   states:
     checkExisting:

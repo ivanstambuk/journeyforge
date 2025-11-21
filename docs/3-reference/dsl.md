@@ -30,7 +30,67 @@ The DSL surface defines the following state types and configuration blocks. All 
 
 ## 2. Top-level shape
 
-## 2a. API catalog (OpenAPI binding)
+### 2a. Inline JSON Schemas
+
+The DSL embeds JSON Schemas directly in a few well-known locations:
+- `spec.input.schema` – logical input object for the journey/API.
+- `spec.output.schema` – logical output object when declared.
+- `spec.context.schema` – optional shape for the mutable context.
+- `wait.input.schema`, `wait.response.schema` – per-step request/response payloads.
+- `webhook.input.schema`, `webhook.response.schema` – callback payloads.
+
+Semantics
+- All inline `*.schema` blocks use JSON Schema 2020-12 semantics.
+- Authors SHOULD omit `$schema` and `$id` inside these blocks; tooling and engines MUST assume the 2020-12 meta-schema by default.
+- Schemas SHOULD be authored to closely mirror OpenAPI 3.1 component schemas:
+  - Top-level `type`, `properties`, `required`, `additionalProperties`, etc.
+  - Optional `title` MAY be used to carry a human-readable name; exporters MAY reuse it for component names (for example, `JourneyStartRequest`).
+
+Example (input schema):
+```yaml
+spec:
+  input:
+    schema:
+      title: JourneyStartRequest
+      type: object
+      required: [inputId]
+      properties:
+        inputId:
+          type: string
+      additionalProperties: true
+```
+
+Example (output schema):
+```yaml
+spec:
+  output:
+    schema:
+      title: HttpSuccessOutput
+      type: object
+      required: [ok]
+      properties:
+        status:
+          type: integer
+        ok:
+          type: boolean
+        headers:
+          type: object
+          additionalProperties:
+            type: string
+        body: {}
+        error:
+          type: object
+          properties:
+            type:
+              type: string
+            message:
+              type: string
+          required: [type]
+          additionalProperties: true
+      additionalProperties: true
+```
+
+## 2b. API catalog (OpenAPI binding)
 To reference downstream services by OpenAPI operationId instead of raw URLs, a journey definition (`kind: Journey`) or API endpoint may declare an API catalog and use `operationRef` in HTTP tasks.
 
 Catalog shape (under `spec.apis`):
@@ -107,8 +167,10 @@ spec:
   route:                        # optional; controls REST surface
     path: <string>              # e.g. /apis/get-user-public; defaults to /apis/{metadata.name}
     method: <string>            # e.g. POST; the initial version supports POST only
-  inputSchemaRef: <string>      # optional but strongly recommended
-  outputSchemaRef: <string>     # optional but strongly recommended
+  input:                        # optional but strongly recommended
+    schema: <JsonSchema>        # inline JSON Schema (2020-12) for request body
+  output:                       # optional but strongly recommended
+    schema: <JsonSchema>        # inline JSON Schema (2020-12) for successful response body
   start: <stateId>
   states:
     <stateId>: <State>
@@ -131,7 +193,7 @@ Constraints for `kind: Api`
 
 Context and results for `kind: Api`
 - Context initialisation:
-  - The HTTP request body is deserialised as JSON and used to initialise the journey `context` for that invocation (subject to `inputSchemaRef` validation, when present).
+  - The HTTP request body is deserialised as JSON and used to initialise the journey `context` for that invocation (subject to `spec.input.schema` validation, when present).
   - `httpBindings.start` MAY further project headers into `context` and/or provide outbound header defaults.
 - Successful responses:
   - Reaching `succeed` terminates execution and produces a 2xx HTTP response.
@@ -1031,27 +1093,40 @@ Validation
 - `mapperRef` values must be non-empty strings that resolve to an existing entry in `spec.mappers`.
 
 ## 11. Schemas (optional)
-- `inputSchemaRef`: JSON Schema (2020-12) that validates the initial `context` provided at journey start.
-- `outputSchemaRef`: JSON Schema for the terminal output returned by `succeed` (or the overall `context` if `outputVar` is omitted).
-- `contextSchemaRef`: JSON Schema for the logical shape of `context` during journey execution (superset of fields that may appear over time).
+- `spec.input.schema`: inline JSON Schema (2020-12) that validates the initial `context` provided at journey start.
+- `spec.output.schema`: inline JSON Schema for the terminal output returned by `succeed` (or the overall `context` if `outputVar` is omitted).
+- `spec.context.schema`: inline JSON Schema for the logical shape of `context` during journey execution (superset of fields that may appear over time).
 - Exporter behaviour:
-  - When `inputSchemaRef` is present, the OpenAPI exporter references it as the request body `context` schema in the per-journey OAS.
-  - When `outputSchemaRef` is present, the exporter refines `JourneyOutcome.output` to `$ref` that schema in the per-journey OAS.
-  - `contextSchemaRef` is primarily for tooling and validation; the exporter MAY expose it as an additional schema component, but it does not change the wire format of `JourneyStartRequest` or `JourneyOutcome`.
+  - When `spec.input.schema` is present, the OpenAPI exporter uses it as the request body schema in the per-journey OAS.
+  - When `spec.output.schema` is present, the exporter specialises `JourneyOutcome.output` to that schema in the per-journey OAS (by inlining or via an internal component).
+  - `spec.context.schema` is primarily for tooling and validation; the exporter MAY expose it as an additional schema component, but it does not change the wire format of `JourneyStartRequest` or `JourneyOutcome`.
 
 Example:
 
 ```yaml
 spec:
-  inputSchemaRef: schemas/order-input.json
-  outputSchemaRef: schemas/order-output.json
-  contextSchemaRef: schemas/order-context.json
+  input:
+    schema:
+      type: object
+      required: [orderId]
+      properties:
+        orderId: { type: string }
+  output:
+    schema:
+      type: object
+      required: [status]
+      properties:
+        status: { type: string }
+  context:
+    schema:
+      type: object
+      additionalProperties: true
 ```
 
 Usage notes
-- Use `inputSchemaRef` for what callers must send at start.
-- Use `outputSchemaRef` for what successful journeys return as `JourneyOutcome.output`.
-- Use `contextSchemaRef` to describe the full, evolving shape of `context` (including internal fields like `remote`, `cachedUser`, `problem`), so linters and editors can validate `context.<path>` usage in DataWeave expressions.
+- Use `spec.input.schema` for what callers must send at start.
+- Use `spec.output.schema` for what successful journeys return as `JourneyOutcome.output`.
+- Use `spec.context.schema` to describe the full, evolving shape of `context` (including internal fields like `remote`, `cachedUser`, `problem`), so linters and editors can validate `context.<path>` usage in DataWeave expressions.
 
 ### OpenAPI operation binding (operationRef)
 - `operationRef`: resolves `<apiName>` in `spec.apis` and `<operationId>` in the referenced OAS.
@@ -1067,15 +1142,19 @@ External-input states pause the journey instance and require a step submission t
 
 Bindings available to DataWeave expressions during step handling:
 - `context`: the current journey context JSON object.
-- `payload`: the submitted step input JSON (validated against `inputSchemaRef`).
+- `payload`: the submitted step input JSON (validated against the state’s `input.schema`, when present).
 
 ### 12.1 `wait` (manual/external input)
 ```yaml
 type: wait
 wait:
   channel: manual                       # manual input from authenticated client
-  inputSchemaRef: <path-to-json-schema> # required
-  apply:                                 # optional – update context before branching
+  input:                                # required – schema for step payload
+    schema: <JsonSchema>                # inline JSON Schema (2020-12)
+  response:                             # optional – project extra fields into step response
+    outputVar: <string>                 # context.<outputVar> object is merged into the top-level response
+    schema: <JsonSchema>                # JSON Schema for the additional top-level fields
+  apply:                                # optional – update context before branching
     mapper:
       lang: dataweave
       expr|exprRef
@@ -1094,22 +1173,35 @@ wait:
 Semantics
 - When entering a `wait` state, the journey phase is `Running`, and the step subresource is considered active.
 - A submission must target the active step; otherwise respond 409 Conflict.
-- The request body is validated against `inputSchemaRef`; invalid → 400 with schema errors.
+- The request body is validated against `wait.input.schema` when present; invalid → 400 with schema errors.
 - If `apply.mapper` is provided, it runs with `context` and `payload` and replaces `context` with the mapper result.
+- Step responses:
+  - After applying the `wait` state (including any `apply.mapper` and branching), the engine builds a `JourneyStatus` object to describe the updated journey state.
+  - When `response.outputVar` is set and `context.<outputVar>` is an object, its properties are shallow-merged into the top level of the JSON response alongside the standard `JourneyStatus` fields.
+  - If `context.<outputVar>` is absent or not an object, the response is a plain `JourneyStatus` without extra fields.
+  - The following top-level properties are reserved and MUST NOT be overridden by projected fields: `journeyId`, `journeyName`, `phase`, `currentState`, `updatedAt`, `tags`, `attributes`, `_links`.
 - The `on` array is evaluated in order; first predicate returning `true` selects `next`. If none match, `default` is used; if absent, the spec is invalid.
 - If `timeoutSec` elapses without submission, transition to `onTimeout`.
 
 Validation
 - `wait.channel` must be `manual`; use `webhook` state for callback semantics.
-- `inputSchemaRef` is required.
+- `wait.input.schema` is required.
 - If `timeoutSec` is set, `onTimeout` is required.
 - Either `on` (non-empty) or `default` must be present.
+- When present:
+  - `response.outputVar` must be a non-empty string matching the variable identifier pattern (`[A-Za-z_][A-Za-z0-9_]*`).
+  - `response.schema` must be a JSON Schema object describing additional top-level fields.
+  - Specs MUST NOT declare projected properties that collide with reserved `JourneyStatus` fields; tools SHOULD treat such collisions as validation errors when detectable.
 
 ### 12.2 `webhook` (callback input)
 ```yaml
 type: webhook
 webhook:
-  inputSchemaRef: <path-to-json-schema>  # required
+  input:                                 # required – schema for callback payload
+    schema: <JsonSchema>                 # inline JSON Schema (2020-12)
+  response:                              # optional – project extra fields into step response
+    outputVar: <string>                  # context.<outputVar> object is merged into the top-level response
+    schema: <JsonSchema>                 # JSON Schema for the additional top-level fields
   security:                               # optional – minimal guard
     kind: sharedSecretHeader
     header: X-Webhook-Secret
@@ -1133,11 +1225,18 @@ webhook:
 Semantics
 - Same as `wait`, but intended for third-party callbacks.
 - If `security.kind == sharedSecretHeader`, the exporter documents the header; enforcement is implementation-defined.
+- Step responses follow the same projection rules as `wait` when `response.outputVar` is configured: the engine returns a `JourneyStatus` body with additional top-level fields taken from `context.<outputVar>` when it is an object.
+
+Validation
+- `webhook.input.schema` is required.
+- `response` (when present) follows the same rules as for `wait.response`: `outputVar` must be a valid variable name, `schema` a JSON Schema object, and projected properties MUST NOT collide with reserved `JourneyStatus` fields.
 
 ### 12.3 Export mapping (steps)
 - For each external-input state, the exporter emits:
-  - `POST /journeys/{journeyId}/steps/{stepId}` with request body schema = `inputSchemaRef`.
-  - 200 response schema = `JourneyStatus`.
+  - `POST /journeys/{journeyId}/steps/{stepId}` with request body schema = the state’s `input.schema`, when present.
+  - `200` response schema:
+    - When `response.schema` is absent: `JourneyStatus` as defined in `docs/3-reference/openapi/journeys.openapi.yaml`.
+    - When `response.schema` is present: an `allOf` composition of `JourneyStatus` and the step-specific schema taken from `response.schema`, so that additional top-level fields are described explicitly.
 - Journeys without external-input states do not emit `/steps/{stepId}` paths.
 
 ## 13. Resilience Policies (HTTP)
@@ -1825,3 +1924,183 @@ Validation
 Usage notes
 - Use outcomes to give names to common scenarios such as “SucceededWithCacheHit”, “SucceededWithoutCache”, “FailedUpstream”, “RejectedByPolicy”.
 - Keep outcome predicates simple and stable; they should refer to durable semantics (for example `error.code`) rather than transient implementation details.
+
+## 22. HTTP Cookies (spec.cookies)
+
+The cookies configuration allows journey definitions and API endpoints to use HTTP cookies in a controlled way, aligned with standard HTTP cookie semantics (RFC 6265 or successors):
+- Maintain a per‑run cookie jar populated from downstream `Set-Cookie` responses.
+- Attach matching cookies automatically to outbound HTTP tasks.
+- Optionally return selected cookies to the client as `Set-Cookie` on successful terminal responses.
+
+The cookie jar is opt‑in per spec and strictly scoped to the lifetime of a single journey instance or API invocation.
+
+### 22.1 Top-level configuration (spec.cookies)
+
+```yaml
+spec:
+  cookies:
+    jar:
+      domains:
+        - pattern: "api.example.com"   # exact host only
+        - pattern: ".example.com"      # subdomains of example.com; not example.com itself
+
+    returnToClient:
+      mode: none | allFromAllowedDomains | filtered
+      include:
+        names: ["session", "csrfToken"]
+        namePatterns:
+          - "^x-app-"                  # Java regex on cookie name
+```
+
+Shape
+- `spec.cookies` is optional. When omitted, cookie handling behaves exactly as in earlier sections: HTTP headers and bodies follow the existing rules, and there is no cookie jar.
+- `spec.cookies.jar` (optional):
+  - `domains`: array of objects with:
+    - `pattern: string` – required, non‑empty.
+      - Exact host pattern (no leading dot), for example `api.example.com`, matches only that host.
+      - Subdomain pattern (leading dot), for example `.example.com`, matches hosts that end with `.example.com` and are not exactly `example.com` (for example `api.example.com`, `foo.bar.example.com`).
+  - The jar is considered enabled for the spec when `spec.cookies.jar` is present, even if `domains` is empty (in that case, no cookies are stored or attached).
+- `spec.cookies.returnToClient` (optional):
+  - `mode`:
+    - `none` – do not emit any `Set-Cookie` headers to the client.
+    - `allFromAllowedDomains` – emit `Set-Cookie` for all cookies in the jar whose domains match `jar.domains`.
+    - `filtered` – emit `Set-Cookie` only for cookies selected via `include`.
+  - `include` (optional; used only when `mode: filtered`):
+    - `names?: string[]` – explicit allow‑list of cookie names.
+    - `namePatterns?: string[]` – allow‑list of Java‑style regular expressions on cookie names.
+    - Selection is by union: a cookie is included if its name is in `names` or matches at least one regex in `namePatterns`. Either list may be empty.
+
+Semantics
+- The cookie jar is per run:
+  - For `kind: Journey`, one jar per journey instance.
+  - For `kind: Api`, one jar per API invocation.
+  - Jars are created at run start and destroyed at the terminal state.
+- When `spec.cookies` is omitted:
+  - No jar is created.
+  - HTTP behaviour remains defined solely by other sections (`task`, `httpBindings`, `httpSecurity`, etc.).
+
+Validation
+- `spec.cookies.jar.domains[*].pattern` must be non‑empty strings.
+- `spec.cookies.returnToClient.mode`, when present, must be one of `none`, `allFromAllowedDomains`, `filtered`.
+- `spec.cookies.returnToClient.include.names`, when present, must be arrays of strings.
+- `spec.cookies.returnToClient.include.namePatterns`, when present, must be arrays of strings that compile as Java‑style regular expressions.
+
+### 22.2 Jar population from downstream Set-Cookie
+
+For specs with `spec.cookies.jar` present, the engine maintains a per‑run cookie jar that is populated from downstream HTTP task responses only.
+
+Sources
+- HTTP task responses (`kind: httpCall`, non‑notify):
+  - For each response, the engine:
+    - Parses all `Set-Cookie` headers.
+    - Computes the effective `domain` and `path` using HTTP cookie rules (RFC 6265 style):
+      - If the cookie declares a `Domain` attribute, use that value.
+      - Otherwise, use the request host as the domain.
+      - If the cookie declares a `Path` attribute, use that; otherwise derive a default path from the request path (for example, the containing directory or `/`).
+    - Applies the domain allow‑list:
+      - If the effective domain does not match any `jar.domains[*].pattern`, the cookie is discarded:
+        - It is not stored in the jar.
+        - It is not exposed as `Set-Cookie` in the structured HTTP result object.
+      - If the effective domain matches a pattern, the cookie is applied to the jar.
+  - Cookie keys:
+    - The jar stores cookies keyed by `(domain, path, name)` with last‑writer‑wins semantics.
+    - When a downstream cookie denotes deletion (for example via `Max-Age=0` or an `Expires` value in the past), the jar removes any existing cookie with the same `(domain, path, name)` and records that a deletion has occurred so that response shaping can emit a deleting `Set-Cookie` if configured.
+
+Notify mode
+- HTTP tasks with `kind: httpCall` and `mode: notify` (see §5.1 and ADR‑0005) do not populate the cookie jar:
+  - Responses to `notify` calls are ignored for jar purposes.
+  - Jar cookies may still be attached to `notify` outbound requests (see §22.3).
+
+Inbound cookies
+- The jar does not ingest inbound `Cookie` headers from start or step requests:
+  - If journeys need to work with inbound cookies, they must use existing mechanisms (`httpBindings.start.headersToContext`, `httpBindings.steps.*.headersToContext`, plus `transform` states) and, if desired, construct `Cookie` headers explicitly for outbound calls.
+
+Validation
+- Cookie parsing and domain/path derivation are implementation details but MUST follow RFC 6265 style HTTP cookie rules (or successors).
+- Specs that configure `spec.cookies.jar` must still validate correctly even if no downstream `Set-Cookie` headers are present at runtime.
+
+### 22.3 Attaching jar cookies to outbound HTTP tasks
+
+HTTP tasks may opt into or out of cookie jar attachment via a per‑task `cookies` block:
+
+```yaml
+states:
+  callBackend:
+    type: task
+    task:
+      kind: httpCall
+      operationRef: backend.getOrder
+      cookies:
+        useJar: false            # optional; default true
+      # headers:
+      #   Cookie: "${context.explicitCookie}"  # explicit header wins over jar
+```
+
+Shape
+- `task.cookies` is allowed only when `task.kind: httpCall`.
+- `task.cookies.useJar?: boolean` – when present:
+  - `true`: enable jar attachment for this task (default when `spec.cookies.jar` exists and no explicit `Cookie` header overrides).
+  - `false`: disable jar attachment for this task.
+
+Semantics
+- For any HTTP task where:
+  - `spec.cookies.jar` is present, and
+  - `task.cookies.useJar` is omitted or `true`, and
+  - No explicit `Cookie` header is configured for the request (neither in `task.headers.Cookie` nor in `spec.defaults.http.headers.Cookie`),
+  the engine:
+  - Resolves the outbound request URL (after applying `operationRef` or `url`).
+  - Computes the request `host` and `path`.
+  - Selects all cookies in the jar whose:
+    - Domain matches the request host according to the patterns in `jar.domains`:
+      - Exact host pattern matches only that host.
+      - Subdomain pattern matches hosts that end in the pattern and are not the bare parent domain.
+    - Path is a prefix of the request path.
+    - `Secure` attribute, when present, is honoured (only attached over HTTPS).
+  - Synthesises a `Cookie` header of the form:
+    - `Cookie: name1=value1; name2=value2; ...`
+- For tasks where `task.cookies.useJar: false`:
+  - The jar is not consulted; no jar cookies are attached.
+- Explicit `Cookie` headers:
+  - If a `Cookie` header is configured via `task.headers.Cookie` or `spec.defaults.http.headers.Cookie`, that value is used as‑is and the jar is not applied for that request, regardless of `useJar`.
+  - There is no automatic merging of jar cookies with explicit `Cookie` values; authors who need such merging must construct the header explicitly.
+
+Notify mode
+- For `mode: notify` HTTP tasks:
+  - Attachment rules are the same as above: if `useJar` is enabled and no explicit `Cookie` header is set, jar cookies may be attached to the outbound request.
+  - Responses to `notify` calls do not mutate the jar.
+
+Validation
+- `task.cookies` is invalid on non‑HTTP tasks and MUST be rejected at validation time.
+- `task.cookies.useJar`, when present, must be boolean.
+
+### 22.4 Returning cookies to the client on success (returnToClient)
+
+When `spec.cookies.returnToClient` is present, the engine may emit `Set-Cookie` headers towards the client on successful terminal responses.
+
+Scope
+- `returnToClient` applies only when a run terminates in `succeed`:
+  - For `kind: Journey`, when producing the final HTTP response that wraps the `JourneyOutcome`.
+  - For `kind: Api`, when producing the synchronous API response.
+- When a run terminates in `fail`, the cookie jar still influences downstream calls during execution, but `returnToClient` does not emit `Set-Cookie` headers.
+
+Selection
+- The engine considers cookies in the jar whose effective domains match the allow‑list in `spec.cookies.jar.domains`.
+- Depending on `mode`:
+  - `none`:
+    - No `Set-Cookie` headers are emitted from the jar.
+  - `allFromAllowedDomains`:
+    - All cookies in the jar for allowed domains are emitted as `Set-Cookie` headers.
+    - When the jar has recorded that a cookie was deleted (see §22.2), the engine emits a deletion `Set-Cookie` towards the client (for example with `Max-Age=0` or a past `Expires`) so that the client removes it.
+  - `filtered`:
+    - Only cookies whose names satisfy at least one of:
+      - `name` is in `include.names`, or
+      - `name` matches at least one regex in `include.namePatterns` (matched using Java‑style regular expressions),
+      are emitted as `Set-Cookie` headers.
+    - Deletions are emitted only for cookies that would otherwise be selected by the filter.
+
+Domain behaviour
+- It is valid for `Set-Cookie` emitted to the client to target any domain allowed by `spec.cookies.jar.domains`, not just the host that the client used to call the engine, subject to RFC 6265 style HTTP cookie rules.
+
+Validation
+- When `spec.cookies.returnToClient` is present but `spec.cookies.jar` is absent, implementations SHOULD treat this as a configuration error (there is no jar to source cookies from).
+- Invalid regex patterns in `namePatterns` MUST be reported as spec validation errors.

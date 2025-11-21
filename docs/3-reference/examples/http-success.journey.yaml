@@ -11,8 +11,40 @@ spec:
     accounts: { openApiRef: apis/accounts.openapi.yaml }
     serviceA: { openApiRef: apis/serviceA.openapi.yaml }
     serviceB: { openApiRef: apis/serviceB.openapi.yaml }
-  inputSchemaRef: schemas/http-success-input.json
-  outputSchemaRef: schemas/http-success-output.json
+  input:
+    schema:
+      title: JourneyStartRequest
+      type: object
+      required: [inputId]
+      properties:
+        inputId:
+          type: string
+      additionalProperties: true
+  output:
+    schema:
+      title: HttpSuccessOutput
+      type: object
+      required: [ok]
+      properties:
+        status:
+          type: integer
+        ok:
+          type: boolean
+        headers:
+          type: object
+          additionalProperties:
+            type: string
+        body: {}
+        error:
+          type: object
+          properties:
+            type:
+              type: string
+            message:
+              type: string
+          required: [type]
+          additionalProperties: true
+      additionalProperties: true
   start: call_api
   states:
     call_api:

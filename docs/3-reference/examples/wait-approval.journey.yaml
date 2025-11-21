@@ -4,8 +4,27 @@ metadata:
   name: wait-approval
   version: 0.1.0
 spec:
-  inputSchemaRef: schemas/wait-approval-input.json
-  outputSchemaRef: schemas/wait-approval-output.json
+  input:
+    schema:
+      type: object
+      required: [id, name]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+      additionalProperties: true
+  output:
+    schema:
+      type: object
+      properties:
+        status:
+          type: integer
+        ok:
+          type: boolean
+        body:
+          type: object
+      additionalProperties: true
 # Provisional example: 'wait' state specified by DSL; engine support arrives in a later feature.
   start: submit
   states:
@@ -32,12 +51,44 @@ spec:
       type: wait
       wait:
         channel: manual
-        inputSchemaRef: schemas/wait-approval-approve-input.json
+        input:
+          schema:
+            description: Manual approval input
+            type: object
+            required: [decision]
+            properties:
+              decision:
+                type: string
+                enum: [approved, rejected]
+              comment:
+                type: string
+            additionalProperties: false
+        response:
+          outputVar: stepResponse
+          schema:
+            title: wait-approval step response
+            type: object
+            description: Additional top-level fields returned from the waitForApproval step.
+            properties:
+              decision:
+                type: string
+                enum: [approved, rejected]
+                description: The decision recorded at the approval step.
+              comment:
+                type: string
+                description: Optional free-text comment provided by the approver.
+            additionalProperties: true
         apply:
           mapper:
             lang: dataweave
             expr: |
-              context ++ { approval: payload }
+              context ++ {
+                approval: payload,
+                stepResponse: {
+                  decision: payload.decision,
+                  comment: payload.comment
+                }
+              }
         on:
           - when:
               predicate:

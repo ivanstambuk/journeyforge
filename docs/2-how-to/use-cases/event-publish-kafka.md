@@ -29,9 +29,24 @@ metadata:
   name: event-publish-kafka
   version: 0.1.0
 spec:
-  inputSchemaRef: schemas/event-publish-kafka-input.json
-  outputSchemaRef: schemas/event-publish-kafka-output.json
-
+  input:
+    schema:
+      type: object
+      required: [orderId, amount, status]
+      properties:
+        orderId: { type: string }
+        amount: { type: number }
+        status: { type: string }
+        traceparent: { type: string }
+      additionalProperties: true
+  output:
+    schema:
+      type: object
+      properties:
+        orderId: { type: string }
+        amount: { type: number }
+        status: { type: string }
+      additionalProperties: true
   start: emitEvent
   states:
     emitEvent:
@@ -59,8 +74,6 @@ spec:
           headers:
             traceparent: "${context.traceparent}"
             source: "journeyforge"
-          keySchemaRef: schemas/event-publish-kafka-key.json
-          valueSchemaRef: schemas/event-publish-kafka-value.json
       next: done
 
     done:
@@ -74,4 +87,3 @@ Notes:
 
 Related files:
 - Journey definition: `event-publish-kafka.journey.yaml`
-- Schemas: `event-publish-kafka-input.json`, `event-publish-kafka-output.json`, `event-publish-kafka-key.json`, `event-publish-kafka-value.json`

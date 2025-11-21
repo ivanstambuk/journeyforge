@@ -44,14 +44,16 @@ Shape:
     route:
       path: <string>   # e.g. /apis/http-chained-calls; defaults to /apis/{metadata.name}
       method: <string> # POST only in the initial version
-    inputSchemaRef: <string>   # optional but recommended
-    outputSchemaRef: <string>  # optional but recommended
+    input:
+      schema: <JsonSchema>     # optional but recommended – inline JSON Schema for request body
+    output:
+      schema: <JsonSchema>     # optional but recommended – inline JSON Schema for success response
   ```
 
 Execution semantics (`kind: Api`):
 - One HTTP request creates an ephemeral `context`, executes the state machine from `spec.start` until a terminal state, and returns a single HTTP response.
 - No `journeyId` is created or exposed; there are no status/result endpoints for `kind: Api`.
-- The request body is deserialised as JSON and used to initialise `context` (validated against `inputSchemaRef` when present); `httpBindings.start` can further project headers into `context`.
+- The request body is deserialised as JSON and used to initialise `context` (validated against `spec.input.schema` when present); `httpBindings.start` can further project headers into `context`.
 - On `succeed`:
   - The engine returns a 2xx response with the body taken from `context.<outputVar>` (when set) or the full `context` otherwise.
 - On `fail`:
@@ -71,8 +73,8 @@ Constraints (`kind: Api`):
 OpenAPI export:
 - The OpenAPI export guideline is extended to cover `kind: Api`:
   - Paths: `POST /api/v1/apis/{apiName}` for synchronous execution.
-  - Request body schema: taken directly from `inputSchemaRef` (no `context` envelope).
-  - Success response schema: taken from `outputSchemaRef` when present.
+  - Request body schema: taken directly from `spec.input.schema` (no `context` envelope).
+  - Success response schema: taken from `spec.output.schema` when present.
   - Error response schema: at minimum `{ code: string, reason: string, ... }`, with room to promote RFC 9457 Problem Details to a shared schema later.
 - A concrete example (`http-chained-calls-api`) is added under `docs/3-reference/examples/` with a matching per-API OpenAPI spec under `docs/3-reference/examples/oas/`.
 

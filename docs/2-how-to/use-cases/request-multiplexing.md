@@ -32,8 +32,38 @@ spec:
       openApiRef: apis/users.openapi.yaml
     accounts:
       openApiRef: apis/accounts.openapi.yaml
-  inputSchemaRef: schemas/http-chained-calls-input.json
-  outputSchemaRef: schemas/http-chained-calls-output.json
+  input:
+    schema:
+      type: object
+      required: [userId]
+      properties:
+        userId: { type: string }
+      additionalProperties: true
+  output:
+    schema:
+      type: object
+      properties:
+        status: { type: integer }
+        ok: { type: boolean }
+        headers:
+          type: object
+          additionalProperties: { type: string }
+        body:
+          type: object
+          properties:
+            accountId: { type: string }
+            ownerId: { type: string }
+            email:
+              type: string
+              format: email
+          additionalProperties: true
+        error:
+          type: object
+          properties:
+            type: { type: string }
+            message: { type: string }
+          additionalProperties: true
+      additionalProperties: true
   start: lookup
   states:
     lookup:
@@ -109,7 +139,6 @@ spec:
 
 Related files:
 - OpenAPI: `http-chained-calls.openapi.yaml`
-- Schemas: `http-chained-calls-input.json`, `http-chained-calls-output.json`
 
 ## Example 2 – Aggregating errors across calls
 
@@ -122,8 +151,30 @@ metadata:
   name: http-aggregate-errors
   version: 0.1.0
 spec:
-  inputSchemaRef: schemas/http-aggregate-errors-input.json
-  outputSchemaRef: schemas/http-aggregate-errors-output.json
+  input:
+    schema:
+      type: object
+      required: [id]
+      properties:
+        id: { type: string }
+      additionalProperties: true
+  output:
+    schema:
+      type: object
+      properties:
+        status: { type: integer }
+        ok: { type: boolean }
+        headers:
+          type: object
+          additionalProperties: { type: string }
+        body: {}
+        error:
+          type: object
+          properties:
+            type: { type: string }
+            message: { type: string }
+          additionalProperties: true
+      additionalProperties: true
   apis:
     items:
       openApiRef: apis/items.openapi.yaml
@@ -190,7 +241,6 @@ spec:
 
 Related files:
 - OpenAPI: `http-aggregate-errors.openapi.yaml`
-- Schemas: `http-aggregate-errors-input.json`, `http-aggregate-errors-output.json`
 
 ## Example 3 – Conditional composition
 
@@ -203,8 +253,31 @@ metadata:
   name: http-conditional-composition
   version: 0.1.0
 spec:
-  inputSchemaRef: schemas/http-conditional-composition-input.json
-  outputSchemaRef: schemas/http-conditional-composition-output.json
+  input:
+    schema:
+      type: object
+      required: [featureFlag, id, name]
+      additionalProperties: true
+      properties:
+        featureFlag: { type: string }
+        id: { type: string }
+        name: { type: string }
+  output:
+    schema:
+      type: object
+      properties:
+        status: { type: integer }
+        ok: { type: boolean }
+        headers:
+          type: object
+          additionalProperties: { type: string }
+        body: {}
+        error:
+          type: object
+          properties:
+            type: { type: string }
+            message: { type: string }
+          additionalProperties: true
   apis:
     items:
       openApiRef: apis/items.openapi.yaml

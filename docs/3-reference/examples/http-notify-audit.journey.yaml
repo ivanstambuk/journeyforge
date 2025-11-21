@@ -5,8 +5,23 @@ metadata:
   version: 0.1.0
   description: Fire-and-forget HTTP audit notification for order updates.
 spec:
-  inputSchemaRef: schemas/http-notify-audit-input.json
-  outputSchemaRef: schemas/http-notify-audit-output.json
+  input:
+    schema:
+      title: http-notify-audit input context
+      type: object
+      required: [orderId]
+      properties:
+        orderId:
+          type: string
+      additionalProperties: true
+  output:
+    schema:
+      title: http-notify-audit output
+      type: object
+      properties:
+        orderId:
+          type: string
+      additionalProperties: true
 
   start: notify
   states:

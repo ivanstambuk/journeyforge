@@ -28,8 +28,28 @@ spec:
   apis:
     serviceA:
       openApiRef: apis/serviceA.openapi.yaml
-  inputSchemaRef: schemas/http-resilience-degrade-input.json
-  outputSchemaRef: schemas/http-resilience-degrade-output.json
+  input:
+    schema:
+      type: object
+      additionalProperties: true
+      properties:
+        id: { type: string }
+  output:
+    schema:
+      type: object
+      properties:
+        status: { type: integer }
+        ok: { type: boolean }
+        headers:
+          type: object
+          additionalProperties: { type: string }
+        body: {}
+        error:
+          type: object
+          properties:
+            type: { type: string }
+            message: { type: string }
+          additionalProperties: true
   policies:
     httpResilience:
       default: standard

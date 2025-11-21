@@ -27,8 +27,22 @@ metadata:
   name: wait-approval
   version: 0.1.0
 spec:
-  inputSchemaRef: schemas/wait-approval-input.json
-  outputSchemaRef: schemas/wait-approval-output.json
+  input:
+    schema:
+      type: object
+      required: [id, name]
+      properties:
+        id: { type: string }
+        name: { type: string }
+      additionalProperties: true
+  output:
+    schema:
+      type: object
+      properties:
+        status: { type: integer }
+        ok: { type: boolean }
+        body: { type: object }
+      additionalProperties: true
   start: submit
   states:
     submit:
@@ -55,7 +69,17 @@ spec:
       type: wait
       wait:
         channel: manual
-        inputSchemaRef: schemas/wait-approval-approve-input.json
+        input:
+          schema:
+            description: Manual approval input
+            type: object
+            required: [decision]
+            properties:
+              decision:
+                type: string
+                enum: [approved, rejected]
+              comment:
+                type: string
         apply:
           mapper:
             lang: dataweave
@@ -82,7 +106,6 @@ spec:
 
 Related files:
 - OpenAPI: `wait-approval.openapi.yaml`
-- Schemas: `wait-approval-input.json`, `wait-approval-output.json`, `wait-approval-approve-input.json`
 
 ## Example 2 – Payment callback webhook
 
@@ -98,8 +121,27 @@ spec:
   apis:
     payments:
       openApiRef: apis/payments.openapi.yaml
-  inputSchemaRef: schemas/payment-callback-input.json
-  outputSchemaRef: schemas/payment-callback-output.json
+  input:
+    schema:
+      type: object
+      required: [paymentId, amount, currency]
+      properties:
+        paymentId: { type: string }
+        amount: { type: number }
+        currency: { type: string }
+      additionalProperties: true
+  output:
+    schema:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [SUCCESS, FAILED]
+        paymentId: { type: string }
+        amount: { type: number }
+        currency: { type: string }
+        reason: { type: string }
+      additionalProperties: true
   start: authorize
   states:
     authorize:
@@ -126,7 +168,16 @@ spec:
     waitCallback:
       type: webhook
       webhook:
-        inputSchemaRef: schemas/payment-callback-webhook-input.json
+        input:
+          schema:
+            type: object
+            required: [paymentId, status]
+            properties:
+              paymentId: { type: string }
+              status:
+                type: string
+                enum: [SUCCESS, FAILED]
+              reason: { type: string }
         security:
           kind: sharedSecretHeader
           header: X-Webhook-Secret
@@ -156,4 +207,3 @@ spec:
 
 Related files:
 - OpenAPI: `payment-callback.openapi.yaml`
-- Schemas: `payment-callback-input.json`, `payment-callback-output.json`, `payment-callback-webhook-input.json`

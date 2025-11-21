@@ -5,8 +5,33 @@ metadata:
   version: 0.1.0
   description: Publish an order event to Kafka using DataWeave mappers.
 spec:
-  inputSchemaRef: schemas/event-publish-kafka-input.json
-  outputSchemaRef: schemas/event-publish-kafka-output.json
+  input:
+    schema:
+      title: event-publish-kafka input context
+      type: object
+      required: [orderId, amount, status]
+      properties:
+        orderId:
+          type: string
+        amount:
+          type: number
+        status:
+          type: string
+        traceparent:
+          type: string
+      additionalProperties: true
+  output:
+    schema:
+      title: event-publish-kafka output
+      type: object
+      properties:
+        orderId:
+          type: string
+        amount:
+          type: number
+        status:
+          type: string
+      additionalProperties: true
 
   start: emitEvent
   states:
@@ -35,8 +60,6 @@ spec:
           headers:
             traceparent: "${context.traceparent}"
             source: "journeyforge"
-          keySchemaRef: schemas/event-publish-kafka-key.json
-          valueSchemaRef: schemas/event-publish-kafka-value.json
       next: done
 
     done:

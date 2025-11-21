@@ -28,8 +28,13 @@ metadata:
   name: http-failure-branch
   version: 0.1.0
 spec:
-  inputSchemaRef: schemas/http-failure-branch-input.json
-  outputSchemaRef: schemas/http-failure-branch-output.json
+  input:
+    schema:
+      type: object
+      required: [inputId]
+      additionalProperties: true
+      properties:
+        inputId: { type: string }
   apis:
     items:
       openApiRef: apis/items.openapi.yaml
@@ -78,7 +83,6 @@ spec:
 
 Related files:
 - OpenAPI: `http-failure-branch.openapi.yaml`
-- Schemas: `http-failure-branch-input.json`, `http-failure-branch-output.json`
 
 ## Example 2 – Timeouts vs success
 
@@ -91,8 +95,13 @@ metadata:
   name: http-timeout-branch
   version: 0.1.0
 spec:
-  inputSchemaRef: schemas/http-timeout-branch-input.json
-  outputSchemaRef: schemas/http-timeout-branch-output.json
+  input:
+    schema:
+      type: object
+      required: [id]
+      additionalProperties: true
+      properties:
+        id: { type: string }
   apis:
     items:
       openApiRef: apis/items.openapi.yaml
@@ -141,7 +150,6 @@ spec:
 
 Related files:
 - OpenAPI: `http-timeout-branch.openapi.yaml`
-- Schemas: `http-timeout-branch-input.json`, `http-timeout-branch-output.json`
 
 ## Example 3 – Normalising to RFC 9457 Problem Details
 
@@ -154,8 +162,13 @@ metadata:
   name: http-problem-details
   version: 0.1.0
 spec:
-  inputSchemaRef: schemas/http-problem-details-input.json
-  outputSchemaRef: schemas/http-problem-details-output.json
+  input:
+    schema:
+      type: object
+      required: [id]
+      additionalProperties: true
+      properties:
+        id: { type: string }
   apis:
     items:
       openApiRef: apis/items.openapi.yaml
@@ -243,4 +256,3 @@ spec:
 
 Related files:
 - OpenAPI: `http-problem-details.openapi.yaml`
-- Schemas: `http-problem-details-input.json`, `http-problem-details-output.json`

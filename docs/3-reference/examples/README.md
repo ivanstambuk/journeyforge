@@ -1,5 +1,7 @@
 # DSL Examples (DataWeave predicates)
 
+- Inline `spec.input.schema` / `spec.output.schema` blocks in these examples are JSON Schema 2020-12 and are authored to mirror OpenAPI 3.1 component schemas.
+
 - http-success.journey.yaml – routes to success when `api.ok == true`.
 - http-failure-branch.journey.yaml – routes to failure when `api.ok == false`.
 - http-content-check.journey.yaml – combines HTTP status/content checks via DataWeave.
@@ -28,15 +30,9 @@ All examples assume `resultVar` stores the structured HTTP result object `{ stat
  - http-chained-calls-api.journey.yaml – synchronous API endpoint variant of http-chained-calls using `kind: Api`.
 - http-compensation.journey.yaml – order-style journey definition with a global compensation journey defined via `spec.compensation`.
 - auth-outbound-client-credentials.journey.yaml – outbound OAuth2 client-credentials auth using `spec.policies.httpClientAuth`.
+ - http-cookie-jar.journey.yaml – maintains a per-run cookie jar and returns selected cookies to the caller on success.
 
 OpenAPI (per-journey) examples:
-- oas/http-success.openapi.yaml
-- oas/http-chained-calls.openapi.yaml
-
-Generic Journeys API:
-- ../openapi/journeys.openapi.yaml
-
-Per-journey OpenAPI specs:
 - oas/choice-multi-branch.openapi.yaml
 - oas/http-204-no-content.openapi.yaml
 - oas/http-aggregate-errors.openapi.yaml
@@ -58,19 +54,19 @@ Per-journey OpenAPI specs:
 - oas/multitenant-routing.openapi.yaml
 - oas/named-outcomes.openapi.yaml
 - oas/sync-wrapper-wait.openapi.yaml
+ - oas/wait-approval.openapi.yaml
+ - oas/http-success.openapi.yaml
+ - oas/payment-callback.openapi.yaml
 
-API Catalog:
+API Catalog / downstream OpenAPI used by `operationRef`:
 - apis/accounts.openapi.yaml
 - apis/items.openapi.yaml
 - apis/serviceA.openapi.yaml
 - apis/serviceB.openapi.yaml
 - apis/users.openapi.yaml
-
-- oas/wait-approval.openapi.yaml
+- apis/payments.openapi.yaml
 
 - payment-callback.journey.yaml – payment with webhook callback and shared secret.
-- oas/payment-callback.openapi.yaml
-- apis/payments.openapi.yaml
 - cache-user-profile.journey.yaml – cache-aware profile lookup using transform + cacheGet/cachePut.
 - oas/cache-user-profile.openapi.yaml
 Per-API OpenAPI specs:

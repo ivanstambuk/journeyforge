@@ -38,8 +38,25 @@ spec:
         kind: inMemory
         maxEntries: 10000
         ttlSeconds: 300
-  inputSchemaRef: schemas/cache-user-profile-input.json
-  outputSchemaRef: schemas/cache-user-profile-output.json
+  input:
+    schema:
+      type: object
+      required: [userId]
+      properties:
+        userId: { type: string }
+        country: { type: string }
+      additionalProperties: true
+  output:
+    schema:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+        email:
+          type: string
+          format: email
+        country: { type: string }
+      additionalProperties: true
   start: normalise
   states:
     normalise:

@@ -61,16 +61,129 @@ paths:
 components:
   schemas:
     JourneyStartRequest:
-      $ref: '../schemas/http-204-no-content-input.json'
+      type: object
+      required: [key]
+      additionalProperties: true
+      properties:
+        key:
+          type: string
     JourneyStartResponse:
-      $ref: '../../../openapi/journeys.openapi.yaml#/components/schemas/JourneyStartResponse'
+      type: object
+      required: [journeyId, journeyName, statusUrl]
+      properties:
+        journeyId: { type: string }
+        journeyName: { type: string }
+        statusUrl: { type: string, format: uri }
+        _links:
+          description: |
+            Optional hypermedia links (HAL-style) describing related resources and next actions.
+            Presence is controlled per-journey via spec.httpSurface.links.enabled; when enabled,
+            the engine typically includes at least `self` and `result` links.
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/Link'
     JourneyStatus:
-      $ref: '../../../openapi/journeys.openapi.yaml#/components/schemas/JourneyStatus'
+      type: object
+      required: [journeyId, journeyName, phase, currentState, updatedAt]
+      properties:
+        journeyId: { type: string }
+        journeyName: { type: string }
+        phase: { type: string, enum: [Running, Succeeded, Failed] }
+        currentState: { type: string }
+        updatedAt: { type: string, format: date-time }
+        tags:
+          type: array
+          description: |
+            Effective tags for this journey instance, derived from the journey's metadata.tags
+            and any instance tag sourcing rules. Tags are non-sensitive, short identifiers intended
+            for filtering and grouping.
+          items: { type: string }
+        attributes:
+          type: object
+          description: |
+            Lightweight metadata for this journey instance, such as subjectId, tenantId, channel,
+            and correlation ids (orderId, paymentIntentId, crmCaseId). Values are strings and
+            MUST respect the limits configured via MetadataLimits.
+          additionalProperties:
+            type: string
+        _links:
+          description: |
+            Optional hypermedia links (HAL-style) describing related resources and next actions.
+            When links are enabled for a journey, the engine SHOULD include at least `self` and `result`,
+            and MAY include links for active step endpoints. For step links, the relation name MUST equal
+            the external-input state id (for example `waitForApproval`, `confirm`). When the journey is
+            Running and user-cancellable, the engine SHOULD also expose a `cancel` link pointing to the
+            canonical cancellation step `/api/v1/journeys/{journeyId}/steps/cancel` with method POST.
+          type: object
+          additionalProperties:
+            $ref: '#/components/schemas/Link'
     JourneyStepRequest:
-      $ref: '../../../openapi/journeys.openapi.yaml#/components/schemas/JourneyStepRequest'
+      type: object
+      required: [eventType]
+      properties:
+        eventType: { type: string }
+        payload:
+          type: object
+          additionalProperties: true
     JourneyOutcome:
       allOf:
-        - $ref: '../../../openapi/journeys.openapi.yaml#/components/schemas/JourneyOutcome'
+        - type: object
+          required: [journeyId, journeyName, phase]
+          properties:
+            journeyId: { type: string }
+            journeyName: { type: string }
+            phase: { type: string, enum: [Succeeded, Failed] }
+            output: {}
+            error:
+              type: object
+              properties:
+                code: { type: string }
+                reason: { type: string }
+            tags:
+              type: array
+              description: |
+                Effective tags for this journey instance, repeated here for convenience when reading
+                final outcomes.
+              items: { type: string }
+            attributes:
+              type: object
+              description: |
+                Instance attributes such as subjectId, tenantId, channel, and correlation ids,
+                repeated here for convenience when reading final outcomes.
+              additionalProperties:
+                type: string
+            _links:
+              description: |
+                Optional hypermedia links (HAL-style) describing related resources (for example `self`)
+                when a journey is terminal. Presence is controlled per-journey via spec.httpSurface.links.enabled.
+              type: object
+              additionalProperties:
+                $ref: '#/components/schemas/Link'
+        - type: object
+          properties:
+            output:
+              type: object
+              properties:
+                status: { type: integer }
+                ok: { type: boolean }
+                headers:
+                  type: object
+                  additionalProperties: { type: string }
+                body: {}
+                error:
+                  type: object
+                  properties:
+                    type: { type: string }
+                    message: { type: string }
+                  additionalProperties: true
+              additionalProperties: true
+    Link:
+      type: object
+      required: [href]
       properties:
-        output:
-          $ref: '../schemas/http-204-no-content-output.json'
+        href:
+          type: string
+          description: Target URI for this link
+        method:
+          type: string
+          description: HTTP method to use when following this link (for example GET, POST, DELETE)

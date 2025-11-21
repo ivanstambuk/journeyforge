@@ -4,8 +4,32 @@ metadata:
   name: http-problem-details
   version: 0.1.0
 spec:
-  inputSchemaRef: schemas/http-problem-details-input.json
-  outputSchemaRef: schemas/http-problem-details-output.json
+  input:
+    schema:
+      type: object
+      required: [id]
+      additionalProperties: true
+      properties:
+        id:
+          type: string
+        soft:
+          type: boolean
+  output:
+    schema:
+      type: object
+      required: [type, title]
+      properties:
+        type:
+          type: string
+        title:
+          type: string
+        status:
+          type: integer
+        detail:
+          type: string
+        instance:
+          type: string
+      additionalProperties: true
   apis:
     items: { openApiRef: apis/items.openapi.yaml }
   start: call_api

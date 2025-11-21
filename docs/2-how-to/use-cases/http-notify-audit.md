@@ -14,7 +14,7 @@ Emit an HTTP notification as a side effect without blocking on the response or b
 - `task` with `kind: httpCall` and `mode: notify` for fire-and-forget semantics.
 - `body.mapper` with DataWeave to build the notification payload from `context`.
 - `succeed` to complete the journey without depending on the HTTP result.
-- `inputSchemaRef` / `outputSchemaRef` to validate the incoming context and shape the output.
+- `spec.input.schema` / `spec.output.schema` to validate the incoming context and shape the output.
 
 ## Example – http-notify-audit
 
@@ -29,9 +29,19 @@ metadata:
   description: >
     Fire-and-forget HTTP audit notification for order updates.
 spec:
-  inputSchemaRef: schemas/http-notify-audit-input.json
-  outputSchemaRef: schemas/http-notify-audit-output.json
-
+  input:
+    schema:
+      type: object
+      required: [orderId]
+      properties:
+        orderId: { type: string }
+      additionalProperties: true
+  output:
+    schema:
+      type: object
+      properties:
+        orderId: { type: string }
+      additionalProperties: true
   start: notify
   states:
     notify:
@@ -64,4 +74,3 @@ Notes:
 
 Related files:
 - Journey definition: `http-notify-audit.journey.yaml`
-- Schemas: `http-notify-audit-input.json`, `http-notify-audit-output.json`

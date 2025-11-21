@@ -83,7 +83,13 @@ spec:
       type: wait
       wait:
         channel: manual
-        inputSchemaRef: schemas/subject-step-guard-input.json
+        input:
+          schema:
+            type: object
+            properties:
+              # step-specific payload fields, e.g. approval decision
+              decision: { type: string }
+            additionalProperties: true
         apply:
           mapper:
             lang: dataweave

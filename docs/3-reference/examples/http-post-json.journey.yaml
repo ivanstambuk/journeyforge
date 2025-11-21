@@ -5,8 +5,36 @@ metadata:
   version: 0.1.0
   description: HTTP POST with JSON request and response bodies.
 spec:
-  inputSchemaRef: schemas/http-post-json-input.json
-  outputSchemaRef: schemas/http-post-json-output.json
+  input:
+    schema:
+      type: object
+      required: [inputId]
+      additionalProperties: true
+      properties:
+        inputId:
+          type: string
+  output:
+    schema:
+      type: object
+      properties:
+        status:
+          type: integer
+        ok:
+          type: boolean
+        headers:
+          type: object
+          additionalProperties:
+            type: string
+        body: {}
+        error:
+          type: object
+          properties:
+            type:
+              type: string
+            message:
+              type: string
+          additionalProperties: true
+      additionalProperties: true
   apis:
     items: { openApiRef: apis/items.openapi.yaml }
     users: { openApiRef: apis/users.openapi.yaml }

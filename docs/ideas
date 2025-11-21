@@ -143,8 +143,12 @@ metadata:
   rbac:
     allowedRoles: [payments-orchestrator, admin]
 spec:
-  inputSchemaRef: schemas/payment-authz-input.json
-  outputSchemaRef: schemas/payment-authz-output.json
+  input:
+    schema:
+      $ref: schemas/payment-authz-input.json # conceptual; inline or external
+  output:
+    schema:
+      $ref: schemas/payment-authz-output.json # conceptual; inline or external
   journeyToken:
     strategy: jwt
     header: X-Journey-Token
@@ -772,8 +776,12 @@ metadata:
   rbac:
     allowedRoles: [payments-orchestrator, admin]
 spec:
-  inputSchemaRef: schemas/payment-authz-input.json
-  outputSchemaRef: schemas/payment-authz-output.json
+  input:
+    schema:
+      $ref: schemas/payment-authz-input.json
+  output:
+    schema:
+      $ref: schemas/payment-authz-output.json
   journeyToken:
     strategy: jwt
     header: X-Journey-Token

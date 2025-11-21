@@ -6,8 +6,38 @@ metadata:
 spec:
   apis:
     items: { openApiRef: apis/items.openapi.yaml }
-  inputSchemaRef: schemas/http-idempotent-create-input.json
-  outputSchemaRef: schemas/http-idempotent-create-output.json
+  input:
+    schema:
+      type: object
+      required: [id, name]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+      additionalProperties: true
+  output:
+    schema:
+      type: object
+      properties:
+        status:
+          type: integer
+        ok:
+          type: boolean
+        headers:
+          type: object
+          additionalProperties:
+            type: string
+        body: {}
+        error:
+          type: object
+          properties:
+            type:
+              type: string
+            message:
+              type: string
+          additionalProperties: true
+      additionalProperties: true
   start: checkExisting
   states:
     checkExisting:

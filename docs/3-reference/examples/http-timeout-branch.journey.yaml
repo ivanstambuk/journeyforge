@@ -4,8 +4,36 @@ metadata:
   name: http-timeout-branch
   version: 0.1.0
 spec:
-  inputSchemaRef: schemas/http-timeout-branch-input.json
-  outputSchemaRef: schemas/http-timeout-branch-output.json
+  input:
+    schema:
+      type: object
+      required: [id]
+      additionalProperties: true
+      properties:
+        id:
+          type: string
+  output:
+    schema:
+      type: object
+      properties:
+        status:
+          type: integer
+        ok:
+          type: boolean
+        headers:
+          type: object
+          additionalProperties:
+            type: string
+        body: {}
+        error:
+          type: object
+          properties:
+            type:
+              type: string
+            message:
+              type: string
+          additionalProperties: true
+      additionalProperties: true
   apis:
     items: { openApiRef: apis/items.openapi.yaml }
     users: { openApiRef: apis/users.openapi.yaml }

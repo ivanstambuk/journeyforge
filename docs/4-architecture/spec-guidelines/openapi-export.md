@@ -23,11 +23,21 @@ It also introduces the export shape for synchronous API endpoints (`kind: Api`).
 - GET `/api/v1/journeys/{journeyId}/result` → `JourneyOutcome` (200 only when terminal)
 
 ### Step subresources (when the journey declares external-input steps)
-- POST `/api/v1/journeys/{journeyId}/steps/{stepId}` → `JourneyStatus`
-  - `stepId` equals the state id of the external-input step (e.g., `waitForOtp`, `confirm`).
-  - The request body schema is step-specific (exporter emits a named schema per step).
+- POST `/api/v1/journeys/{journeyId}/steps/{stepId}` → step response
+  - `stepId` equals the state id of the external-input step (e.g., `waitForOtp`, `waitForApproval`, `waitForCallback`).
+  - Request body:
+    - Exported directly from the state’s `input.schema` (inline JSON Schema in the DSL).
+    - There is no `JourneyStepRequest` envelope in per-journey OAS; the payload is the step’s logical input object.
+  - `200` response:
+    - Generic: `JourneyStatus` (canonical status envelope).
+    - Per-journey:
+      - When the state does not declare `response.schema`, the response schema is just `JourneyStatus`.
+      - When the state declares `response.schema`, the exporter uses `allOf` to compose:
+        - `JourneyStatus`, and
+        - an inline object schema generated from `response.schema`, so that additional top-level fields are documented.
 
-Note: current examples have no external-input steps, so no `/steps/{stepId}` paths are emitted.
+Examples:
+- `wait-approval` and `payment-callback` OpenAPI specs under `docs/3-reference/examples/oas/` show step endpoints with per-step request and `JourneyStatus + allOf(step schema)` responses.
 
 Note: even though the current implementation runs synchronously, the REST model is asynchronous to remain forward‑compatible. A synchronous `execute` endpoint may be added as a convenience later.
 
@@ -41,7 +51,7 @@ Note: even though the current implementation runs synchronously, the REST model 
 Note: the initial version only specifies `POST` for API endpoints. Future versions MAY allow `GET`/`PUT` when semantics are clear (for example, read-only APIs).
 
 ## Schemas (canonical)
-- `JourneyStartRequest`: `{ context: object }`
+- `JourneyStartRequest`: conceptually “initial context object”; per-journey OAS specialise this to the journey’s `spec.input.schema`.
 - `JourneyStartResponse`: `{ journeyId: string, journeyName: string, statusUrl: string, _links?: Links }`
 - `JourneyStatus`: `{ journeyId, journeyName, phase: enum[Running,Succeeded,Failed], currentState: string, updatedAt: string(date-time), _links?: Links }`
 - `JourneyStepRequest`: `{ eventType: string, payload?: object }`
@@ -60,12 +70,12 @@ Notes on `_links`
 
 ### API endpoints (`kind: Api`)
 
-API endpoints reuse the same input/output JSON Schemas as journeys but without the `Journey*` envelope:
+API endpoints reuse the same logical JSON Schemas as journeys but without the `Journey*` envelope:
 - Request body:
-  - If `inputSchemaRef` is present on the `kind: Api` spec, the exporter uses that schema directly as the request body schema for `/apis/{apiName}`.
+  - If `spec.input.schema` is present on the `kind: Api` spec, the exporter uses that schema directly as the request body schema for `/apis/{apiName}`.
   - If absent, the request body defaults to an untyped `object`.
 - Successful response:
-  - If `outputSchemaRef` is present, the exporter uses that schema as the `200` response body.
+  - If `spec.output.schema` is present, the exporter uses that schema as the `200` response body.
   - If absent, the response body defaults to an untyped `object`.
 - Error response:
   - At minimum, exporters SHOULD describe a generic error envelope `{ code: string, reason: string, ... }` aligned with the DSL `fail` shape.
@@ -80,11 +90,27 @@ API endpoints reuse the same input/output JSON Schemas as journeys but without t
   - `info.title` is set to `JourneyForge – <api> (Api)`; tags include `<api>`.
 
 ## Future work
-- Add per‑journey input/output JSON Schemas by sampling or from declared `inputSchemaRef`/`outputSchemaRef` in the spec.
+- Add per‑journey input/output JSON Schemas by sampling or from declared `spec.input.schema`/`spec.output.schema` in the spec.
 - Extend events to named signals for `wait`/webhook states when introduced.
 - Define a shared `ProblemDetails` schema and formalise how `kind: Api` exports error responses (including status code mapping from `spec.outcomes`).
 
-## Schema integration
-- If `inputSchemaRef` is present, the exporter wraps it as the request body schema at `/journeys/{journeyName}/start` under `context`.
-- If `outputSchemaRef` is present, the exporter refines `JourneyOutcome.output` to `$ref` that schema in the per-journey OAS.
-- If absent, both default to untyped `object` (generic).
+## Schema integration and bundling
+- The DSL exposes inline JSON Schemas via:
+  - `spec.input.schema`, `spec.output.schema`, `spec.context.schema`, and
+  - `wait.input.schema`, `wait.response.schema`, `webhook.input.schema`, `webhook.response.schema`.
+- Per-journey OpenAPI exporters:
+  - Read these inline schemas from the journey definition.
+  - Materialise them as **inline components** under `components.schemas` in the per-journey OAS.
+  - Specialise `JourneyOutcome.output` via `allOf`:
+    - First branch: the generic `JourneyOutcome` envelope (inlined into the per-journey file).
+    - Second branch: an object schema derived from `spec.output.schema` (when present).
+- Bundling rules for examples and exported OAS:
+  - Per-journey OAS files are **self-contained**:
+    - No `$ref` to external JSON files (for example `../schemas/*.json`).
+    - No `$ref` to `journeys.openapi.yaml`; generic `Journey*` and `Link` shapes are copied inline.
+  - Component naming:
+    - Journeys:
+      - `JourneyStartRequest`, `JourneyStartResponse`, `JourneyStatus`, `JourneyStepRequest` (when needed), `JourneyOutcome`, `Link`.
+    - APIs:
+      - Journey-specific names such as `Input`, `Output`, `Error` for `/apis/{apiName}`.
+  - Tooling MAY still treat `docs/3-reference/openapi/journeys.openapi.yaml` as the normative generic contract, but per-journey exports must not depend on it via cross-file `$ref`.

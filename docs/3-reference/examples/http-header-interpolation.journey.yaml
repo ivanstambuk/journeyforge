@@ -4,8 +4,36 @@ metadata:
   name: http-header-interpolation
   version: 0.1.0
 spec:
-  inputSchemaRef: schemas/http-header-interpolation-input.json
-  outputSchemaRef: schemas/http-header-interpolation-output.json
+  input:
+    schema:
+      type: object
+      required: [traceparent]
+      additionalProperties: true
+      properties:
+        traceparent:
+          type: string
+  output:
+    schema:
+      type: object
+      properties:
+        status:
+          type: integer
+        ok:
+          type: boolean
+        headers:
+          type: object
+          additionalProperties:
+            type: string
+        body: {}
+        error:
+          type: object
+          properties:
+            type:
+              type: string
+            message:
+              type: string
+          additionalProperties: true
+      additionalProperties: true
   apis:
     items: { openApiRef: apis/items.openapi.yaml }
     users: { openApiRef: apis/users.openapi.yaml }

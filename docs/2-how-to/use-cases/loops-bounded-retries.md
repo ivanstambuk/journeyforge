@@ -41,8 +41,13 @@ spec:
       errorCode: APPROVAL_TIMEOUT
       reason: "No decision within 60 minutes"
 
-  inputSchemaRef: schemas/approval-loop-input.json
-  outputSchemaRef: schemas/approval-loop-output.json
+  input:
+    schema:
+      type: object
+      required: [decision]
+      properties:
+        decision: { type: string }
+      additionalProperties: true
 
   start: init
   states:
@@ -64,7 +69,12 @@ spec:
       type: wait
       wait:
         channel: manual
-        inputSchemaRef: schemas/approval-loop-input.json
+        input:
+          schema:
+            type: object
+            required: [decision]
+            properties:
+              decision: { type: string }
         timeoutSec: 300
         onTimeout: timedOut
         apply:
@@ -163,8 +173,13 @@ spec:
       errorCode: POLL_TIMEOUT
       reason: "Status polling exceeded 10 seconds"
 
-  inputSchemaRef: schemas/poll-status-input.json
-  outputSchemaRef: schemas/poll-status-output.json
+  input:
+    schema:
+      type: object
+      required: [jobId]
+      properties:
+        jobId: { type: string }
+      additionalProperties: true
 
   start: init
   states:

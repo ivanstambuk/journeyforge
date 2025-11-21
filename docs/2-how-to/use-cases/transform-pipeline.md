@@ -12,7 +12,7 @@ Transform input data through multiple steps:
 ## Relevant DSL Features
 
 - `transform` state with context replacement and var targets.
-- `inputSchemaRef` / `outputSchemaRef`.
+- `spec.input.schema` / `spec.output.schema`.
 
 ## Example – transform-pipeline
 
@@ -25,8 +25,24 @@ metadata:
   name: transform-pipeline
   version: 0.1.0
 spec:
-  inputSchemaRef: schemas/transform-pipeline-input.json
-  outputSchemaRef: schemas/transform-pipeline-output.json
+  input:
+    schema:
+      type: object
+      required: [id, amount]
+      properties:
+        id: { type: string }
+        amount: { type: number }
+        currency: { type: string }
+      additionalProperties: true
+  output:
+    schema:
+      type: object
+      required: [id, total, currency]
+      properties:
+        id: { type: string }
+        total: { type: number }
+        currency: { type: string }
+      additionalProperties: true
   start: normalise
   states:
     normalise:

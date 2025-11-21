@@ -1,0 +1,66 @@
+apiVersion: v1
+kind: Journey
+metadata:
+  name: http-cookie-jar
+  version: 0.1.0
+  description: Journey that uses a per-run cookie jar for a backend domain.
+spec:
+  cookies:
+    jar:
+      domains:
+        - pattern: "api.example.com"
+        - pattern: ".example.com"
+
+    returnToClient:
+      mode: filtered
+      include:
+        names: ["session"]
+
+  start: login
+  states:
+    login:
+      type: task
+      task:
+        kind: httpCall
+        method: POST
+        url: "https://api.example.com/login"
+        headers:
+          Accept: application/json
+        timeoutMs: 5000
+        resultVar: loginResult
+      next: getProfile
+
+    getProfile:
+      type: task
+      task:
+        kind: httpCall
+        method: GET
+        url: "https://api.example.com/profile"
+        cookies:
+          useJar: true         # implicit; shown for clarity
+        headers:
+          Accept: application/json
+        timeoutMs: 5000
+        resultVar: profile
+      next: decide
+
+    decide:
+      type: choice
+      choices:
+        - when:
+            predicate:
+              lang: dataweave
+              expr: |
+                context.profile.ok == true and context.profile.status == 200
+          next: done
+      default: failed
+
+    done:
+      type: succeed
+      outputVar: profile
+
+    failed:
+      type: fail
+      errorCode: PROFILE_FAILED
+      reason: "Profile call failed or did not return 200"
+

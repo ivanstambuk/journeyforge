@@ -26,8 +26,18 @@ metadata:
   name: sync-wrapper-wait
   version: 0.1.0
 spec:
-  inputSchemaRef: schemas/sync-wrapper-wait-input.json
-  outputSchemaRef: schemas/sync-wrapper-wait-output.json
+  input:
+    schema:
+      type: object
+      properties:
+        status: { type: string }
+      additionalProperties: true
+  output:
+    schema:
+      type: object
+      properties:
+        status: { type: string }
+      additionalProperties: true
   start: startLongRunning
   states:
     startLongRunning:
@@ -46,7 +56,12 @@ spec:
       type: wait
       wait:
         channel: manual
-        inputSchemaRef: schemas/sync-wrapper-wait-input.json
+        input:
+          schema:
+            type: object
+            properties:
+              status: { type: string }
+            additionalProperties: true
         timeoutSec: 10
         onTimeout: timedOut
         apply:
@@ -74,4 +89,3 @@ spec:
 
 Related files:
 - OpenAPI: `sync-wrapper-wait.openapi.yaml`
-- Schemas: `sync-wrapper-wait-input.json`, `sync-wrapper-wait-output.json`

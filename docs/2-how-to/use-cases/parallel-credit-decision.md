@@ -34,8 +34,21 @@ spec:
       openApiRef: apis/serviceB.openapi.yaml
     kyc:
       openApiRef: apis/users.openapi.yaml
-  inputSchemaRef: schemas/credit-decision-parallel-input.json
-  outputSchemaRef: schemas/credit-decision-parallel-output.json
+  input:
+    schema:
+      type: object
+      required: [userId]
+      properties:
+        userId: { type: string }
+      additionalProperties: true
+  output:
+    schema:
+      type: object
+      properties:
+        risk: { type: object }
+        limits: { type: object }
+        kyc: { type: object }
+      additionalProperties: true
   start: evaluate
   states:
     evaluate:

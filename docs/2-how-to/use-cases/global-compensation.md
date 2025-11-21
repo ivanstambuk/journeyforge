@@ -33,9 +33,6 @@ metadata:
   name: http-compensation
   version: 0.1.0
 spec:
-  inputSchemaRef: schemas/http-compensation-input.json
-  outputSchemaRef: schemas/http-compensation-output.json
-
   execution:
     maxDurationSec: 30
     onTimeout:

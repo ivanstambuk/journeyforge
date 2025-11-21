@@ -44,8 +44,37 @@ spec:
     accounts:
       openApiRef: apis/accounts.openapi.yaml
 
-  inputSchemaRef: schemas/http-chained-calls-input.json
-  outputSchemaRef: schemas/http-chained-calls-output.json
+  input:
+    schema:
+      type: object
+      required: [userId]
+      properties:
+        userId: { type: string }
+      additionalProperties: true
+  output:
+    schema:
+      type: object
+      properties:
+        status: { type: integer }
+        ok: { type: boolean }
+        headers:
+          type: object
+          additionalProperties: { type: string }
+        body:
+          type: object
+          properties:
+            accountId: { type: string }
+            ownerId: { type: string }
+            email:
+              type: string
+              format: email
+          additionalProperties: true
+        error:
+          type: object
+          properties:
+            type: { type: string }
+            message: { type: string }
+          additionalProperties: true
 
   defaults:
     http:

@@ -7,12 +7,12 @@ JourneyForge uses a spec‑first workflow. We need a human‑friendly authoring 
 
 ## Decision
 - Author in YAML (YAML 1.2 subset), allow both YAML and JSON inputs.
-- Generate canonical JSON snapshots on validate/build for determinism (sorted keys, UTF‑8/LF).
+- Treat the YAML as the primary, authoritative artefact; JSON forms (when produced) are derived and non-normative.
 - Disallow YAML anchors/aliases and implicit type coercions; validate with JSON Schema.
 
 ## Consequences
 - Human‑readable specs with comments and concise structure.
-- Stable JSON artefacts for caching, diffs, and automation.
+- Implementations MAY generate canonical JSON snapshots for tooling or CI, but they are not required and are not part of the public contract.
 - Parser must enforce the allowed YAML subset and error clearly on unsupported features.
 
 ## Related

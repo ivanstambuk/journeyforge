@@ -31,8 +31,30 @@ spec:
       openApiRef: apis/items.openapi.yaml
     itemsB:
       openApiRef: apis/serviceA.openapi.yaml
-  inputSchemaRef: schemas/multitenant-routing-input.json
-  outputSchemaRef: schemas/multitenant-routing-output.json
+  input:
+    schema:
+      type: object
+      required: [id]
+      properties:
+        id: { type: string }
+      additionalProperties: true
+  output:
+    schema:
+      type: object
+      properties:
+        status: { type: integer }
+        ok: { type: boolean }
+        headers:
+          type: object
+          additionalProperties: { type: string }
+        body: {}
+        error:
+          type: object
+          properties:
+            type: { type: string }
+            message: { type: string }
+          additionalProperties: true
+      additionalProperties: true
   httpBindings:
     start:
       headersToContext:
@@ -112,4 +134,3 @@ spec:
 
 Related files:
 - OpenAPI: `multitenant-routing.openapi.yaml`
-- Schemas: `multitenant-routing-input.json`, `multitenant-routing-output.json`

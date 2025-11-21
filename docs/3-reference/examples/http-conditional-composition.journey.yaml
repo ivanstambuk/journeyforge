@@ -4,8 +4,40 @@ metadata:
   name: http-conditional-composition
   version: 0.1.0
 spec:
-  inputSchemaRef: schemas/http-conditional-composition-input.json
-  outputSchemaRef: schemas/http-conditional-composition-output.json
+  input:
+    schema:
+      type: object
+      required: [featureFlag, id, name]
+      additionalProperties: true
+      properties:
+        featureFlag:
+          type: string
+        id:
+          type: string
+        name:
+          type: string
+  output:
+    schema:
+      type: object
+      properties:
+        status:
+          type: integer
+        ok:
+          type: boolean
+        headers:
+          type: object
+          additionalProperties:
+            type: string
+        body: {}
+        error:
+          type: object
+          properties:
+            type:
+              type: string
+            message:
+              type: string
+          additionalProperties: true
+      additionalProperties: true
   apis:
     items: { openApiRef: apis/items.openapi.yaml }
     users: { openApiRef: apis/users.openapi.yaml }

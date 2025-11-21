@@ -54,3 +54,7 @@ expr: |
 ```
 
 Single-line `expr: "..."` is still valid but should be avoided in new specs and gradually normalised to the multiline form in existing docs/examples.
+
+## LLM Interaction Protocol
+- Before proposing designs, specs, or code changes, the agent MUST first ask targeted clarification questions until the human confirms that key ambiguities are resolved.
+- For non-trivial changes, the interaction order SHOULD be: questions → human answers → detailed proposal.
