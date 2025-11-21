@@ -1,6 +1,6 @@
 # Agent Playbook – JourneyForge
 
-Project TL;DR: Spec‑first API workflow orchestrator in Java 25. DSL and specs live under `docs/`; runtime engine and connectors live under `journeyforge-*` modules; CLI lives in `app/` (temporary) or `journeyforge-cli/` later. Read the constitution in `docs/6-decisions/project-constitution.md` before acting.
+Project TL;DR: Spec‑first API journey orchestrator in Java 25. DSL and specs live under `docs/`; the engine and connectors live under `journeyforge-*` modules; CLI lives in `app/` (temporary) or `journeyforge-cli/` later. Read the constitution in `docs/6-decisions/project-constitution.md` before acting.
 
 ## Agent‑Facing Repo Map
 - Modules (initial)
@@ -35,6 +35,7 @@ Project TL;DR: Spec‑first API workflow orchestrator in Java 25. DSL and specs 
 - Author YAML (1.2 subset); accept YAML+JSON; generate canonical JSON snapshots. See spec-format guideline and ADR-0001.
 
 ## Key References
+- Terminology: `docs/0-overview/terminology.md`
 - DSL Reference: `docs/3-reference/dsl.md`
 - DSL Style Guide: `docs/4-architecture/spec-guidelines/dsl-style.md`
 - Spec Format & Snapshots: `docs/4-architecture/spec-guidelines/spec-format.md`

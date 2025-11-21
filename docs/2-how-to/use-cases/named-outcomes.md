@@ -15,11 +15,11 @@ Classify terminal outcomes with a stable vocabulary:
 
 ## Example – named-outcomes
 
-Workflow: `named-outcomes.workflow.yaml`
+Journey definition: `named-outcomes.journey.yaml`
 
 ```yaml
 apiVersion: v1
-kind: Workflow
+kind: Journey
 metadata:
   name: named-outcomes
   version: 0.1.0

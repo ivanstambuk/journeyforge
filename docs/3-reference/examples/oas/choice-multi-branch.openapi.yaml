@@ -16,11 +16,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              required: [context]
-              properties:
-                context:
-                  $ref: '../schemas/choice-multi-branch-input.json'
+              $ref: '../schemas/choice-multi-branch-input.json'
       responses:
         '202':
           description: Accepted

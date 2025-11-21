@@ -18,11 +18,11 @@ Combine multiple upstream HTTP calls into a single journey:
 
 ## Example 1 – Chained calls (user → account)
 
-Workflow: `http-chained-calls.workflow.yaml`
+Journey definition: `http-chained-calls.journey.yaml`
 
 ```yaml
 apiVersion: v1
-kind: Workflow
+kind: Journey
 metadata:
   name: http-chained-calls
   version: 0.1.0
@@ -113,11 +113,11 @@ Related files:
 
 ## Example 2 – Aggregating errors across calls
 
-Workflow: `http-aggregate-errors.workflow.yaml`
+Journey definition: `http-aggregate-errors.journey.yaml`
 
 ```yaml
 apiVersion: v1
-kind: Workflow
+kind: Journey
 metadata:
   name: http-aggregate-errors
   version: 0.1.0
@@ -194,11 +194,11 @@ Related files:
 
 ## Example 3 – Conditional composition
 
-Workflow: `http-conditional-composition.workflow.yaml`
+Journey definition: `http-conditional-composition.journey.yaml`
 
 ```yaml
 apiVersion: v1
-kind: Workflow
+kind: Journey
 metadata:
   name: http-conditional-composition
   version: 0.1.0

@@ -41,7 +41,7 @@ Call out adjacent topics out of scope.
 | S-<NNN>-01 | Describe behaviour |
 
 ## Test Strategy
-Describe coverage per layer (core/runtime, admin/runtime APIs, CLI, UI, docs/contracts).
+Describe coverage per layer (engine core, admin/journey APIs, CLI, UI, docs/contracts).
 
 ## Interface & Contract Catalogue
 Document domain objects, API routes, CLI commands, telemetry events, and fixtures.

@@ -17,11 +17,11 @@ Implement a “create if missing, otherwise return existing” flow:
 
 ## Example – http-idempotent-create
 
-Workflow: `http-idempotent-create.workflow.yaml`
+Journey definition: `http-idempotent-create.journey.yaml`
 
 ```yaml
 apiVersion: v1
-kind: Workflow
+kind: Journey
 metadata:
   name: http-idempotent-create
   version: 0.1.0

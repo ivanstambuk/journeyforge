@@ -14,11 +14,11 @@ Propagate inbound tracing or correlation headers (for example W3C / OpenTelemetr
 
 ## Example – Header interpolation
 
-Workflow: `http-header-interpolation.workflow.yaml`
+Journey definition: `http-header-interpolation.journey.yaml`
 
 ```yaml
 apiVersion: v1
-kind: Workflow
+kind: Journey
 metadata:
   name: http-header-interpolation
   version: 0.1.0

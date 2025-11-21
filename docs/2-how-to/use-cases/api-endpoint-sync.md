@@ -25,7 +25,7 @@ There is no concept of journey initiation, status polling, or `journeyId` – fr
 
 ## Example – http-chained-calls-api
 
-Workflow: `http-chained-calls-api.workflow.yaml`
+API definition: `http-chained-calls-api.journey.yaml`
 
 ```yaml
 apiVersion: v1
@@ -124,6 +124,6 @@ Notes:
 - The engine reuses the same state machine as journeys, but does not expose `journeyId` or status/result polling endpoints for `kind: Api`.
 
 Related files:
-- Workflow: `http-chained-calls-api.workflow.yaml`
+- Workflow spec: `http-chained-calls-api.journey.yaml`
 - OpenAPI: `http-chained-calls-api.openapi.yaml`
 - Schemas: `http-chained-calls-input.json`, `http-chained-calls-output.json`

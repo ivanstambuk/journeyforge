@@ -18,11 +18,11 @@ Model long‑running approval flows that:
 
 ## Example 1 – Manual approval
 
-Workflow: `wait-approval.workflow.yaml`
+Journey definition: `wait-approval.journey.yaml`
 
 ```yaml
 apiVersion: v1
-kind: Workflow
+kind: Journey
 metadata:
   name: wait-approval
   version: 0.1.0
@@ -86,11 +86,11 @@ Related files:
 
 ## Example 2 – Payment callback webhook
 
-Workflow: `payment-callback.workflow.yaml`
+Journey definition: `payment-callback.journey.yaml`
 
 ```yaml
 apiVersion: v1
-kind: Workflow
+kind: Journey
 metadata:
   name: payment-callback
   version: 0.1.0

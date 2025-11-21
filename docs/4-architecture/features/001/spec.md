@@ -12,22 +12,22 @@
 > Guardrail: This specification is the single normative source of truth for the feature. Track high‑ and medium‑impact questions in `docs/4-architecture/open-questions.md` (for example Q-001), encode resolved answers directly in the Requirements/NFR/Behaviour/Telemetry sections below, and use ADRs under `docs/6-decisions/` for architecturally significant clarifications.
 
 ## Overview
-Introduce a spec‑first workflow engine that executes YAML/JSON workflow documents using the full DSL surface defined in `docs/3-reference/dsl.md`. The DSL includes state types such as `task` (HTTP call and cache operations), `choice`, `transform`, `wait`, `webhook`, `parallel`, `succeed`, and `fail`, plus configuration blocks for schemas, policies, and error handling. Execution is initially synchronous and in‑memory, suitable for local runs and unit tests, and lays the foundation for later persistence, timers, and parallelism.
+Introduce a spec‑first engine that executes YAML/JSON journey definitions using the full DSL surface defined in `docs/3-reference/dsl.md`. The DSL includes state types such as `task` (HTTP call and cache operations), `choice`, `transform`, `wait`, `webhook`, `parallel`, `succeed`, and `fail`, plus configuration blocks for schemas, policies, and error handling. Execution is initially synchronous and in‑memory, suitable for local runs and unit tests, and lays the foundation for later persistence, timers, and parallelism.
 
 ## Goals
 - Parse and validate the DSL from YAML/JSON into model types.
-- Execute a workflow synchronously starting at `spec.start`, transitioning via `next`.
+- Execute a journey definition synchronously starting at `spec.start`, transitioning via `next`, creating a journey instance.
 - Provide HTTP `task` execution with `operationRef`/raw bindings, structured result recording, optional resilience policies, and error mapping hooks.
 - Provide branching via `choice` using DataWeave 2.x predicates (must evaluate to boolean).
 - Support `transform` states for context/value shaping.
-- Reserve DSL shapes for external-input (`wait`/`webhook`), parallel, cache, and policy blocks, even if their full runtime semantics are implemented incrementally.
+- Reserve DSL shapes for external-input (`wait`/`webhook`), parallel, cache, and policy blocks, even if their full engine semantics are implemented incrementally.
 - Support terminal `succeed` and `fail` states with structured result/errata.
-- Provide a tiny runner (CLI or unit test harness) to execute a workflow file and print the final outcome.
+- Provide a tiny runner (CLI or unit test harness) to execute a journey file and print the final outcome.
 
 ## Non-Goals
 - No persistence or resume across process restarts.
 - No distributed scheduler or durable timers.
-- No advanced retries, circuit breakers, or auth enforcement beyond what is required for a minimal local runner; richer policy enforcement will be refined in later runtime features.
+- No advanced retries, circuit breakers, or auth enforcement beyond what is required for a minimal local engine; richer policy enforcement will be refined in later features.
 
 ## DSL (normative)
 
@@ -36,10 +36,11 @@ See also: `docs/3-reference/dsl.md` and `docs/4-architecture/spec-guidelines/dsl
 ### Top‑level
 ```yaml
 apiVersion: v1
-kind: Workflow
+kind: Journey
 metadata:
   name: example
   version: 0.1.0
+  description: Simple HTTP GET with success/failure branching.
 spec:
   start: call-api                     # required, state id
   states:                             # map<string, State>
@@ -84,7 +85,7 @@ spec:
   - Evaluate `when.predicate` with `context` bound; the expression must return boolean. The first true predicate transitions via `next`.
   - If no branch matches, engine transitions to `default`.
 - `succeed`:
-  - Terminal state. If `outputVar` is set and exists in `context`, the engine returns that value as the workflow output; otherwise returns the full `context`.
+  - Terminal state. If `outputVar` is set and exists in `context`, the engine returns that value as the journey output; otherwise returns the full `context`.
 - `fail`:
   - Terminal state with `errorCode` and human‑readable `reason`.
 
@@ -98,11 +99,11 @@ spec:
 | ID | Requirement | Success path | Validation path | Failure path | Telemetry & traces | Source |
 |----|-------------|--------------|-----------------|--------------|--------------------|--------|
 | FR-001-01 | Parse DSL from YAML/JSON into model types. | Valid file yields model tree. | Missing `start` or unknown `type` rejected. | Parser error with line/column. | Log spec filename and error summary. | docs/ideas |
-| FR-001-02 | Execute workflow synchronously from `start`. | Returns `Succeed` output or `Fail` record. | Unknown `next` rejected at validation. | Terminates on first error. | Trace start/stop with state ids. | docs/ideas |
+| FR-001-02 | Execute journey synchronously from `start`. | Returns `Succeed` output or `Fail` record. | Unknown `next` rejected at validation. | Terminates on first error. | Trace start/stop with state ids. | docs/ideas |
 | FR-001-03 | HTTP `task` execution. | Performs request with timeout; stores structured result (`status`, `ok`, `headers`, `body`, optional `error`) under `resultVar`; continues to `next`. | Disallow body on GET; require method+url. | No auto‑termination; branch explicitly in a following `choice`. | Log url, method, duration (no secrets). | docs/ideas |
 | FR-001-04 | `choice` branching. | Branches on DataWeave predicate; first true wins. | DW predicate must return boolean. | No match → `default`. | Trace chosen branch id. | docs/ideas |
 | FR-001-05 | Terminal states. | `succeed`/`fail` end execution. | Return output per semantics. | N/A | Trace terminal outcome. | docs/ideas |
-| FR-001-06 | Runner entrypoint (temporary). | Run a workflow file with initial context. | Validates then executes. | Non‑zero exit on failure. | Print outcome JSON. | docs/ideas |
+| FR-001-06 | Runner entrypoint (temporary). | Run a journey file with initial context. | Validates then executes. | Non‑zero exit on failure. | Print outcome JSON. | docs/ideas |
 
 ## Non‑Functional Requirements
 | ID | Requirement | Driver | Measurement | Dependencies | Source |
@@ -123,7 +124,7 @@ N/A for this feature slice (CLI/tests only).
 
 ## Test Strategy
 - Parser: round‑trip parse/validate valid and invalid specs.
-- Runtime: state‑by‑state execution with a stubbed HTTP client (no real network in CI).
+- Engine: state‑by‑state execution with a stubbed HTTP client (no real network in CI).
 - Runner: happy‑path and failure exit codes.
 
 ## Interface & Contract Catalogue

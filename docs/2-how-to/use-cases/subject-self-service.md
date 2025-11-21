@@ -28,16 +28,16 @@ We want a pattern where:
 
 ## Example – subject-step-guard
 
-Workflow: `subject-step-guard.workflow.yaml`
+Journey definition: `subject-step-guard.journey.yaml`
 
-This workflow shows how to:
+This journey shows how to:
 - Capture the subject from the JWT when the journey starts (`ownerUserId`).
 - Capture the subject again when a follow-up step is called (`stepUserId`).
 - Compare both and fail with a security error when they differ.
 
 ```yaml
 apiVersion: v1
-kind: Workflow
+kind: Journey
 metadata:
   name: subject-step-guard
   version: 0.1.0

@@ -18,11 +18,11 @@ Evaluate a credit decision by:
 
 ## Example – credit-decision-parallel
 
-Workflow: `credit-decision-parallel.workflow.yaml`
+Journey definition: `credit-decision-parallel.journey.yaml`
 
 ```yaml
 apiVersion: v1
-kind: Workflow
+kind: Journey
 metadata:
   name: credit-decision-parallel
   version: 0.1.0

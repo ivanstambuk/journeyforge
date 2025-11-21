@@ -7,7 +7,7 @@ Status: Draft | Last updated: 2025-11-20
 Emit an HTTP notification as a side effect without blocking on the response or branching on the outcome:
 - Send a best-effort audit/notification call to an external HTTP endpoint.
 - Continue the journey regardless of whether the notification eventually succeeds.
-- Keep the workflow semantics simple: no `resultVar`, no error handling logic for the notification.
+- Keep the journey semantics simple: no `resultVar`, no error handling logic for the notification.
 
 ## Relevant DSL Features
 
@@ -18,14 +18,16 @@ Emit an HTTP notification as a side effect without blocking on the response or b
 
 ## Example – http-notify-audit
 
-Workflow: `http-notify-audit.workflow.yaml`
+Journey definition: `http-notify-audit.journey.yaml`
 
 ```yaml
 apiVersion: v1
-kind: Workflow
+kind: Journey
 metadata:
   name: http-notify-audit
   version: 0.1.0
+  description: >
+    Fire-and-forget HTTP audit notification for order updates.
 spec:
   inputSchemaRef: schemas/http-notify-audit-input.json
   outputSchemaRef: schemas/http-notify-audit-output.json
@@ -53,14 +55,13 @@ spec:
 
     done:
       type: succeed
-      # return the (unchanged) context; this workflow does not depend on the HTTP outcome
+      # return the (unchanged) context; this journey does not depend on the HTTP outcome
 ```
 
 Notes:
-- The audit call is “fire-and-forget” from the workflow’s perspective: it does not define `resultVar` or `errorMapping`, and the journey cannot branch on notification success or failure.
-- Runtimes may still log failures or apply retries internally, but control flow always proceeds from `notify` to `done`.
+- The audit call is “fire-and-forget” from the journey’s perspective: it does not define `resultVar` or `errorMapping`, and the journey cannot branch on notification success or failure.
+- Engine implementations MAY log or retry the notification internally, but those behaviours are non-observable in the DSL: control flow always proceeds from `notify` to `done` regardless of HTTP success/failure.
 
 Related files:
-- Workflow: `http-notify-audit.workflow.yaml`
+- Journey definition: `http-notify-audit.journey.yaml`
 - Schemas: `http-notify-audit-input.json`, `http-notify-audit-output.json`
-

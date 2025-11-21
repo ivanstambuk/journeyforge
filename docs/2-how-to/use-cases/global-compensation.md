@@ -24,11 +24,11 @@ Model a journey that:
 
 ## Example – http-compensation
 
-Workflow: `http-compensation.workflow.yaml`
+Journey definition: `http-compensation.journey.yaml`
 
 ```yaml
 apiVersion: v1
-kind: Workflow
+kind: Journey
 metadata:
   name: http-compensation
   version: 0.1.0
@@ -172,6 +172,6 @@ spec:
 Use `spec.compensation` when:
 - Your journey performs multi-step mutations across external systems.
 - You need a consistent, centralised rollback path that has access to the final `context` and termination metadata.
-- You want to keep compensation logic close to the main workflow spec, rather than wiring it up separately in platform code.
+- You want to keep compensation logic close to the main journey definition, rather than wiring it up separately in platform code.
 
 You can switch `mode` to `sync` when callers must wait until compensation completes (for example, internal admin flows), while keeping `async` as the default for user-facing APIs where latency matters more than immediate rollback.

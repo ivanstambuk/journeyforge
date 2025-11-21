@@ -16,11 +16,11 @@ Transform input data through multiple steps:
 
 ## Example – transform-pipeline
 
-Workflow: `transform-pipeline.workflow.yaml`
+Journey definition: `transform-pipeline.journey.yaml`
 
 ```yaml
 apiVersion: v1
-kind: Workflow
+kind: Journey
 metadata:
   name: transform-pipeline
   version: 0.1.0

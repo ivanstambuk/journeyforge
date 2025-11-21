@@ -12,9 +12,9 @@ Guiding principles
 | ID | Name | Status | Scope Snapshot |
 |----|------|--------|----------------|
 | 001 | DSL + Core HTTP engine | Planned | Full YAML/JSON DSL surface (all state types and config blocks) + synchronous runner + HTTP call node |
-| 002 | Persistence + runtime REST | Planned | Instance store, start/query APIs |
+| 002 | Persistence + Journeys API | Planned | Instance store, start/query APIs |
 | 003 | OpenAPI/Arazzo integration | Planned | Import OAS, reference `operationId`, Arazzo exporter |
-| 004 | UI bridge (designer) | Planned | Graph API for React Flow/Atlas over runtime/admin APIs |
+| 004 | UI bridge (designer) | Planned | Graph API for React Flow/Atlas over journey/admin APIs |
 | 005 | Admin plane | Planned | Versioned definitions, environments, RBAC, telemetry |
 | 006 | LDAP/JDBC/Kafka connectors | Planned | Additional connectors and fixtures |
 

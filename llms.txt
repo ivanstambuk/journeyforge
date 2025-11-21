@@ -49,9 +49,9 @@ docs/3-reference/examples/oas/http-failure-branch.openapi.yaml
 docs/3-reference/examples/oas/http-header-interpolation.openapi.yaml
 docs/3-reference/examples/oas/http-post-json.openapi.yaml
 docs/3-reference/examples/oas/http-put-delete.openapi.yaml
-docs/3-reference/examples/oas/http-timeout-branch.openapi.yamldocs/3-reference/examples/wait-approval.workflow.yaml
+docs/3-reference/examples/oas/http-timeout-branch.openapi.yamldocs/3-reference/examples/wait-approval.journey.yaml
 docs/3-reference/examples/oas/wait-approval.openapi.yaml
-docs/3-reference/examples/payment-callback.workflow.yaml
+docs/3-reference/examples/payment-callback.journey.yaml
 docs/3-reference/examples/schemas/payment-callback-input.json
 docs/3-reference/examples/schemas/payment-callback-webhook-input.json
 docs/3-reference/examples/schemas/payment-callback-output.json
@@ -61,7 +61,7 @@ docs/4-architecture/spec-guidelines/step-design.md
 docs/4-architecture/features/003/spec.md
 docs/4-architecture/features/005/spec.md
 docs/4-architecture/features/006/spec.md
-docs/3-reference/examples/cache-user-profile.workflow.yaml
+docs/3-reference/examples/cache-user-profile.journey.yaml
 docs/3-reference/examples/schemas/cache-user-profile-input.json
 docs/3-reference/examples/schemas/cache-user-profile-output.json
 docs/3-reference/examples/oas/cache-user-profile.openapi.yaml

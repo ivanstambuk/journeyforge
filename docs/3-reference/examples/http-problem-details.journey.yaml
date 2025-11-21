@@ -1,0 +1,88 @@
+apiVersion: v1
+kind: Journey
+metadata:
+  name: http-problem-details
+  version: 0.1.0
+spec:
+  inputSchemaRef: schemas/http-problem-details-input.json
+  outputSchemaRef: schemas/http-problem-details-output.json
+  apis:
+    items: { openApiRef: apis/items.openapi.yaml }
+  start: call_api
+  states:
+    call_api:
+      type: task
+      task:
+        kind: httpCall
+        operationRef: items.getItemById
+        params:
+          path: { id: "${context.id}" }
+          headers: { Accept: application/json }
+        timeoutMs: 5000
+        resultVar: api
+      next: decide_error
+
+    decide_error:
+      type: choice
+      choices:
+        - when:
+            predicate:
+              lang: dataweave
+              expr: |
+                context.api.ok == false
+          next: error_mode
+      default: done
+
+    error_mode:
+      type: choice
+      choices:
+        - when:
+            predicate:
+              lang: dataweave
+              expr: |
+                context.soft == true
+          next: normalise_soft
+      default: normalise_hard
+
+    normalise_soft:
+      type: transform
+      transform:
+        mapper:
+          lang: dataweave
+          expr: |
+            {
+              type: 'https://example.com/probs/upstream-error',
+              title: 'Upstream service failure',
+              status: context.api.status default: 500,
+              detail: context.api.error.message default: 'Upstream error'
+            }
+        target:
+          kind: var
+        resultVar: problem
+      next: return_problem
+
+    return_problem:
+      type: succeed
+      outputVar: problem
+
+    normalise_hard:
+      type: transform
+      transform:
+        mapper:
+          lang: dataweave
+          expr: |
+            {
+              type: 'https://example.com/probs/upstream-error',
+              title: 'Upstream service failure',
+              status: context.api.status default: 500,
+              detail: context.api.error.message default: 'Upstream error'
+            }
+        target:
+          kind: var
+        resultVar: problem
+      next: fail_with_problem
+
+    fail_with_problem:
+      type: fail
+      errorCode: "https://example.com/probs/upstream-error"
+      reason: "Upstream service failure"

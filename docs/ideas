@@ -8,7 +8,7 @@ You are essentially sketching a **spec-first, Java-based API workflow orchestrat
   * Kong Datakit’s YAML workflows for connecting and transforming third-party APIs. ([Kong Docs][1])
   * Amazon States Language (ASL) style state machines (Task/Choice/Parallel/Wait/etc.). ([AWS Documentation][2])
   * OpenAPI Arazzo: use-case oriented workflows as sequences of API calls described in YAML/JSON. ([openapis.org][3])
-* A **runtime engine** that executes those specs with:
+* An **execution engine** that executes those specs with:
 
   * Rich **HTTP client resiliency policies** (retries, timeouts, bulkheads, connection pools, circuit breakers).
   * **Authentication policies** (OAuth2, mTLS, API keys) reusable across calls.
@@ -48,7 +48,7 @@ Relative to existing engines:
 * Compared to **Temporal / Cadence / SWF / Step Functions / Cloud Workflows**:
 
   * Temporal argues “workflow should be code, not graphs”. You want something in between: **spec-as-source**, data-driven, with a declarative orchestration graph that is still inspectable and exportable (Arazzo, OpenAPI, etc.).
-  * You are more interested in **API façade and portability** than in a fully managed distributed runtime.
+  * You are more interested in **API façade and portability** than in a fully managed distributed execution engine.
 * Compared to **Kong Datakit**:
 
   * Datakit is a plugin inside Kong Gateway that lets you define workflows combining and transforming API responses, including auth and caching. ([Kong Docs][1])
@@ -82,11 +82,11 @@ You already hinted at the two façades; the overall structure could be:
      * Reference operations as `<apiName>.<operationId>`.
      * Export/derive Arazzo workflows for documentation and tooling.
 
-2. **Runtime Engine**
+2. **Execution Engine**
 
    * Workflow interpreter that executes the DSL:
 
-     * State machine runtime (influenced by ASL).
+     * State machine core (influenced by ASL).
      * Execution contexts (“journeys”) with variables, headers, claims, tokens.
      * Scheduler for timers, wait states, long-running flows.
      * Execution graph supporting sequential, parallel, and conditional paths.
@@ -130,11 +130,11 @@ You have three strong reference points:
 
 A reasonable direction:
 
-1. **Top-level workflow spec**
+1. **Top-level journey spec**
 
 ```yaml
 apiVersion: v1
-kind: Workflow
+kind: Journey
 metadata:
   name: payment-authorization
   version: 1.2.0
@@ -396,9 +396,9 @@ You want a “library for subjourneys”:
 
 ## ⚙️ Java 25 implementation strategy
 
-### Language & runtime
+### Language & platform
 
-* Target **Java 25 (LTS)**: most recent LTS with up-to-date language/runtime features. ([Oracle][4])
+* Target **Java 25 (LTS)**: most recent LTS with up-to-date language and platform features. ([Oracle][4])
 * Use:
 
   * Virtual threads (Project Loom) for handling large numbers of concurrent HTTP calls and long-running waits without tying up platform threads.
@@ -573,7 +573,7 @@ A few design tensions you should consciously manage:
 
 3. **Java + spec-first friction**
 
-   * Java is excellent as a runtime core (performance, tooling, ecosystem).
+   * Java is excellent as an engine core (performance, tooling, ecosystem).
    * But spec-first systems inevitably require good **tooling around the spec**:
 
      * LSP / VS Code integration.
@@ -602,10 +602,10 @@ A few design tensions you should consciously manage:
 
 | Area                      | Proposed Direction                                                                             | Key Influences / Notes                                                              |
 | ------------------------- | ---------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
-| Language & runtime        | Java 25 LTS, virtual threads, Gradle multi-module                                              | Java 25 is latest LTS as of 2025. ([Oracle][4])                                     |
+| Language & platform       | Java 25 LTS, virtual threads, Gradle multi-module                                              | Java 25 is latest LTS as of 2025. ([Oracle][4])                                     |
 | Core paradigm             | Spec-first workflows in YAML/JSON, state-machine style                                         | Amazon States Language, Arazzo, Kong Datakit                                        |
 | Workflow semantics        | States: httpCall, transform, choice, parallel, wait, subworkflow, fail/success                 | ASL and Arazzo-style workflows ([AWS Documentation][2])                             |
-| API façade                | REST APIs for definition mgmt, journey control, introspection                                  | OpenAPI-described admin & runtime APIs                                              |
+| API façade                | REST APIs for definition mgmt, journey control, introspection                                  | OpenAPI-described admin & journey APIs                                              |
 | UI façade                 | React Flow/Atlas web UI + optional TUI, both consuming API façade                              | Visual designer is secondary to spec                                                |
 | Connectors                | HTTP, LDAP, JDBC, Kafka, webhooks, filesystem/DB persistence                                   | HTTP first, others as plug-ins                                                      |
 | Policies                  | Externalised resiliency & auth policies attached by reference                                  | Similar conceptually to Datakit’s config and Resilience4j patterns ([Kong Docs][1]) |
@@ -614,7 +614,7 @@ A few design tensions you should consciously manage:
 | Persistence               | Pluggable: filesystem, embedded DB, JDBC DB                                                    | Simple first, pluggable later                                                       |
 | Versioning & environments | Versioned workflows, environment bindings (dev/test/prod), immutable deployed specs            | RFP/enterprise expectations                                                         |
 | Telemetry & governance    | OpenTelemetry integration, log streaming, RBAC for admin APIs, RFP checklist in docs           | Enterprise positioning                                                              |
-| MVP slice                 | Core HTTP engine + basic spec + runtime + simple CLI/API                                       | Additional connectors and UI later                                                  |
+| MVP slice                 | Core HTTP engine + basic spec + engine + simple CLI/API                                        | Additional connectors and UI later                                                  |
 | Main risks                | DSL complexity, overlap with existing engines, SAGA semantics complexity, feature bloat        | Needs a disciplined, minimal core                                                   |
 
 If you want, the next step can be a concrete **initial repo blueprint** (README outline, first Gradle modules, and one minimal workflow spec + engine stub) that you can drop into a GitHub repo and start iterating on.
@@ -637,7 +637,7 @@ You are essentially sketching a **spec-first, Java-based API workflow orchestrat
   * Kong Datakit’s YAML workflows for connecting and transforming third-party APIs. ([Kong Docs][1])
   * Amazon States Language (ASL) style state machines (Task/Choice/Parallel/Wait/etc.). ([AWS Documentation][2])
   * OpenAPI Arazzo: use-case oriented workflows as sequences of API calls described in YAML/JSON. ([openapis.org][3])
-* A **runtime engine** that executes those specs with:
+* An **execution engine** that executes those specs with:
 
   * Rich **HTTP client resiliency policies** (retries, timeouts, bulkheads, connection pools, circuit breakers).
   * **Authentication policies** (OAuth2, mTLS, API keys) reusable across calls.
@@ -677,7 +677,7 @@ Relative to existing engines:
 * Compared to **Temporal / Cadence / SWF / Step Functions / Cloud Workflows**:
 
   * Temporal argues “workflow should be code, not graphs”. You want something in between: **spec-as-source**, data-driven, with a declarative orchestration graph that is still inspectable and exportable (Arazzo, OpenAPI, etc.).
-  * You are more interested in **API façade and portability** than in a fully managed distributed runtime.
+  * You are more interested in **API façade and portability** than in a fully managed distributed execution engine.
 * Compared to **Kong Datakit**:
 
   * Datakit is a plugin inside Kong Gateway that lets you define workflows combining and transforming API responses, including auth and caching. ([Kong Docs][1])
@@ -711,11 +711,11 @@ You already hinted at the two façades; the overall structure could be:
      * Reference operations as `<apiName>.<operationId>`.
      * Export/derive Arazzo workflows for documentation and tooling.
 
-2. **Runtime Engine**
+2. **Execution Engine**
 
    * Workflow interpreter that executes the DSL:
 
-     * State machine runtime (influenced by ASL).
+     * State machine core (influenced by ASL).
      * Execution contexts (“journeys”) with variables, headers, claims, tokens.
      * Scheduler for timers, wait states, long-running flows.
      * Execution graph supporting sequential, parallel, and conditional paths.
@@ -759,11 +759,11 @@ You have three strong reference points:
 
 A reasonable direction:
 
-1. **Top-level workflow spec**
+1. **Top-level journey spec**
 
 ```yaml
 apiVersion: v1
-kind: Workflow
+kind: Journey
 metadata:
   name: payment-authorization
   version: 1.2.0
@@ -1025,9 +1025,9 @@ You want a “library for subjourneys”:
 
 ## ⚙️ Java 25 implementation strategy
 
-### Language & runtime
+### Language & platform
 
-* Target **Java 25 (LTS)**: most recent LTS with up-to-date language/runtime features. ([Oracle][4])
+* Target **Java 25 (LTS)**: most recent LTS with up-to-date language and platform features. ([Oracle][4])
 * Use:
 
   * Virtual threads (Project Loom) for handling large numbers of concurrent HTTP calls and long-running waits without tying up platform threads.
@@ -1202,7 +1202,7 @@ A few design tensions you should consciously manage:
 
 3. **Java + spec-first friction**
 
-   * Java is excellent as a runtime core (performance, tooling, ecosystem).
+   * Java is excellent as an engine core (performance, tooling, ecosystem).
    * But spec-first systems inevitably require good **tooling around the spec**:
 
      * LSP / VS Code integration.
@@ -1231,10 +1231,10 @@ A few design tensions you should consciously manage:
 
 | Area                      | Proposed Direction                                                                             | Key Influences / Notes                                                              |
 | ------------------------- | ---------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
-| Language & runtime        | Java 25 LTS, virtual threads, Gradle multi-module                                              | Java 25 is latest LTS as of 2025. ([Oracle][4])                                     |
+| Language & platform       | Java 25 LTS, virtual threads, Gradle multi-module                                              | Java 25 is latest LTS as of 2025. ([Oracle][4])                                     |
 | Core paradigm             | Spec-first workflows in YAML/JSON, state-machine style                                         | Amazon States Language, Arazzo, Kong Datakit                                        |
 | Workflow semantics        | States: httpCall, transform, choice, parallel, wait, subworkflow, fail/success                 | ASL and Arazzo-style workflows ([AWS Documentation][2])                             |
-| API façade                | REST APIs for definition mgmt, journey control, introspection                                  | OpenAPI-described admin & runtime APIs                                              |
+| API façade                | REST APIs for definition mgmt, journey control, introspection                                  | OpenAPI-described admin & journey APIs                                              |
 | UI façade                 | React Flow/Atlas web UI + optional TUI, both consuming API façade                              | Visual designer is secondary to spec                                                |
 | Connectors                | HTTP, LDAP, JDBC, Kafka, webhooks, filesystem/DB persistence                                   | HTTP first, others as plug-ins                                                      |
 | Policies                  | Externalised resiliency & auth policies attached by reference                                  | Similar conceptually to Datakit’s config and Resilience4j patterns ([Kong Docs][1]) |
@@ -1243,7 +1243,7 @@ A few design tensions you should consciously manage:
 | Persistence               | Pluggable: filesystem, embedded DB, JDBC DB                                                    | Simple first, pluggable later                                                       |
 | Versioning & environments | Versioned workflows, environment bindings (dev/test/prod), immutable deployed specs            | RFP/enterprise expectations                                                         |
 | Telemetry & governance    | OpenTelemetry integration, log streaming, RBAC for admin APIs, RFP checklist in docs           | Enterprise positioning                                                              |
-| MVP slice                 | Core HTTP engine + basic spec + runtime + simple CLI/API                                       | Additional connectors and UI later                                                  |
+| MVP slice                 | Core HTTP engine + basic spec + engine + simple CLI/API                                        | Additional connectors and UI later                                                  |
 | Main risks                | DSL complexity, overlap with existing engines, SAGA semantics complexity, feature bloat        | Needs a disciplined, minimal core                                                   |
 
 If you want, the next step can be a concrete **initial repo blueprint** (README outline, first Gradle modules, and one minimal workflow spec + engine stub) that you can drop into a GitHub repo and start iterating on.
@@ -1268,9 +1268,9 @@ You now want:
 * Clear separation of:
 
   * **Admin plane** (definitions, policies, environments).
-  * **Runtime plane** (journeys / executions).
+  * **Journey-execution plane** (journeys / executions).
 
-Below is a concrete synthesis: a DSL shape, engine architecture, admin/runtime APIs, and implementation plan.
+Below is a concrete synthesis: a DSL shape, engine architecture, admin/journey APIs, and implementation plan.
 
 ---
 
@@ -1347,7 +1347,7 @@ Draft:
 
 ```yaml
 apiVersion: ork.io/v1
-kind: Workflow
+kind: Journey
 metadata:
   name: animal-facts
   version: 1.0.0
@@ -1598,10 +1598,10 @@ In Java terms (Java 25, records, sealed types):
 
 Execution context:
 
-* `WorkflowInstance`
+* `JourneyInstance`
 
   * `UUID id`
-  * `String workflowName`
+  * `String journeyName`
   * `String version`
   * `String currentStateName`
   * `JsonNode context` (Jackson tree)
@@ -1750,7 +1750,7 @@ Each connector implementation uses resiliency and telemetry consistently.
 
 ---
 
-## 🛡️ Admin vs runtime APIs
+## 🛡️ Admin vs journey APIs
 
 ### Administrative plane (control plane)
 
@@ -1790,7 +1790,7 @@ Security:
 
 * Strict RBAC & SSO; typically accessible only to platform/IAM teams.
 
-### Runtime plane (data plane)
+### Journey-execution plane (data plane)
 
 Responsibilities:
 
@@ -1835,7 +1835,7 @@ Security:
 * Normal client auth (OAuth2, MTLS, API key).
 * Checks that callers can only operate on authorised workflows/journeys.
 
-The runtime plane never exposes internal `stateName` or DSL details unless you want introspection; those can be subject to stricter scopes.
+The journey-execution plane never exposes internal `stateName` or DSL details unless you want introspection; those can be subject to stricter scopes.
 
 ---
 
@@ -1859,7 +1859,7 @@ api-workflow-orchestrator/
   orchestrator-persistence-jdbc/ # Postgres, etc.
   orchestrator-persistence-embedded/
   orchestrator-admin-service/    # admin plane REST (Spring Boot/Micronaut)
-  orchestrator-runtime-service/  # runtime plane REST
+orchestrator-runtime-service/  # journey-execution plane REST
   orchestrator-ui-bridge/        # simplified graph API for React Flow/Atlas
   examples/
     animal-facts/
@@ -1875,7 +1875,7 @@ api-workflow-orchestrator/
    * YAML parser → model → synchronous runner (no persistence).
    * CLI or unit tests run workflows.
 
-2. **v0.2 – Persistence & runtime service**
+2. **v0.2 – Persistence & journey service**
 
    * Introduce `WorkflowInstanceStore`.
    * Runtime REST API:
@@ -1954,7 +1954,7 @@ Several non-trivial issues deserve explicit skepticism.
 
 4. **Operational complexity**
 
-   * A standalone engine with timers, persistence, parallelism, and a runtime API is a non-trivial distributed system:
+   * A standalone engine with timers, persistence, parallelism, and a journey API is a non-trivial distributed system:
 
      * You must handle crashes, restarts, exactly-once vs at-least-once semantics.
      * Waits and long-running flows introduce subtle correctness issues.
@@ -1988,13 +1988,13 @@ Several non-trivial issues deserve explicit skepticism.
 | Node / operation abstraction | `Task.operation.kind` = `httpCall`, `cacheGet`, `cachePut`, `transform`, `ldap`, `jdbcQuery`, etc.        | Datakit node types (call, cache, jq, branch, exit, static) ([Kong Docs][1]) |
 | Resources                    | `resources.httpClients`, `resources.caches`, `resources.vault`, `resources.datastores`, `resources.ldap`  | Datakit `resources.cache`, `resources.vault`, generalised ([Kong Docs][1])  |
 | Policies                     | `policies.httpResiliency`, `policies.httpAuth`, later others                                              | Encodes retries, timeouts, auth separately from tasks                       |
-| Runtime model                | `WorkflowInstance` with JSON context, status, current state; persisted between steps                      | Classic state machine execution with ASL-like semantics                     |
+| Runtime model                | `WorkflowInstance` with JSON context, status, current state; persisted between steps                      | Classic engine execution with ASL-like semantics                            |
 | Concurrency                  | Virtual threads, structured concurrency for `Parallel` and `Map`                                          | Leverages Java 25 capabilities for large-scale orchestration                |
-| Wait & events                | `Wait` state + `TimerStore`; `WebhookWait` triggered by runtime events                                    | ASL Wait semantics plus event-driven resumes ([AWS Documentation][4])       |
-| Admin vs runtime API         | `/admin/...` for definitions/policies; `/runtime/...` for journeys/executions                             | Explicit control/data plane split                                           |
+| Wait & events                | `Wait` state + `TimerStore`; `WebhookWait` triggered by engine events                                     | ASL Wait semantics plus event-driven resumes ([AWS Documentation][4])       |
+| Admin vs journey API         | `/admin/...` for definitions/policies; `/runtime/...` for journeys/executions                             | Explicit control/data plane split                                           |
 | Main risks                   | Re-implementing ASL semantics; DSL complexity; operational overhead                                       | Needs disciplined DSL scope, strong validation, good tooling                |
 
-This gives you a coherent, ASL-inspired but Datakit-flavoured blueprint for a standalone Java orchestrator. Next logical step is to harden the **DSL schema v0** (JSON Schema) and define the **exact Java model types** that mirror it, so you can start a real repo and incrementally implement the runtime.
+This gives you a coherent, ASL-inspired but Datakit-flavoured blueprint for a standalone Java orchestrator. Next logical step is to harden the **DSL schema v0** (JSON Schema) and define the **exact Java model types** that mirror it, so you can start a real repo and incrementally implement the engine.
 
 [1]: https://developer.konghq.com/plugins/datakit/ "Datakit - Plugin | Kong Docs"
 [2]: https://docs.aws.amazon.com/step-functions/latest/dg/concepts-amazon-states-language.html?utm_source=chatgpt.com "Using Amazon States Language to define Step Functions ..."

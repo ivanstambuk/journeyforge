@@ -16,11 +16,11 @@ Wrap an unstable upstream HTTP call with resilience policies:
 
 ## Example – http-resilience-degrade
 
-Workflow: `http-resilience-degrade.workflow.yaml`
+Journey definition: `http-resilience-degrade.journey.yaml`
 
 ```yaml
 apiVersion: v1
-kind: Workflow
+kind: Journey
 metadata:
   name: http-resilience-degrade
   version: 0.1.0

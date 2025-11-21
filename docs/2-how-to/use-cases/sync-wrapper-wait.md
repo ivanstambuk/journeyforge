@@ -17,11 +17,11 @@ Model a long‑running operation that:
 
 ## Example – sync-wrapper-wait
 
-Workflow: `sync-wrapper-wait.workflow.yaml`
+Journey definition: `sync-wrapper-wait.journey.yaml`
 
 ```yaml
 apiVersion: v1
-kind: Workflow
+kind: Journey
 metadata:
   name: sync-wrapper-wait
   version: 0.1.0

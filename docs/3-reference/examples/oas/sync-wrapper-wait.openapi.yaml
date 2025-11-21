@@ -78,11 +78,7 @@ paths:
 components:
   schemas:
     JourneyStartRequest:
-      type: object
-      required: [context]
-      properties:
-        context:
-          $ref: '../schemas/sync-wrapper-wait-input.json'
+      $ref: '../schemas/sync-wrapper-wait-input.json'
 
     JourneyStartResponse:
       $ref: '../../../openapi/journeys.openapi.yaml#/components/schemas/JourneyStartResponse'
@@ -96,4 +92,3 @@ components:
           $ref: '../schemas/sync-wrapper-wait-output.json'
     SyncWrapperWaitInput:
       $ref: '../schemas/sync-wrapper-wait-input.json'
-

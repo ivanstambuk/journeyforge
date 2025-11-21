@@ -4,8 +4,8 @@ Status: Draft | Last updated: 2025-11-19
 
 ## Naming
 - State ids (steps): `waitForApproval`, `waitForCallback`, `enterOtp` – verbs describing the external input.
-- Schemas: `<workflow>-<step>-input.json` for step payload, `<workflow>-output.json` for final output.
-- Avoid reusing the same `stepId` for different semantics within a workflow.
+- Schemas: `<journey>-<step>-input.json` for step payload, `<journey>-output.json` for final output.
+- Avoid reusing the same `stepId` for different semantics within a journey.
 
 ## Schema design
 - Keep step schemas small and focused on what the client must send.
@@ -29,5 +29,5 @@ Status: Draft | Last updated: 2025-11-19
 
 ## Versioning
 - Changing a step’s schema in a breaking way should be accompanied by:
-  - New `stepId` or new workflow version.
+  - New `stepId` or new journey version.
   - Updated JSON Schemas and OAS documentation.

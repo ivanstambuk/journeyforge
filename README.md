@@ -1,6 +1,6 @@
 # JourneyForge
 
-Spec‑first API journey orchestrator (Java 25). Workflows are authored in YAML (1.2 subset) and executed by a runtime engine with HTTP‑centric tasks. This repository follows a spec‑driven development (SDD) workflow.
+Spec‑first API journey orchestrator (Java 25). Journey definitions (`kind: Journey`) are authored in YAML (1.2 subset) and executed by the JourneyForge engine with HTTP‑centric tasks. This repository follows a spec‑driven development (SDD) workflow.
 
 ## Quick Links
 - DSL Reference: [docs/3-reference/dsl.md](docs/3-reference/dsl.md)

@@ -3,9 +3,9 @@
 Date: 2025-11-19 | Status: Accepted
 
 ## Context
-JourneyForge workflows call downstream HTTP APIs and expose their own outcomes via the Journeys API (`JourneyOutcome`). We need a consistent error model that:
-- Works across HTTP tasks, journey failures, and future admin/runtime APIs.
-- Avoids every workflow inventing a bespoke error envelope.
+JourneyForge journeys call downstream HTTP APIs and expose their own outcomes via the Journeys API (`JourneyOutcome`). We need a consistent error model that:
+- Works across HTTP tasks, journey failures, and future admin/journey APIs.
+-- Avoids every journey definition inventing a bespoke error envelope.
 - Plays well with OpenAPI and existing ecosystem tools.
 
 The current DSL defines:
@@ -16,7 +16,7 @@ The current DSL defines:
 We considered several options:
 - Keep an ad-hoc `{code,reason}` model only.
 - Adopt RFC 9457 "problem details" as the canonical error shape.
-- Allow per-workflow pluggable error formats.
+- Allow per-journey pluggable error formats.
 
 ## Decision
 - RFC 9457 "problem details" is the canonical internal error model for HTTP and journey errors.
@@ -41,10 +41,10 @@ We considered several options:
   - Workflows interoperate cleanly with APIs that already use RFC 9457, and can expose RFC 9457 documents directly via `succeed` when appropriate.
   - OpenAPI contracts can describe error responses using standard Problem Details schemas when we add richer error mapping to exports.
 - Flexibility:
-  - Existing workflows can continue to expose simple `{code,reason}` errors while internally using Problem Details.
-  - Workflows that need domain- or client-specific error formats can derive them from the canonical Problem Details object via `transform` states.
+  - Existing journey definitions can continue to expose simple `{code,reason}` errors while internally using Problem Details.
+  - Journey definitions that need domain- or client-specific error formats can derive them from the canonical Problem Details object via `transform` states.
 - Implementation impact:
-  - Runtimes and tooling must implement helpers and/or libraries for constructing, validating, and logging Problem Details objects.
+  - Engine implementations and tooling must implement helpers and/or libraries for constructing, validating, and logging Problem Details objects.
   - The DSL reference has been updated to describe the recommended mapping between `fail`, `JourneyOutcome.error`, and RFC 9457 Problem Details.
 
 ## Related

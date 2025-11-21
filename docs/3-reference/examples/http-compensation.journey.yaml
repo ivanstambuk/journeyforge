@@ -1,0 +1,125 @@
+apiVersion: v1
+kind: Journey
+metadata:
+  name: http-compensation
+  version: 0.1.0
+spec:
+  inputSchemaRef: schemas/http-compensation-input.json
+  outputSchemaRef: schemas/http-compensation-output.json
+
+  execution:
+    maxDurationSec: 30
+    onTimeout:
+      errorCode: ORDER_TIMEOUT
+      reason: "Order orchestration exceeded 30 seconds"
+
+  apis:
+    billing:
+      openApiRef: apis/billing.openapi.yaml
+    inventory:
+      openApiRef: apis/inventory.openapi.yaml
+
+  # Global compensation journey that runs when the main journey fails,
+  # times out, or is cancelled.
+  compensation:
+    mode: async
+    start: rollback
+    states:
+      rollback:
+        type: task
+        task:
+          kind: httpCall
+          operationRef: billing.cancelCharge
+          params:
+            path:
+              orderId: "${context.orderId}"
+          resultVar: cancelResult
+        next: undo_inventory
+
+      undo_inventory:
+        type: task
+        task:
+          kind: httpCall
+          operationRef: inventory.releaseReservation
+          params:
+            path:
+              orderId: "${context.orderId}"
+          resultVar: inventoryResult
+        next: notify
+
+      notify:
+        type: task
+        task:
+          kind: eventPublish
+          eventPublish:
+            transport: kafka
+            topic: orders.compensation
+            value:
+              mapper:
+                lang: dataweave
+                expr: |
+                  {
+                    orderId: context.orderId,
+                    terminationKind: outcome.terminationKind,
+                    error: outcome.error
+                  }
+        next: done
+
+      done:
+        type: succeed
+
+  start: place_order
+  states:
+    place_order:
+      type: task
+      task:
+        kind: httpCall
+        operationRef: billing.authorizePayment
+        params:
+          body:
+            mapper:
+              lang: dataweave
+              expr: |
+                {
+                  orderId: context.orderId,
+                  amount: context.amount
+                }
+        resultVar: billingResult
+      next: reserve_inventory
+
+    reserve_inventory:
+      type: task
+      task:
+        kind: httpCall
+        operationRef: inventory.reserveItems
+        params:
+          body:
+            mapper:
+              lang: dataweave
+              expr: |
+                {
+                  orderId: context.orderId,
+                  items: context.items
+                }
+        resultVar: inventoryResult
+      next: decide
+
+    decide:
+      type: choice
+      choices:
+        - when:
+            predicate:
+              lang: dataweave
+              expr: |
+                context.billingResult.ok == true and context.inventoryResult.ok == true
+          next: done
+      default: failed
+
+    done:
+      type: succeed
+      outputVar: inventoryResult
+
+    failed:
+      type: fail
+      errorCode: ORDER_FAILED
+      reason: "Order orchestration failed; compensation journey will attempt rollback"

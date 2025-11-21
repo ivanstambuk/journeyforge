@@ -1,0 +1,63 @@
+apiVersion: v1
+kind: Journey
+metadata:
+  name: http-aggregate-errors
+  version: 0.1.0
+spec:
+  inputSchemaRef: schemas/http-aggregate-errors-input.json
+  outputSchemaRef: schemas/http-aggregate-errors-output.json
+  apis:
+    items: { openApiRef: apis/items.openapi.yaml }
+    users: { openApiRef: apis/users.openapi.yaml }
+    accounts: { openApiRef: apis/accounts.openapi.yaml }
+    serviceA: { openApiRef: apis/serviceA.openapi.yaml }
+    serviceB: { openApiRef: apis/serviceB.openapi.yaml }
+  start: call_a
+  states:
+    call_a:
+      type: task
+      task:
+        kind: httpCall
+        method: GET
+        url: "https://api.example.com/serviceA/${context.id}"
+        headers: { Accept: application/json }
+        timeoutMs: 5000
+        resultVar: a
+      next: call_b
+
+    call_b:
+      type: task
+      task:
+        kind: httpCall
+        method: GET
+        url: "https://api.example.com/serviceB/${context.id}"
+        headers: { Accept: application/json }
+        timeoutMs: 5000
+        resultVar: b
+      next: decide
+
+    decide:
+      type: choice
+      choices:
+        - when:
+            predicate:
+              lang: dataweave
+              expr: |
+                (context.a.ok == false) or (context.b.ok == false)
+          next: failed
+        - when:
+            predicate:
+              lang: dataweave
+              expr: |
+                context.a.ok == true and context.b.ok == true
+          next: done
+      default: failed
+
+    done:
+      type: succeed
+      outputVar: b
+
+    failed:
+      type: fail
+      errorCode: UPSTREAM_FAILURE
+      reason: "One or more upstream calls failed"

@@ -1,6 +1,6 @@
 # Spec Format – Authoring & Canonicalization
 
-Decision (2025-11-19): Author workflows in YAML (1.2 subset), accept both YAML (`.yaml`/`.yml`) and JSON (`.json`) as inputs, and generate a canonical JSON snapshot on validate/build.
+Decision (2025-11-19): Author journeys in YAML (1.2 subset), accept both YAML (`.yaml`/`.yml`) and JSON (`.json`) as inputs, and generate a canonical JSON snapshot on validate/build.
 
 ## Authoring
 - Use YAML 1.2 subset; treat YAML as a friendly surface over a strict JSON data model.
@@ -15,14 +15,14 @@ Decision (2025-11-19): Author workflows in YAML (1.2 subset), accept both YAML (
 
 ## Canonical JSON Snapshot
 - Command: `journeyforge validate --snapshot` (CLI to be introduced).
-- Output file: write `<name>.workflow.json` alongside source (configurable).
+- Output file: write `<name>.journey.json` alongside source (configurable).
 - Canonicalization rules:
   - UTF‑8, LF line endings.
   - Sorted object keys for stable diffs.
   - No trailing spaces; no insignificant whitespace.
 
 ## Style Guide
-- Filenames: `<workflow-name>.workflow.yaml` (or `.json`).
+- Filenames: `<journey-name>.journey.yaml` (or `.json`).
 - Top‑level fields: `apiVersion`, `kind`, `metadata`, `spec`.
 - No secrets in specs; reference them indirectly (future: `secret://...`).
 

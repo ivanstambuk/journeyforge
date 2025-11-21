@@ -4,10 +4,10 @@ Status: Draft | Last updated: 2025-11-20
 
 ## Problem
 
-Emit domain events to Kafka from a workflow so other systems can react asynchronously:
+Emit domain events to Kafka from a journey so other systems can react asynchronously:
 - Publish an `ORDER_UPDATED` event whenever an order changes.
-- Use the workflow `context` to build the event payload.
-- Keep event emission as a side effect: the workflow does not branch on publish outcome.
+- Use the journey `context` to build the event payload.
+- Keep event emission as a side effect: the journey does not branch on publish outcome.
 
 ## Relevant DSL Features
 
@@ -20,11 +20,11 @@ Emit domain events to Kafka from a workflow so other systems can react asynchron
 
 ## Example – event-publish-kafka
 
-Workflow: `event-publish-kafka.workflow.yaml`
+Journey definition: `event-publish-kafka.journey.yaml`
 
 ```yaml
 apiVersion: v1
-kind: Workflow
+kind: Journey
 metadata:
   name: event-publish-kafka
   version: 0.1.0
@@ -65,13 +65,13 @@ spec:
 
     done:
       type: succeed
-      # The workflow does not rely on publish outcome; it can simply return context or a subset.
+      # The journey does not rely on publish outcome; it can simply return context or a subset.
 ```
 
 Notes:
-- `eventPublish` does not define `resultVar`, and the workflow cannot branch on whether the Kafka publish succeeded or failed; it is a side effect.
-- Runtimes may validate the mapped payload against `valueSchemaRef` before publishing and integrate with a schema registry using the same schemas.
+- `eventPublish` does not define `resultVar`, and the journey instance cannot branch on whether the Kafka publish succeeded or failed; it is a side effect.
+- When configured, the engine validates the mapped payload against `valueSchemaRef` before publishing and integrates with a schema registry using the same schemas.
 
 Related files:
-- Workflow: `event-publish-kafka.workflow.yaml`
+- Journey definition: `event-publish-kafka.journey.yaml`
 - Schemas: `event-publish-kafka-input.json`, `event-publish-kafka-output.json`, `event-publish-kafka-key.json`, `event-publish-kafka-value.json`

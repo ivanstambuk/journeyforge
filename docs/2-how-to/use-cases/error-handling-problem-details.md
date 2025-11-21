@@ -19,11 +19,11 @@ Handle upstream failures and timeouts in a structured way:
 
 ## Example 1 – Branch on generic failure
 
-Workflow: `http-failure-branch.workflow.yaml`
+Journey definition: `http-failure-branch.journey.yaml`
 
 ```yaml
 apiVersion: v1
-kind: Workflow
+kind: Journey
 metadata:
   name: http-failure-branch
   version: 0.1.0
@@ -82,11 +82,11 @@ Related files:
 
 ## Example 2 – Timeouts vs success
 
-Workflow: `http-timeout-branch.workflow.yaml`
+Journey definition: `http-timeout-branch.journey.yaml`
 
 ```yaml
 apiVersion: v1
-kind: Workflow
+kind: Journey
 metadata:
   name: http-timeout-branch
   version: 0.1.0
@@ -145,11 +145,11 @@ Related files:
 
 ## Example 3 – Normalising to RFC 9457 Problem Details
 
-Workflow: `http-problem-details.workflow.yaml`
+Journey definition: `http-problem-details.journey.yaml`
 
 ```yaml
 apiVersion: v1
-kind: Workflow
+kind: Journey
 metadata:
   name: http-problem-details
   version: 0.1.0

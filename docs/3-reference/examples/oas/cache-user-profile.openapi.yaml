@@ -16,11 +16,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              required: [context]
-              properties:
-                context:
-                  $ref: '../schemas/cache-user-profile-input.json'
+              $ref: '../schemas/cache-user-profile-input.json'
       responses:
         '202':
           description: Accepted

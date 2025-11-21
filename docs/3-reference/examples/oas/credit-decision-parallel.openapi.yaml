@@ -61,11 +61,7 @@ paths:
 components:
   schemas:
     JourneyStartRequest:
-      type: object
-      required: [context]
-      properties:
-        context:
-          $ref: '../schemas/credit-decision-parallel-input.json'
+      $ref: '../schemas/credit-decision-parallel-input.json'
 
     JourneyStartResponse:
       $ref: '../../../openapi/journeys.openapi.yaml#/components/schemas/JourneyStartResponse'
@@ -79,4 +75,3 @@ components:
       properties:
         output:
           $ref: '../schemas/credit-decision-parallel-output.json'
-

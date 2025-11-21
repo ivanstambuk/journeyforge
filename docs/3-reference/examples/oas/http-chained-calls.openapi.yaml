@@ -61,11 +61,7 @@ paths:
 components:
   schemas:
     JourneyStartRequest:
-      type: object
-      required: [context]
-      properties:
-        context:
-          $ref: '../schemas/http-chained-calls-input.json'
+      $ref: '../schemas/http-chained-calls-input.json'
     JourneyStartResponse:
       $ref: '../../../openapi/journeys.openapi.yaml#/components/schemas/JourneyStartResponse'
     JourneyStatus:

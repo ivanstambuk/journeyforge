@@ -3,24 +3,24 @@
 Date: 2025-11-20 | Status: Proposed
 
 ## Context
-JourneyForge workflows often coordinate side-effecting operations across multiple systems: HTTP mutations, database writes, emitted events, and so on. When a journey fails, times out, or is cancelled, operators frequently need to **undo or mitigate** some of these effects:
+JourneyForge journeys often coordinate side-effecting operations across multiple systems: HTTP mutations, database writes, emitted events, and so on. When a journey fails, times out, or is cancelled, operators frequently need to **undo or mitigate** some of these effects:
 - Cancel charges or reservations in downstream systems.
 - Release inventory or locks.
 - Publish compensating events for consumers.
 
 Without a first-class compensation construct, authors must:
 - Thread compensation logic manually through the main state machine (for example via extra branches and states after every failure), or
-- Maintain separate “rollback workflows” out-of-band and wire them up imperatively from the runtime or callers.
+- Maintain separate “rollback journeys” or auxiliary specs out-of-band and wire them up imperatively from the engine or callers.
 
 This has drawbacks:
 - Compensation flows are harder to discover and reason about; they are not co-located with the main journey spec.
 - There is no standard way to access the final `context` and the reason for termination when performing rollback.
-- Runtimes cannot provide consistent telemetry or guarantees around when and how compensation runs.
+- Engine implementations cannot provide consistent telemetry or guarantees around when and how compensation runs.
 
-Separately, we already plan subworkflow support and SAGA-like patterns (see `docs/ideas`), but those are more fine-grained. We need a **coarse-grained, optional global compensation path** that can be attached to any workflow or API.
+Separately, we already plan subjourney support and SAGA-like patterns (see `docs/ideas`), but those are more fine-grained. We need a **coarse-grained, optional global compensation path** that can be attached to any journey definition or API.
 
 ## Decision
-We introduce an optional `spec.compensation` block that defines a **global compensation journey** for a workflow or API:
+We introduce an optional `spec.compensation` block that defines a **global compensation journey** for a journey definition or API:
 
 ```yaml
 spec:
@@ -73,7 +73,7 @@ spec:
 ```
 
 Core semantics:
-- `spec.compensation` is **optional** and available for both `kind: Workflow` and `kind: Api`.
+- `spec.compensation` is **optional** and available for both `kind: Journey` and `kind: Api`.
 - When the main run terminates with a **non-successful outcome** (fail, timeout, cancel, runtime error) and `spec.compensation` is present, the engine:
   - Starts a compensation journey using `compensation.states` and `compensation.start`.
   - Executes it with:
@@ -94,7 +94,7 @@ Bindings for compensation:
     },
     "terminatedAtState": "stateId or null",
     "journeyId": "string or null",
-    "workflowName": "string"
+    "journeyName": "string"
   }
   ```
 
@@ -106,26 +106,26 @@ Sync vs async:
 - `mode: sync`:
   - Main run does not complete until the compensation journey finishes.
   - For APIs, the HTTP response still reflects the main failure (error code/reason, possibly mapped to HTTP status via `spec.errors` / `spec.outcomes`), not the result of compensation.
-  - For workflows, `JourneyOutcome.phase` and `JourneyOutcome.error` continue to describe the original failure; compensation errors may be attached as extensions but MUST NOT change `phase`.
+- For journeys, `JourneyOutcome.phase` and `JourneyOutcome.error` continue to describe the original failure; compensation errors may be attached as extensions but MUST NOT change `phase`.
 
 The DSL reference (`docs/3-reference/dsl.md`) is updated with a new section “2d. Global compensation (spec.compensation)” capturing this shape and semantics.
 
 ## Consequences
 - Pros:
-  - Makes compensation journeys first-class and discoverable in the same spec file as the main workflow/API.
+  - Makes compensation journeys first-class and discoverable in the same spec file as the main journey/API.
   - Provides a consistent way to access both the final `context` and termination metadata, simplifying rollback logic.
   - Supports both synchronous and asynchronous compensation modes, matching different operational needs.
-  - Aligns with future subworkflow and SAGA features without requiring them for basic global compensation.
+  - Aligns with future subjourney and SAGA features without requiring them for basic global compensation.
 - Cons:
-  - Adds another axis of behaviour that runtimes must implement carefully (especially with retries, idempotency, and crash recovery).
+  - Adds another axis of behaviour that the engine must implement carefully (especially with retries, idempotency, and crash recovery).
   - Compensation execution is inherently best-effort; the DSL cannot guarantee that all external side effects are fully undone.
   - Error handling for compensation itself (partial failures) needs clear telemetry and possibly future extensions (for example, surfacing compensation status in `JourneyOutcome`).
 
 Implementation guidance:
-- Runtimes that do not yet support compensation journeys SHOULD:
+- Engine implementations that do not yet support compensation journeys SHOULD:
   - Reject specs that declare `spec.compensation`, or
   - Treat `spec.compensation` as unsupported and clearly document this limitation.
-- Runtimes that support compensation SHOULD:
+- Engine implementations that support compensation SHOULD:
   - Start compensation journeys reliably when main runs fail, time out, or are cancelled.
   - Tag compensation instances with a `parentJourneyId` (or similar) to allow correlation.
   - Expose metrics and traces for compensation execution (latency, success/failure, skipped/no-op runs).

@@ -1,19 +1,19 @@
 # JourneyForge DSL – Reference
 
-Status: Draft | Last updated: 2025-11-20
+Status: Draft | Last updated: 2025-11-21
 
-This document normatively defines the JourneyForge workflow DSL supported by Feature 001. It aims to be explicit about behaviour and limitations so we can refine before implementation.
+This document normatively defines the JourneyForge journey DSL (for `kind: Journey` and `kind: Api`) supported by Feature 001. It aims to be explicit about behaviour and limitations so we can refine before implementation.
 
 ## 1. Overview
-- Purpose: describe small, synchronous API workflows in a human-friendly format (YAML 1.2 subset) with a precise JSON model.
-- Files: `.workflow.yaml` / `.workflow.yml` or `.workflow.json`.
+- Purpose: describe small, synchronous API journeys (defined by `kind: Journey`) in a human-friendly format (YAML 1.2 subset) with a precise JSON model.
+- Files: `.journey.yaml` / `.journey.yml` or `.journey.json`.
 - States: `task` (HTTP call), `choice` (branch), `transform` (DataWeave mapping), `parallel` (branches with join), `wait` (external input), `webhook` (callback input), `succeed` (terminal), `fail` (terminal).
 - Expressions & transforms: DataWeave 2.x is the canonical language for predicates and (future) transform nodes.
-- Execution: starts at `spec.start`, mutates a JSON `context`, and terminates on `succeed`/`fail`, a global execution timeout (`spec.execution.maxDurationSec`), or a runtime error. When `spec.compensation` is present, a separate compensation journey MAY run after non-successful termination.
+- Execution: starts at `spec.start`, mutates a JSON `context`, and terminates on `succeed`/`fail`, a global execution timeout (`spec.execution.maxDurationSec`), or an engine execution error. When `spec.compensation` is present, a separate compensation journey MAY run after non-successful termination.
 
 ### 1a. State types and surface
 
-The DSL surface defines the following state types and configuration blocks. All of them belong to the same language; runtimes may implement them in stages, but the spec treats them as a single coherent DSL.
+The DSL surface defines the following state types and configuration blocks. All of them belong to the same language; the engine may support them in stages, but the spec treats them as a single coherent DSL.
 
 | State type / construct                    | Description                                      | Notes in spec                                          |
 |------------------------------------------|--------------------------------------------------|--------------------------------------------------------|
@@ -26,12 +26,12 @@ The DSL surface defines the following state types and configuration blocks. All 
 | `webhook`                                | Callback input                                   | DSL shape + REST export defined; security impl TBD     |
 | `parallel`                               | Parallel branches with join                      | DSL shape + join contract defined; concurrency impl TBD|
 | Cache resources/tasks (`cacheGet`/`cachePut`) | Named caches and cache operations           | DSL shape defined; cache backend semantics TBD         |
-| Policies (`httpResilience`, `httpSecurity`) | Resiliency/auth configuration                 | Configuration model defined; enforcement impl TBD      |
+| Policies (`httpResilience`, `httpSecurity`, `httpClientAuth`) | Resiliency/auth configuration (inbound & outbound) | Configuration model defined; enforcement impl TBD      |
 
 ## 2. Top-level shape
 
 ## 2a. API catalog (OpenAPI binding)
-To reference downstream services by OpenAPI operationId instead of raw URLs, a workflow or API endpoint may declare an API catalog and use `operationRef` in HTTP tasks.
+To reference downstream services by OpenAPI operationId instead of raw URLs, a journey definition (`kind: Journey`) or API endpoint may declare an API catalog and use `operationRef` in HTTP tasks.
 
 Catalog shape (under `spec.apis`):
 ```yaml
@@ -45,10 +45,11 @@ apis:
 Use in tasks: `operationRef: <apiName>.<operationId>`
 ```yaml
 apiVersion: v1                  # required
-kind: Workflow | Api            # required
+kind: Journey | Api            # required
 metadata:                       # required
   name: <string>
   version: <semver>
+  description: <string>         # optional; human-readable summary
 spec:                           # required
   start: <stateId>              # required
   states:                       # required: map<string, State>
@@ -58,19 +59,30 @@ spec:                           # required
 Constraints
 - `apiVersion` must be `v1`.
 - `kind` must be either:
-  - `Workflow` – a long‑lived journey exposed via the Journeys API, or
+  - `Journey` – a long‑lived journey exposed via the Journeys API, or
   - `Api` – a synchronous HTTP endpoint (single request/response) with no visible journey id.
 - `metadata.name` must be a DNS‑label‑like string `[a-z0-9]([-a-z0-9]*[a-z0-9])?`.
+- `metadata.description`, when present:
+  - MUST be a non-empty string.
+  - MUST NOT contain secrets or PII.
+  - SHOULD be a short, human-readable summary of the journey or API (for example, one or two sentences).
+  - MUST NOT be used for routing, authorisation, or behaviour; engines and tooling MAY surface it in UIs, CLIs, and generated documentation (for example, OpenAPI descriptions).
+- `metadata.tags`, when present:
+  - MUST be an array of strings.
+  - MUST NOT contain secrets or PII.
+  - SHOULD use short, human-readable identifiers (recommended `kebab-case`, for example `self-service`, `kyc`, `financial`).
+  - MUST respect the maximum count configured via the `MetadataLimits` document (see section 21); tools SHOULD treat specs that exceed this as validation errors.
 - `spec.states` must contain `spec.start`.
 
-### 2a.i. Workflows (`kind: Workflow`)
+### 2a.i. Journeys (`kind: Journey`)
 
-Workflows are “journeys”:
-- Initiated via `/api/v1/journeys/{workflowName}/start` (see `docs/3-reference/openapi/journeys.openapi.yaml` and the OpenAPI export guideline).
+`kind: Journey` specs are “journey definitions”:
+- Initiated via `/api/v1/journeys/{journeyName}/start` (see `docs/3-reference/openapi/journeys.openapi.yaml` and the OpenAPI export guideline).
 - Identified by a `journeyId` and observed via `/journeys/{journeyId}` and `/journeys/{journeyId}/result`.
 - May use all state types, including long‑lived external input (`wait`, `webhook`).
+ - For the start call, the HTTP request body is deserialised as JSON and used directly as the initial `context` object for the journey (subject to any input schema the journey definition declares).
 
-The semantics of `succeed`/`fail` for workflows are defined in sections 5.4–5.6, which describe the `JourneyOutcome` envelope.
+The semantics of `succeed`/`fail` for journeys are defined in sections 5.4–5.6, which describe the `JourneyOutcome` envelope.
 
 ### 2a.ii. API endpoints (`kind: Api`)
 
@@ -90,6 +102,7 @@ kind: Api
 metadata:
   name: <string>
   version: <semver>
+  description: <string>         # optional; human-readable summary
 spec:
   route:                        # optional; controls REST surface
     path: <string>              # e.g. /apis/get-user-public; defaults to /apis/{metadata.name}
@@ -118,7 +131,7 @@ Constraints for `kind: Api`
 
 Context and results for `kind: Api`
 - Context initialisation:
-  - The HTTP request body is deserialised as JSON and used to initialise the workflow `context` (subject to `inputSchemaRef` validation, when present).
+  - The HTTP request body is deserialised as JSON and used to initialise the journey `context` for that invocation (subject to `inputSchemaRef` validation, when present).
   - `httpBindings.start` MAY further project headers into `context` and/or provide outbound header defaults.
 - Successful responses:
   - Reaching `succeed` terminates execution and produces a 2xx HTTP response.
@@ -130,7 +143,7 @@ Context and results for `kind: Api`
 
 ## 2b. Defaults (spec.defaults)
 
-Workflows may define per-journey defaults to reduce repetition. Defaults apply when specific fields are omitted at state level.
+Journey definitions may define per-journey defaults to reduce repetition. Defaults apply when specific fields are omitted at state level.
 
 ```yaml
 spec:
@@ -159,11 +172,11 @@ Semantics
 Validation
 - `timeoutMs` (under `spec.defaults.http`) must be an integer ≥ 1 when present.
 - `headers` must be a map of string keys to string values.
-- `resiliencePolicyRef`, when present, SHOULD refer to an id under `spec.policies.httpResilience.definitions` (or a platform-level policy); unknown ids are a validation warning for tools, but may be resolved at deployment time.
+- `resiliencePolicyRef`, when present, SHOULD refer to an id under `spec.policies.httpResilience.definitions` (or a platform-level policy); unknown ids are a validation warning for tools, but may be resolved by the platform or at engine configuration time.
 
 ## 2c. Execution deadlines (spec.execution)
 
-Workflows and API endpoints may define a global execution budget to avoid unbounded run times. The execution block expresses a spec-visible wall-clock limit and how timeouts are surfaced to callers.
+Journeys and API endpoints may define a global execution budget to avoid unbounded run times. The execution block expresses a spec-visible wall-clock limit and how timeouts are surfaced to callers.
 
 ```yaml
 spec:
@@ -178,22 +191,22 @@ Semantics
 - Max duration:
   - When `spec.execution.maxDurationSec` is present, it defines the maximum wall-clock time (in whole seconds) that a single journey or API invocation is allowed to execute from start to terminal outcome.
   - The timer starts when:
-    - `kind: Workflow`: the journey is accepted by the Journeys API `start` endpoint.
+    - `kind: Journey`: the journey is accepted by the Journeys API `start` endpoint.
     - `kind: Api`: the HTTP request is accepted by the API endpoint (for example `/api/v1/apis/{apiName}` or `spec.route.path`).
-  - Runtimes MUST treat reaching this deadline as a failure even if the state machine has not yet reached a terminal `succeed`/`fail` state.
+  - Engine implementations MUST treat reaching this deadline as a failure even if the state machine has not yet reached a terminal `succeed`/`fail` state.
 - Interaction with per-state timeouts:
-  - For blocking operations that already have a timeout (`httpCall.timeoutMs`, `wait.timeoutSec`, `webhook.timeoutSec`), runtimes SHOULD clamp the effective timeout to the remaining global budget.
+  - For blocking operations that already have a timeout (`httpCall.timeoutMs`, `wait.timeoutSec`, `webhook.timeoutSec`), the engine SHOULD clamp the effective timeout to the remaining global budget.
   - Conceptually, the effective timeout is `min(configuredTimeout, remainingBudget)`; when the remaining budget is ≤ 0, the operation SHOULD NOT start and the run MUST be treated as timed out.
-  - When no per-state timeout is configured, runtimes MAY still interrupt long-running operations when the global deadline expires, or detect the timeout immediately after the operation completes.
+  - When no per-state timeout is configured, the engine MAY still interrupt long-running operations when the global deadline expires, or detect the timeout immediately after the operation completes.
 - Timeout outcome:
   - When the global deadline is reached, the engine MUST stop scheduling new states and complete the run as a failure using `spec.execution.onTimeout`.
-  - For `kind: Workflow`:
+  - For `kind: Journey`:
     - The resulting `JourneyOutcome` has `phase = Failed` and `error` populated from `onTimeout.errorCode` and `onTimeout.reason` (following the Problem Details alignment rules in section 5.6).
   - For `kind: Api`:
     - The engine terminates the HTTP request with a non‑2xx response that reflects the same error code and reason.
-    - Exporters and runtimes MAY map execution timeouts to HTTP 504 Gateway Timeout by default, or use `spec.errors` and `spec.outcomes` (when present) for finer control.
+    - Exporters and the engine MAY map execution timeouts to HTTP 504 Gateway Timeout by default, or use `spec.errors` and `spec.outcomes` (when present) for finer control.
 - Relationship with platform limits:
-  - Platform- or environment-level maximums MAY further restrict execution time; runtimes MAY clamp `spec.execution.maxDurationSec` to a configured upper bound.
+  - Platform- or environment-level maximums MAY further restrict execution time; the engine MAY clamp `spec.execution.maxDurationSec` to a configured upper bound.
   - Setting a large `maxDurationSec` does not guarantee that a run is allowed to execute that long; platform limits take precedence.
 
 Validation
@@ -203,15 +216,15 @@ Validation
   - `onTimeout` is required and MUST contain:
     - `errorCode`: non-empty string, recommended to be a stable identifier (for example, a Problem Details `type` URI).
     - `reason`: non-empty string describing the timeout condition for humans (operators, API clients).
- - `spec.execution` MAY be used for both `kind: Workflow` and `kind: Api` specs.
+ - `spec.execution` MAY be used for both `kind: Journey` and `kind: Api` specs.
 
 ## 2d. Global compensation (spec.compensation)
 
-Some workflows and APIs need a global “compensation journey” that runs when the main execution does not succeed, to undo or mitigate side effects (for example, HTTP mutations, database writes, or emitted events). The `spec.compensation` block allows authors to attach such a compensation path to a workflow in a declarative, opt‑in way.
+Some journeys and APIs need a global “compensation journey” that runs when the main execution does not succeed, to undo or mitigate side effects (for example, HTTP mutations, database writes, or emitted events). The `spec.compensation` block allows authors to attach such a compensation path to a journey definition in a declarative, opt‑in way.
 
 At a high level:
 - The main journey executes as usual from `spec.start` until it reaches `succeed`/`fail`, hits a global execution timeout (`spec.execution.maxDurationSec`), or is cancelled.
-- When the main run terminates in any non‑success state (fail, timeout, cancel, runtime error), and `spec.compensation` is present, the engine may start a separate compensation journey using the embedded compensation state machine.
+- When the main run terminates in any non‑success state (fail, timeout, cancel, engine execution error), and `spec.compensation` is present, the engine may start a separate compensation journey using the embedded compensation state machine.
 
 Shape:
 
@@ -271,13 +284,13 @@ Semantics
   - When present, compensation is triggered when the main run terminates with a non‑success outcome:
     - It reaches a terminal `fail` state.
     - It hits the global execution deadline and terminates using `spec.execution.onTimeout`.
-    - It is cancelled via a runtime/admin API.
-    - It ends due to a runtime/internal error.
+    - It is cancelled via an engine/admin API.
+    - It ends due to an internal engine error.
   - Successful runs (terminal `succeed` without error) MUST NOT trigger compensation.
 - Compensation journey:
-  - The `compensation.states` map defines a separate state machine, using the same state types and configuration shapes as the top-level workflow (`task`, `choice`, `transform`, `parallel`, `wait`, `webhook`, `succeed`, `fail`, etc.), subject to the same `kind: Workflow` / `kind: Api` constraints.
+  - The `compensation.states` map defines a separate state machine, using the same state types and configuration shapes as the top-level journey definition (`task`, `choice`, `transform`, `parallel`, `wait`, `webhook`, `succeed`, `fail`, etc.), subject to the same `kind: Journey` / `kind: Api` constraints.
   - `compensation.start` identifies the first state in this map.
-- Compensation runs with its own control flow and may itself succeed or fail; these outcomes are not visible to the main caller but SHOULD be logged and traced by runtimes.
+- Compensation runs with its own control flow and may itself succeed or fail; these outcomes are not visible to the main caller but SHOULD be logged and traced by the engine.
 - Context and bindings:
   - When starting the compensation journey, the engine MUST:
     - Provide `context` as a deep copy of the main journey’s context at the moment of termination.
@@ -293,7 +306,7 @@ Semantics
       },
       "terminatedAtState": "stateId or null",
       "journeyId": "string or null",
-      "workflowName": "string"
+      "journeyName": "string"
     }
     ```
   - Compensation logic can branch on `outcome` (for example, run different undo steps for cancellation vs timeout) and use the copied `context` to determine which side effects to revert.
@@ -308,12 +321,12 @@ Semantics
     - For `kind: Api`:
       - The HTTP response is sent only after the compensation journey terminates.
       - The response still reflects the original failure (for example, from `fail` or `spec.execution.onTimeout`), not the result of compensation.
-    - For `kind: Workflow`:
+    - For `kind: Journey`:
       - `JourneyOutcome` is only finalised after compensation finishes.
       - `JourneyOutcome.phase` and `JourneyOutcome.error` continue to represent the original failure; compensation errors MAY be recorded in telemetry or as extensions but MUST NOT change `phase`.
-- Relationship with sub-workflows:
-  - `spec.compensation` describes a coarse-grained, global compensation journey for the entire run.
-  - Future features (for example a `subworkflow` state or per-step `compensate` blocks) may provide more fine-grained SAGA semantics; these are complementary and not required to use `spec.compensation`.
+- Relationship with sub-journeys:
+  - `spec.compensation` describes a coarse-grained, global compensation journey for the entire journey/API run.
+  - Future features (for example a `subjourney` state or per-step `compensate` blocks) may provide more fine-grained SAGA semantics; these are complementary and not required to use `spec.compensation`.
 
 Validation
 - `spec.compensation` is optional.
@@ -322,11 +335,11 @@ Validation
   - `start` is required and MUST refer to a key in `compensation.states`.
   - `states` is required and MUST be a non-empty map of state definitions with the same validation rules as top-level states.
   - Compensation states MUST obey the same constraints as the main spec for the given `kind` (for example, no `wait`/`webhook` in `kind: Api`).
-  - Tooling SHOULD flag specs where `spec.compensation` is declared but the runtime does not support compensation journeys.
+  - Tooling SHOULD flag specs where `spec.compensation` is declared but the engine does not support compensation journeys.
 
 ## 2e. HTTP surface & hypermedia links (spec.httpSurface.links)
 
-Journeys (`kind: Workflow`) are exposed via the Journeys API, which returns JSON envelopes such as `JourneyStartResponse`, `JourneyStatus`, and `JourneyOutcome`. To make the next legal actions discoverable, implementations MAY expose a HAL-like `_links` object alongside the core fields.
+Journeys (`kind: Journey`) are exposed via the Journeys API, which returns JSON envelopes such as `JourneyStartResponse`, `JourneyStatus`, and `JourneyOutcome`. To make the next legal actions discoverable, implementations MAY expose a HAL-like `_links` object alongside the core fields.
 
 Shape (per spec, opt-out at journey level):
 
@@ -351,7 +364,7 @@ Semantics
     where `href` is a URI (relative or absolute) and `method` is the HTTP method to use when following the link (for example `GET`, `POST`, `DELETE`).
 - Default behaviour:
   - If `spec.httpSurface.links` is absent, the effective configuration is as if `enabled: true` were set.
-  - When links are enabled, runtimes SHOULD:
+  - When links are enabled, the engine SHOULD:
     - Include `_links.self` on:
       - `JourneyStartResponse` (typically pointing to the status URL for the new journey),
       - `JourneyStatus` (the status resource itself), and
@@ -365,12 +378,12 @@ Semantics
     - The `_links.cancel` action MUST be idempotent: repeated invocations when the journey is already terminal or already cancelled MUST NOT change the outcome; implementations MAY still log additional cancel attempts.
   - Link relation names are otherwise implementation-defined, but `self` and `result` SHOULD be reserved for the canonical resources described above.
 - Opt-out:
-  - When `spec.httpSurface.links.enabled == false`, runtimes SHOULD omit the `_links` object from:
+  - When `spec.httpSurface.links.enabled == false`, the engine SHOULD omit the `_links` object from:
     - `JourneyStartResponse`,
-    - `JourneyStatus`, and
+    - `JourneyStatus`,
     - `JourneyOutcome`
-    for that workflow, even if the platform would otherwise include links globally.
-  - Exporters SHOULD continue to describe `_links` as an optional property in the generic Journeys OpenAPI schema; implementations that honour `enabled: false` simply omit it at runtime for the relevant workflow.
+    for that journey, even if the platform would otherwise include links globally.
+  - Exporters SHOULD continue to describe `_links` as an optional property in the generic Journeys OpenAPI schema; implementations that honour `enabled: false` simply omit it at execution time for the relevant journey.
 - `kind: Api`:
   - The `spec.httpSurface.links` block is primarily defined for journeys; synchronous APIs (`kind: Api`) MAY also expose `_links` in their responses, but this spec does not prescribe a specific link vocabulary for them.
 
@@ -386,7 +399,7 @@ When links are enabled (the default), a running journey might expose status like
 ```json
 {
   "journeyId": "abc123",
-  "workflowName": "order-orchestration",
+  "journeyName": "order-orchestration",
   "phase": "Running",
   "currentState": "waitForApproval",
   "updatedAt": "2025-11-20T10:15:30Z",
@@ -428,11 +441,11 @@ Semantics
   - When explicitly `false`, self‑service clients MUST NOT be offered a cancel action for this journey.
 - Interaction with Journeys API and `_links`:
   - When `spec.httpSurface.links` are enabled and `cancellable != false`:
-    - While `JourneyStatus.phase == "Running"`, runtimes SHOULD expose a `_links.cancel` entry as described in section 2e, pointing to the canonical cancellation step `/api/v1/journeys/{journeyId}/steps/cancel`.
+    - While `JourneyStatus.phase == "Running"`, the engine SHOULD expose a `_links.cancel` entry as described in section 2e, pointing to the canonical cancellation step `/api/v1/journeys/{journeyId}/steps/cancel`.
     - Once the journey is terminal (`Succeeded` or `Failed`), `_links.cancel` MUST be omitted.
-  - When `cancellable == false`, runtimes MUST omit `_links.cancel` even if the journey is `Running`.
+  - When `cancellable == false`, the engine MUST omit `_links.cancel` even if the journey is `Running`.
 - Cancellation semantics (conceptual):
-  - When a runtime honours a user‑initiated cancellation, it SHOULD:
+  - When an engine honours a user‑initiated cancellation, it SHOULD:
     - Stop scheduling new states for the run.
     - Complete the run as a failure with a stable error code such as `JOURNEY_CANCELLED` and a human‑readable reason (for example, "Cancelled by user").
     - Treat the cancellation as a non‑success outcome for the purposes of `spec.compensation`, using `terminationKind = "Cancel"` in the compensation `outcome` binding (see section 2d).
@@ -447,7 +460,7 @@ A cancelled journey might produce an outcome like:
 ```json
 {
   "journeyId": "abc123",
-  "workflowName": "order-orchestration",
+  "journeyName": "order-orchestration",
   "phase": "Failed",
   "output": null,
   "error": {
@@ -461,6 +474,173 @@ A cancelled journey might produce an outcome like:
 ```
 
 Here cancellation is represented as a failure with a stable error code, aligned with the execution and compensation semantics above.
+
+## 2g. Journey metadata (tags & attributes)
+
+Journey definitions and journey instances expose lightweight metadata for classification and querying. The DSL
+distinguishes:
+- Definition-level tags (`metadata.tags`) on journey definitions.
+- Instance-level tags (`journey.tags`) and attributes (`journey.attributes`) on journey instances, populated by the engine according to explicit rules.
+
+### 2g.i. Definition tags (`metadata.tags`)
+
+- Shape:
+  - Optional `metadata.tags: string[]` for both `kind: Journey` and `kind: Api`.
+- Semantics:
+  - Tags classify the spec (for example, `self-service`, `kyc`, `pii`, `financial`,
+    `credit-decision`).
+  - Tags are non-sensitive; they MUST NOT contain PII or secrets.
+  - Tags SHOULD be short, human-readable identifiers; `kebab-case` is recommended
+    (for example, `self-service`, `cache-user-profile`).
+- Limits:
+  - The maximum number of tags per spec is controlled via the `MetadataLimits` document
+    (see section 21).
+
+### 2g.ii. Instance tags (`journey.tags`)
+
+- Concept:
+  - Each journey instance may carry a set of tags derived from:
+    - The definition’s `metadata.tags`.
+    - Explicit tag bindings declared under `spec.metadata.bindings.tags` (see 2g.iv).
+  - Clients do not set instance tags directly in the start request; the engine derives them
+    from the configured journey definition.
+- Semantics:
+  - Instance tags are intended for:
+    - Filtering and grouping in operator dashboards.
+    - Coarse-grained policy and reporting (for example, “all `kyc` journeys in `Running` phase”).
+  - For v1, instance tags are immutable after the journey is started.
+- Limits:
+  - The maximum number of instance tags per journey and maximum tag length are controlled by
+    `MetadataLimits` (section 21).
+
+### 2g.iii. Instance attributes (`journey.attributes`)
+
+- Concept:
+  - `journey.attributes` is a small `Map<String,String>` attached to each journey for
+    identity, tenancy, and correlation metadata, for example:
+    - `subjectId` – canonical owner identity.
+    - `tenantId` – logical tenant id.
+    - `channel` – origin channel (`web`, `mobile`, etc.).
+    - `initiatedBy` – `user`, `system`, or `admin`.
+    - Correlation ids such as `orderId`, `paymentIntentId`, `crmCaseId`.
+- Population:
+  - Attributes are populated by the engine based on explicit bindings declared under
+    `spec.metadata.bindings.attributes` (see 2g.iv), using values from:
+    - The start request payload.
+    - Named headers (for example, `X-Tenant-Id`, `X-Channel`).
+    - The W3C `baggage` header (key/value entries).
+  - Clients do not send an `attributes` property in the start request; they provide only the
+    normal JSON payload and headers.
+- Reserved keys:
+  - `subjectId` – identity of the subject derived from the validated JWT at journey start
+    (for example `context.auth.jwt.claims.sub`), when present and not configured as
+    anonymous by the HTTP security policy.
+  - `tenantId` – logical tenant identifier.
+  - `channel` – origin channel.
+  - `initiatedBy` – who initiated the journey (`user`, `system`, `admin`).
+- Semantics:
+  - Attributes are intended for:
+    - Self-service queries (“my journeys”) via `subjectId`.
+    - Multi-tenant and operator views via `tenantId` and `region`.
+    - Correlation with external systems via `orderId`, `paymentIntentId`, `crmCaseId`, etc.
+  - For v1, attributes are immutable after the journey is started.
+- Limits:
+  - The maximum number of attribute keys and key/value lengths are controlled by
+    `MetadataLimits` (section 21).
+
+### 2g.iv. Metadata bindings (spec.metadata.bindings)
+
+Journey definitions can declare how to bind values from the start request into journey
+instance tags and attributes. Bindings are evaluated exactly once, when handling the start
+request for a `kind: Journey` journey (`POST /api/v1/journeys/{journeyName}/start`); they
+do not depend on later state transitions.
+
+Shape:
+
+```yaml
+spec:
+  metadata:
+    bindings:
+      tags:
+        fromPayload:
+          - path: channel
+          - path: segment
+        fromHeaders:
+          - header: X-Journey-Tag
+        fromBaggage:
+          - key: journey_tag
+
+      attributes:
+        fromPayload:
+          orderId:
+            path: order.id
+          customerId:
+            path: customer.id
+        fromHeaders:
+          tenantId:
+            header: X-Tenant-Id
+          channel:
+            header: X-Channel
+        fromBaggage:
+          correlationId:
+            key: correlation_id
+          experiment:
+            key: exp
+```
+
+Semantics
+- Evaluation timing:
+  - The engine evaluates `spec.metadata.bindings` exactly once per journey instance, when
+    processing the start request (`/journeys/{journeyName}/start`) for `kind: Journey`.
+  - Bindings do not reference `context`; they read directly from the start request payload
+    and headers.
+- Tag bindings:
+  - `tags.fromPayload`:
+    - Each entry is an object with a `path` field, a dot path evaluated against the start
+      request body.
+    - When the path resolves to a non-empty string value, that value is added to
+      `journey.tags` (subject to `MetadataLimits.instanceTags`).
+  - `tags.fromHeaders`:
+    - Each entry is an object with a `header` field naming an inbound header.
+    - When the header is present and non-empty, its value is added to `journey.tags`.
+  - `tags.fromBaggage`:
+    - Each entry is an object with a `key` field naming a baggage key.
+    - The engine parses the `baggage` header according to the W3C Baggage format and, when
+      the key is present, adds its value as a tag.
+- Attribute bindings:
+  - `attributes.fromPayload`:
+    - A map from attribute name to an object with a `path` field.
+    - For each `attributeName: { path: <dotPath> }`, the engine evaluates the path against
+      the start request body. When a value is present, it is converted to a string (if
+      needed) and written to `journey.attributes[attributeName]`.
+  - `attributes.fromHeaders`:
+    - A map from attribute name to an object with a `header` field.
+    - For each `attributeName: { header: <headerName> }`, when the header is present, its
+      value is written to `journey.attributes[attributeName]`.
+  - `attributes.fromBaggage`:
+    - A map from attribute name to an object with a `key` field.
+    - For each `attributeName: { key: <baggageKey> }`, when the baggage key is present, its
+      value is written to `journey.attributes[attributeName]`.
+- Interaction with limits:
+  - When bindings would cause `journey.tags` or `journey.attributes` to exceed the limits in
+    `MetadataLimits`, the engine MUST either:
+    - Reject the start request with a clear error, or
+    - Truncate additional tags/attributes in a documented way. Engines SHOULD prefer
+      explicit rejection in production settings.
+
+Validation
+- When present, `spec.metadata.bindings` MUST be an object.
+- `bindings.tags.fromPayload`, when present, MUST be an array of objects with a non-empty
+  `path` string.
+- `bindings.tags.fromHeaders`, when present, MUST be an array of objects with a non-empty
+  `header` string.
+- `bindings.tags.fromBaggage`, when present, MUST be an array of objects with a non-empty
+  `key` string.
+- `bindings.attributes.fromPayload`, `fromHeaders`, `fromBaggage`, when present, MUST be
+  maps from attribute names (non-empty strings) to objects with the corresponding `path`,
+  `header`, or `key` fields.
+- Attribute names used in bindings SHOULD follow the same naming guidance as other
+  attribute keys (`lowerCamel` / `snake_case`) and are subject to `MetadataLimits`.
 
 ## 3. Context and paths
 - `context` is a per-journey mutable JSON object initialised to `{}` unless a caller provides an initial value. It lives only for that journey instance and is not shared across journeys.
@@ -495,6 +675,8 @@ task:
   timeoutMs: <int, default 10000>
   resultVar: <identifier>          # stores structured result under context.<resultVar>
   resiliencePolicyRef: <id>        # optional; reference to an HTTP resilience policy defined under spec.policies.httpResilience
+  auth:                            # optional; outbound auth policy binding
+    policyRef: <id>                # reference to an outbound auth policy defined under spec.policies.httpClientAuth
   errorMapping:                     # optional – conditional transform for error results
     when: nonOk                     # only nonOk is supported (result.ok == false)
     mapper:
@@ -513,17 +695,20 @@ next: <stateId>                 # required
 ```
 
 Semantics
-- Request: constructed from `method`, `url`, `headers`, optional `body`.
+- Request: constructed from `method`, `url`, `headers`, optional `body`, and any configured outbound auth.
 - Body: if an object in YAML/JSON, it is serialised as JSON with `application/json` unless `Content-Type` overrides.
-- `mode` controls how the workflow observes the HTTP outcome:
+- `mode` controls how the journey instance observes the HTTP outcome:
   - `requestResponse` (default):
     - The engine sends the HTTP request and waits for a response (or timeout/error).
     - It then builds a structured result object and stores it at `context.<resultVar>`.
     - Callers can branch on or transform this result via `choice`, `transform`, or `errorMapping`.
   - `notify` (fire-and-forget):
     - The engine sends the HTTP request but does not wait for a response body and does not construct a result object.
-    - The workflow does not observe HTTP status, headers, or body; any network or protocol errors are implementation-defined (typically logged) but MUST NOT change control flow.
+    - The journey instance does not observe HTTP status, headers, or body; any network or protocol errors are implementation-defined (typically logged) but MUST NOT change control flow.
     - Execution continues immediately to `next`.
+- Naming and relationship to compensation:
+  - `task.mode` uses HTTP-centric names (`requestResponse` vs `notify`) to describe whether the journey instance observes an HTTP result or simply fires a request and proceeds.
+  - This is distinct from `spec.compensation.mode` (`sync` vs `async`), which controls whether the *caller* waits for the compensation journey to finish; compensation MAY still run asynchronously even when individual HTTP tasks use `requestResponse`.
 - Response handling in `requestResponse` mode (no auto-termination):
   - 2xx status: build a result object with `ok=true`; if `Content-Type` indicates JSON, parse to JSON; else store as string.
   - Non‑2xx: build a result object with `ok=false` and include `status`, headers, and body (parsed when possible).
@@ -532,7 +717,7 @@ Semantics
 - Conditional error mapping (`errorMapping`):
   - After constructing and storing the HTTP result object at `context.<resultVar>`, if `errorMapping` is present and `when: nonOk`, the engine conceptually evaluates `errorMapping.mapper` only when `context.<resultVar>.ok == false`.
   - The mapper evaluates with:
-    - `context` bound to the current workflow context, and
+    - `context` bound to the current journey context, and
     - `result` bound to the structured HTTP result object stored at `context.<resultVar>`.
   - The mapper result is then written according to `errorMapping.target` and `errorMapping.resultVar` using the same rules as the `transform` state:
     - `target.kind == context` and `target.path` set → assign at `context.<path>`.
@@ -557,8 +742,12 @@ Validation
 - When `mode` is `notify`:
   - `resultVar` MUST be omitted (there is no result).
   - `errorMapping` MUST be omitted (there is no error result to map).
-  - `resiliencePolicyRef` MAY be ignored by runtimes; retries have no observable effect on workflow behaviour.
-- HTTP outcomes (status/timeouts) do not terminate execution; you must branch explicitly. In `notify` mode the workflow cannot branch on call outcomes because they are not observable.
+  - `resiliencePolicyRef` MAY be ignored by the engine; retries have no observable effect on journey behaviour.
+- Outbound auth (`auth.policyRef`):
+  - When present, the engine resolves `auth.policyRef` against `spec.policies.httpClientAuth.definitions` (or platform-level equivalents) and applies the resulting policy to the outbound HTTP request (for example by adding an `Authorization` header or attaching a client certificate).
+  - When absent, and when `spec.policies.httpClientAuth.default` is set, the engine MAY use the default policy as if `auth.policyRef` were set to that id.
+  - When neither a task-level `auth.policyRef` nor a usable default can be resolved, the request is sent without additional outbound auth (subject to implementation defaults).
+- HTTP outcomes (status/timeouts) do not terminate execution; you must branch explicitly. In `notify` mode the journey instance cannot branch on call outcomes because they are not observable.
 ### 5.1b `task` (event publish)
 
 In addition to HTTP calls, `task` can publish events to external transports such as Kafka.
@@ -588,18 +777,18 @@ next: <stateId>
 Semantics
 - Transport and topic:
   - `eventPublish.transport` identifies the event transport; in the initial implementation it MUST be `kafka`.
-  - `eventPublish.topic` is the Kafka topic name; cluster/connection details are provided out of band by the runtime.
+  - `eventPublish.topic` is the Kafka topic name; cluster/connection details are provided out of band by the engine and its configuration.
 - Key and value:
-  - `eventPublish.key.mapper` (when present) is evaluated with `context` bound to the current workflow context; the result is serialised according to runtime configuration (typically string/bytes) and used as the Kafka record key.
-  - `eventPublish.value.mapper` is required and produces the event payload object; runtimes typically serialise this as JSON.
+  - `eventPublish.key.mapper` (when present) is evaluated with `context` bound to the current journey context; the result is serialised according to engine configuration (typically string/bytes) and used as the Kafka record key.
+  - `eventPublish.value.mapper` is required and produces the event payload object; engines typically serialise this as JSON.
 - Headers:
   - `eventPublish.headers` is an optional map from header name to interpolated string value; values are evaluated against `context` and attached as Kafka record headers.
 - Schemas:
-  - `eventPublish.keySchemaRef` (optional) points to a JSON Schema that describes the logical shape of the key. Runtimes and tooling MAY use this for validation or schema registry integration.
-  - `eventPublish.valueSchemaRef` (optional but recommended) points to a JSON Schema that describes the event payload. When present, runtimes SHOULD validate the mapped payload against this schema before publishing and MAY register it with an event/schema registry.
+  - `eventPublish.keySchemaRef` (optional) points to a JSON Schema that describes the logical shape of the key. Engine implementations and tooling MAY use this for validation or schema registry integration.
+  - `eventPublish.valueSchemaRef` (optional but recommended) points to a JSON Schema that describes the event payload. When present, engines SHOULD validate the mapped payload against this schema before publishing and MAY register it with an event/schema registry.
 - Control flow:
-  - Publishing is fire-and-forget from the workflow’s perspective: the task does not write a `resultVar`, and no control-flow decisions are based on publish outcomes.
-  - On publish failures after any configured retries, implementations MAY treat this as a runtime error (failing the journey/API call); the DSL does not surface partial success states.
+  - Publishing is fire-and-forget from the journey’s perspective: the task does not write a `resultVar`, and no control-flow decisions are based on publish outcomes.
+  - On publish failures after any configured retries, implementations MAY treat this as an engine execution error (failing the journey/API call); the DSL does not surface partial success states.
 
 Validation
 - `task.kind` may be `httpCall` or `eventPublish`.
@@ -627,7 +816,7 @@ default: <stateId>              # optional but recommended
 
 Semantics
 - Evaluate branches in order; the first predicate that evaluates to `true` wins.
-- DataWeave predicate: evaluate `when.predicate.expr` with `context` bound to the current workflow context. The expression must return a boolean; non‑boolean results are a validation error.
+- DataWeave predicate: evaluate `when.predicate.expr` with `context` bound to the current journey context. The expression must return a boolean; non‑boolean results are a validation error.
 - If no branch matches, transition to `default` if present; otherwise validation error.
 
 ### 5.3 `succeed`
@@ -652,7 +841,7 @@ Semantics
 ### 5.5 Error handling patterns
 
 - Task-level errors as data
-  - `task` states (for example `httpCall`) never auto-terminate a workflow. They always store a structured result in `context.<resultVar>` (including `status`, `ok`, `headers`, `body`, optional `error`) and then continue to `next`.
+- `task` states (for example `httpCall`) never auto-terminate a journey. They always store a structured result in `context.<resultVar>` (including `status`, `ok`, `headers`, `body`, optional `error`) and then continue to `next`.
   - Error handling is expressed explicitly via `choice` predicates and/or `transform` states that inspect these result objects.
 - Mapping to journey outcome
   - `succeed` produces `JourneyOutcome.phase = Succeeded` with `output` taken from `context.<outputVar>` when set, otherwise from the full `context`.
@@ -676,27 +865,27 @@ Semantics
   - A common mapping is:
     - `errorCode` ≈ Problem Details `type` (a URI or stable identifier).
     - `reason` ≈ Problem Details `title` or `detail` (human-readable summary).
-  - Workflows MAY keep the full Problem Details object in `context` (for example `context.problem`) even when only `code` and `reason` are exposed in `JourneyOutcome.error`.
+  - Journeys MAY keep the full Problem Details object in `context` (for example `context.problem`) even when only `code` and `reason` are exposed in `JourneyOutcome.error`.
 - Normalising downstream errors to RFC 9457
-  - Downstream HTTP APIs can return arbitrary error formats; workflows can normalise these into a Problem Details object using `transform` states and DataWeave mappers.
+  - Downstream HTTP APIs can return arbitrary error formats; journeys can normalise these into a Problem Details object using `transform` states and DataWeave mappers.
   - Typical pattern:
     - `task` captures the raw HTTP error into `context.api`.
     - A `choice` routes on `context.api.ok == false`.
     - A `transform` builds `context.problem` with RFC 9457 fields derived from `context.api.status`, `context.api.body`, and `context.api.error`.
-    - The workflow then either:
+    - The journey then either:
       - `succeed`s with `outputVar: problem` to return a pure Problem Details document, or
       - `fail`s, using `errorCode` from `context.problem.type` and `reason` from `context.problem.detail` or `title`.
 - Mapping RFC 9457 to other error formats
-  - When clients expect a non-RFC error format, workflows can map a canonical Problem Details object into a client-specific error envelope via `transform` states (for example `context.clientError`) and then:
+  - When clients expect a non-RFC error format, journeys can map a canonical Problem Details object into a client-specific error envelope via `transform` states (for example `context.clientError`) and then:
     - `succeed` with `outputVar: clientError`, or
     - `fail` with a compact `errorCode`/`reason` while still keeping `context.problem` and/or `context.clientError` available for logging and diagnostics.
 - Reuse via shared mappers
-  - To keep error handling consistent across workflows, authors SHOULD define shared DataWeave modules (`.dwl` files) that implement common mappers such as “downstream error → Problem Details” and “Problem Details → client error”.
+  - To keep error handling consistent across journeys, authors SHOULD define shared DataWeave modules (`.dwl` files) that implement common mappers such as “downstream error → Problem Details” and “Problem Details → client error”.
   - These modules are referenced from `transform` and `choice` expressions via `exprRef`, so the canonical error logic lives in one place even though the DSL has no dedicated `spec.errors` block.
 
 ## 19. Error configuration (spec.errors)
 
-The `spec.errors` block allows workflows to centralise how they normalise and expose errors, building on the canonical RFC 9457 Problem Details model (see ADR‑0003).
+The `spec.errors` block allows journeys to centralise how they normalise and expose errors, building on the canonical RFC 9457 Problem Details model (see ADR‑0003).
 
 ```yaml
 spec:
@@ -723,8 +912,8 @@ Semantics (guidance)
 - `spec.errors` provides named mappers that can be reused from:
   - `transform` states (via `mapperRef` to entries under `normalisers`/`clients`),
   - HTTP task `errorMapping.mapperRef`, and
-  - future runtime integration points.
-- Runtimes MAY:
+  - future engine integration points.
+- Engine implementations MAY:
   - Use a configured normaliser (for example `spec.errors.normalisers.httpDefault`) as the default `errorMapping` for HTTP tasks that do not specify one.
   - Use a configured client mapper (for example `spec.errors.clients.backendClient`) when projecting internal Problem Details objects into the final `JourneyOutcome.error` representation, as long as the resulting `error.code` remains a stable identifier and aligns with ADR‑0003.
 
@@ -736,7 +925,7 @@ Validation
 ## 6. Example
 ```yaml
 apiVersion: v1
-kind: Workflow
+kind: Journey
 metadata:
   name: example
   version: 0.1.0
@@ -777,9 +966,9 @@ spec:
 ```
 
 ## 7. Limitations (explicit non-capabilities)
-- Terminal success/failure are explicit via `succeed`/`fail`; tasks never auto‑terminate a workflow.
-- No runtime enforcement for retries, circuit breakers, bulkheads, or authentication policies; only configuration via resilience policies is defined.
-- Feature 001 runtimes do not implement timers (`wait`), external input (`webhook`), parallelism (`parallel`/`map`), or sub‑workflows; these states are reserved for Features 003/004 and SHOULD be rejected or treated as unsupported.
+- Terminal success/failure are explicit via `succeed`/`fail`; tasks never auto‑terminate a journey.
+- Enforcement for retries, circuit breakers, bulkheads, or authentication policies is not defined here; only configuration via resilience policies is specified.
+- Feature 001 of the engine does not support timers (`wait`), external input (`webhook`), parallelism (`parallel`/`map`), or sub‑journeys; these states are reserved for Features 003/004 and SHOULD be rejected or treated as unsupported.
 - No array indexing in dot‑paths (no `a[0]`), and no alternate expression languages (all predicates/mappers are DataWeave).
 - No environment‑variable substitution or secret references (future features may add).
 - No persistence/resume across process restarts.
@@ -794,14 +983,14 @@ spec:
 
 ## 10. DataWeave – Expressions & Mappers
 - Language: DataWeave 2.x (expressions authored inline via `expr` or referenced via `exprRef` to an external `.dwl` file).
-- Binding: `context` variable is bound to the current workflow context JSON value.
+- Binding: `context` variable is bound to the current journey context JSON value.
 - Predicates: used in `choice` branches via `when.predicate`. The expression must evaluate to a boolean.
 - Transforms: `transform` states use DataWeave to compute values written into `context` or into variables under `context.<resultVar>`, according to the semantics in the Transform state section.
 - Determinism & safety: expressions must be pure (no I/O); the evaluator must enforce timeouts and resource limits.
 
 ### 10.1 Reusable mappers (`spec.mappers` and `mapperRef`)
 
-To avoid repeating the same DataWeave snippets across multiple states, workflows can define named mappers under `spec.mappers` and reference them via `mapperRef`.
+To avoid repeating the same DataWeave snippets across multiple states, journey definitions can define named mappers under `spec.mappers` and reference them via `mapperRef`.
 
 ```yaml
 spec:
@@ -874,10 +1063,10 @@ Usage notes
 
 ## 12. External-Input States (wait/webhook)
 
-External-input states pause the workflow and require a step submission to continue. Submissions are sent to `/journeys/{journeyId}/steps/{stepId}` where `stepId` equals the state id.
+External-input states pause the journey instance and require a step submission to continue. Submissions are sent to `/journeys/{journeyId}/steps/{stepId}` where `stepId` equals the state id.
 
 Bindings available to DataWeave expressions during step handling:
-- `context`: the current workflow context JSON object.
+- `context`: the current journey context JSON object.
 - `payload`: the submitted step input JSON (validated against `inputSchemaRef`).
 
 ### 12.1 `wait` (manual/external input)
@@ -1009,7 +1198,7 @@ Validation
 - `maxAttempts` must be an integer ≥ 1.
 
 Notes
- - This section defines the configuration model only; runtime enforcement belongs to the policy implementation in the runtime and is out of scope for the DSL reference.
+- This section defines the configuration model only; enforcement belongs to the policy implementation in the engine and is out of scope for the DSL reference.
 
 ## 14. Transform State (DataWeave)
 
@@ -1033,7 +1222,7 @@ next: <stateId>
 ```
 
 Semantics
-- `mapper` evaluates with `context` bound to the current workflow context and returns a JSON value.
+- `mapper` evaluates with `context` bound to the current journey context and returns a JSON value.
 - If `target.kind == context` (default) and `target.path` is provided, the value is written at `context.<path>` (overwriting any existing value).
 - If `target.kind == var`, the value is stored under `context.<resultVar>`; other context fields remain unchanged.
 - If neither `target.path` nor `resultVar` is set, the mapper result replaces the entire `context`.
@@ -1072,7 +1261,7 @@ fail_with_problem:
 
 ## 15. Cache Resources & Operations
 
-Caches are modelled as named resources plus cache-focused task kinds. This section defines the configuration and wiring; concrete cache implementations and eviction behaviour belong to the runtime.
+Caches are modelled as named resources plus cache-focused task kinds. This section defines the configuration and wiring; concrete cache implementations and eviction behaviour belong to the engine.
 
 ### 15.1 Cache resources
 
@@ -1238,8 +1427,8 @@ Semantics (configuration)
 Validation
 - Branch `start` must refer to a state id within the branch-local `states` map.
 - Branch state ids are local to the branch and must be unique within that branch.
-- `join.strategy` must be one of `allOf`, `anyOf`, or `firstCompleted`; Feature 004 will define the exact runtime semantics for `anyOf`/`firstCompleted` in more detail.
-- `join.errorPolicy` must be one of `collectAll`, `failFast`, or `ignoreErrors` when present; it is advisory and primarily guides runtime implementations and readers.
+- `join.strategy` must be one of `allOf`, `anyOf`, or `firstCompleted`; Feature 004 will define the exact engine semantics for `anyOf`/`firstCompleted` in more detail.
+- `join.errorPolicy` must be one of `collectAll`, `failFast`, or `ignoreErrors` when present; it is advisory and primarily guides the engine and readers.
 - `join.mapper.lang` must be `dataweave` when provided.
 
 Notes
@@ -1267,7 +1456,7 @@ spec:
 ```
 
 Semantics
-- `headersToContext`: for each `headerName: contextField` entry, when a start request is invoked (`POST /journeys/{workflowName}/start` for `kind: Workflow`, or `POST /apis/{apiName}` / `spec.route.path` for `kind: Api`), if the request has the header, its value is copied to `context.<contextField>`. Missing headers are ignored; requiredness should be expressed via JSON Schema on `context`, not here.
+- `headersToContext`: for each `headerName: contextField` entry, when a start request is invoked (`POST /journeys/{journeyName}/start` for a `kind: Journey` journey definition, or `POST /apis/{apiName}` / `spec.route.path` for `kind: Api`), if the request has the header, its value is copied to `context.<contextField>`. Missing headers are ignored; requiredness should be expressed via JSON Schema on the journey `context`, not here.
 - `headersPassthrough`: for each mapping, the engine conceptually propagates the inbound header value from the start request to all subsequent HTTP tasks as the specified outbound header, *even if it is not stored in `context`*.
   - This is syntactic sugar for header value propagation; it behaves as if the value flowed via an internal, reserved context field.
 - `queryToContext`: for each `paramName: contextField` entry, when the start request is invoked, if the request has the query parameter, its (string) value is copied to `context.<contextField>`. Missing params are ignored; requiredness should be expressed via JSON Schema on `context` or a dedicated input schema, not here.
@@ -1301,7 +1490,7 @@ Semantics
   - Should be part of the journey’s replay/debug story (visible in `context`).
 - Use `headersPassthrough` when the header:
   - Is purely transport-level (for example, tracing, correlation), and
-  - Does not need to be read by the workflow itself.
+  - Does not need to be read by the journey definition itself.
 - It is valid to use both: bind a header into `context` and also pass it through, if you need both visibility and propagation.
 
 Validation
@@ -1311,7 +1500,7 @@ Validation
 - Step ids under `httpBindings.steps` must refer to external-input states (`wait`/`webhook`).
 
 Notes
-- This section defines the binding model; concrete enforcement and header sets are implemented in the runtime/API layer.
+- This section defines the binding model; concrete enforcement and header sets are implemented in the engine/API layer.
 
 ## 18. HTTP Security Policies (Auth)
 
@@ -1327,6 +1516,7 @@ spec:
       definitions:
         jwtDefault:
           kind: jwt
+          mode: required                  # optional; required (default) | optional
           issuer: "https://issuer.example.com"
           audience: ["journeyforge"]
           jwks:
@@ -1339,6 +1529,8 @@ spec:
               type: string
             scope:
               contains: ["journeys:read"]
+          anonymousSubjects:              # optional; subjects considered "anonymous"
+            - "00000000-0000-0000-0000-000000000000"
         clientCertDefault:
           kind: mtls
           trustAnchors:
@@ -1357,10 +1549,14 @@ spec:
 
 Kinds
 - `jwt` – JSON Web Token validation policy.
+  - `mode`: controls whether credentials are required for this endpoint:
+    - `required` (default): a missing or invalid token MUST cause the request to be rejected (for example, 401/403); the journey instance does not start.
+    - `optional`: a missing token is allowed and treated as anonymous; an invalid token MUST still cause rejection. When no token is present, `context.auth.jwt` remains unset and no subject is derived.
   - `issuer`, `audience`: expected issuer and audience(s).
   - `jwks`: where to obtain verification keys (JWKS URL or static key set).
   - `clockSkewSeconds`: allowed skew when validating `exp`/`nbf`.
   - `requiredClaims`: shape and constraints for specific claims (implementation-defined schema).
+  - `anonymousSubjects`: optional list of subject values that should be treated as anonymous even when the token is otherwise valid (for example, an all-zero UUID used by some gateways). When `sub` matches one of these values, the engine MUST NOT derive a canonical owner (`attributes.subjectId`) from it.
 - `mtls` – client certificate policy.
   - `trustAnchors`: list of root/sub-CA PEM refs to trust.
   - `allowSubjects`: list of allowed subject DNs; certificate chain must validate against `trustAnchors` and subject must match one of these.
@@ -1384,7 +1580,7 @@ spec:
 ```
 
 Semantics
-- `journeyPolicyRef` (if set) applies to `POST /journeys/{workflowName}/start` and all step endpoints unless overridden.
+- `journeyPolicyRef` (if set) applies to `POST /journeys/{journeyName}/start` and all step endpoints unless overridden.
 - `securityPolicyRef` under `start` overrides `journeyPolicyRef` specifically for the start endpoint.
 - `securityPolicyRef` under `steps.<stepId>` overrides both for that particular step endpoint.
 - If no policy is resolved for an endpoint, authentication behaviour is implementation-defined (for example, relying on upstream gateway enforcement).
@@ -1400,14 +1596,91 @@ Semantics
   - You want the same authentication behaviour reused across multiple journeys or steps.
 - Combine with `httpBindings` when:
   - You also need to project authentication metadata into `context` (for example, userId from a JWT claim) or forward headers downstream.
-  - `httpSecurity` enforces *who* can call; `httpBindings` controls *how* inbound metadata is made available to the workflow and downstream calls.
+  - `httpSecurity` enforces *who* can call; `httpBindings` controls *how* inbound metadata is made available to the journey instance and downstream calls.
 
 Notes
-- This section defines the configuration model only; runtime enforcement belongs to the security implementation in the runtime and is out of scope for the DSL reference.
+- This section defines the configuration model only; enforcement belongs to the security implementation in the engine and is out of scope for the DSL reference.
 
-### 18.5 Mapping auth into workflow context
+## 19. Outbound HTTP Auth (httpClientAuth)
 
-After successful policy validation, the runtime MUST populate one of the following views under `context.auth` so DataWeave expressions and `transform` states can use authentication data:
+Outbound HTTP auth policies define how HTTP tasks authenticate *to* downstream services (for example, using static bearer tokens, OAuth2 client credentials, or mTLS client certificates). They are configured under `spec.policies.httpClientAuth` and referenced from HTTP `task` definitions.
+
+### 19.1 Policy definitions
+
+```yaml
+spec:
+  policies:
+    httpClientAuth:
+      default: backendDefault        # optional default policy id
+      definitions:
+        backendDefault:
+          kind: oauth2ClientCredentials
+          tokenEndpoint: https://auth.example.com/oauth2/token
+          auth:
+            method: clientSecretPost   # clientSecretPost | clientSecretBasic | tlsClientAuth
+            clientId: orders-service
+            clientSecretRef: secret://oauth/clients/orders-service
+            # or, for mTLS client auth at the token endpoint:
+            # clientCertRef: secret://certs/orders-service
+          form:
+            grant_type: client_credentials
+            scope: orders.read orders.write
+            audience: https://api.example.com
+        staticToken:
+          kind: bearerStatic
+          tokenRef: secret://tokens/static-backend-token
+        mtlsClient:
+          kind: mtlsClient
+          clientCertRef: secret://certs/backend-client
+          # optional outbound trust anchors for this client
+          trustAnchors:
+            - pemRef: trust/roots/root-ca.pem
+```
+
+Kinds
+- `bearerStatic` – static bearer token auth.
+  - `tokenRef`: `secretRef` pointing to a secret that resolves to the bearer token value.
+- `oauth2ClientCredentials` – OAuth2 client credentials flow.
+  - `tokenEndpoint`: URL of the token endpoint.
+  - `auth.method`: how the client authenticates to the token endpoint:
+    - `clientSecretPost`: send `client_id` and `client_secret` in the form body.
+    - `clientSecretBasic`: send `Authorization: Basic base64(client_id:client_secret)`.
+    - `tlsClientAuth`: authenticate with mTLS using a client certificate.
+  - `auth.clientId`: OAuth2 client id.
+  - `auth.clientSecretRef`: `secretRef` for client secret (required for secret-based methods).
+  - `auth.clientCertRef`: `secretRef` for client cert/key (required for `tlsClientAuth`).
+  - `form`: x-www-form-urlencoded payload fields to send to the token endpoint; must include `grant_type: client_credentials` (either explicitly or implied by the engine).
+- `mtlsClient` – outbound client certificate on data-plane calls.
+  - `clientCertRef`: `secretRef` for the client certificate/key pair.
+  - `trustAnchors`: optional list of `pemRef` entries describing trusted roots for outbound TLS.
+
+Semantics
+- Policy resolution:
+  - `spec.policies.httpClientAuth.default` (when set) provides a default policy id for HTTP tasks that do not specify their own `auth.policyRef`.
+  - `definitions` is a map from policy id to policy object; unknown `kind` values are invalid.
+- Secret references:
+  - All secret-bearing fields (`tokenRef`, `auth.clientSecretRef`, `auth.clientCertRef`) are opaque `secretRef` identifiers.
+  - The DSL never exposes raw secret values; engines resolve `secretRef` against an implementation-defined secret store.
+- OAuth2 token acquisition:
+  - For policies with `kind: oauth2ClientCredentials`, the engine obtains an access token by calling `tokenEndpoint` with the configured `auth` method and `form` payload.
+  - The engine MUST treat `grant_type` as `client_credentials`; other grant types are invalid in this version.
+- Token caching:
+  - Engines MAY cache access tokens per (policy id + tokenEndpoint + `auth.method` + form payload) and reuse them across journey instances until expiry, accounting for clock skew.
+  - When a cached token is available and not expired, the engine SHOULD reuse it rather than calling the token endpoint again.
+
+Validation
+- `spec.policies.httpClientAuth.definitions` must be a map of ids to policy objects.
+- Each policy must specify a supported `kind`.
+- `bearerStatic` policies must set a non-empty `tokenRef`.
+- `oauth2ClientCredentials` policies must set `tokenEndpoint`, `auth.method`, and `auth.clientId` and at least one of `auth.clientSecretRef` or `auth.clientCertRef` consistent with `auth.method`.
+- `mtlsClient` policies must set `clientCertRef`.
+
+Notes
+- This section defines the configuration model only; token acquisition, secret storage, and caching live in the engine and secret store.
+
+### 18.5 Mapping auth into journey context
+
+After successful policy validation, the engine MUST populate one of the following views under `context.auth` so DataWeave expressions and `transform` states can use authentication data:
 
 - JWT policies (`kind: jwt`):
   - `context.auth.jwt.header` – JOSE header (non-sensitive fields only, for example `alg`, `kid`, `typ`).
@@ -1451,7 +1724,7 @@ mtls-normalise:
   next: nextState
 ```
 
-This keeps `context` as the canonical place for data that influences journey behaviour, while `httpSecurity` governs authentication and `httpBindings` governs how inbound metadata becomes available to the workflow and downstream calls.
+This keeps `context` as the canonical place for data that influences journey behaviour, while `httpSecurity` governs authentication and `httpBindings` governs how inbound metadata becomes available to the journey instance and downstream calls.
 
 ## 20. Named Outcomes (spec.outcomes)
 
@@ -1480,15 +1753,69 @@ Shape
 - `spec.outcomes` is a map of outcome ids to classification rules.
 - Each outcome has:
   - `when.phase`: `Succeeded` or `Failed` (must match `JourneyOutcome.phase`).
-  - `when.predicate`: optional DataWeave predicate evaluated with `context` bound to the final workflow context and `output`/`error` available as bindings if the runtime supplies them.
+  - `when.predicate`: optional DataWeave predicate evaluated with `context` bound to the final journey context and `output`/`error` available as bindings if the engine supplies them.
 
 Semantics (classification only)
-- Outcomes do not affect execution: the workflow still terminates on `succeed`/`fail` as usual.
-- After a journey reaches a terminal phase, a runtime MAY:
+- Outcomes do not affect execution: the journey still terminates on `succeed`/`fail` as usual.
+- After a journey reaches a terminal phase, an engine MAY:
   - Evaluate outcomes in a deterministic order (for example, insertion order or lexicographic by id).
   - Select the first outcome whose `when.phase` matches and whose predicate evaluates to `true`.
   - Record the selected outcome id for telemetry or include it as an additional field (for example `outcomeId`) in `JourneyOutcome` without changing existing fields.
 - If no outcome matches, the journey remains unclassified from the DSL’s perspective.
+
+## 21. Metadata limits (MetadataLimits)
+
+To keep metadata predictable and avoid unbounded growth, operators configure limits for
+tags and attributes in the engine configuration via a dedicated configuration document:
+
+```yaml
+apiVersion: v1
+kind: MetadataLimits
+metadata:
+  name: metadata-limits
+spec:
+  definitionTags:
+    maxCount: 10
+
+  instanceTags:
+    maxCount: 16
+    maxLength: 40
+
+  attributes:
+    maxKeys: 16
+    maxKeyLength: 32
+    maxValueLength: 256
+```
+
+Semantics
+- `MetadataLimits` is part of the configuration surface for the engine; it is not referenced
+  by individual journey definitions but governs validation and enforcement for tags and attributes.
+- At startup, the engine MUST load `MetadataLimits` from a well-known location. When it is
+  missing:
+  - Implementations MAY fail fast with a clear error, or
+  - Use documented built-in defaults equivalent to the example above, with a strong
+    recommendation to make limits explicit for production.
+- The limits apply as follows:
+  - `definitionTags.maxCount`:
+    - Maximum number of entries in `metadata.tags` per spec.
+  - `instanceTags.maxCount`:
+    - Maximum number of effective tags on a single journey instance (after combining
+      `metadata.tags` and spec-derived tags).
+  - `instanceTags.maxLength`:
+    - Maximum length, in characters, of a single tag value.
+  - `attributes.maxKeys`:
+    - Maximum number of keys in `journey.attributes` for a single journey.
+  - `attributes.maxKeyLength`:
+    - Maximum length, in characters, of an attribute key.
+  - `attributes.maxValueLength`:
+    - Maximum length, in characters, of an attribute value.
+
+Validation
+- Tools and the engine SHOULD treat violations of `MetadataLimits` as validation errors when
+  possible (for example, during spec compilation or static analysis).
+- During execution, attempts to add tags or attributes that would exceed the configured
+  limits SHOULD cause the operation to fail fast with a clear error; behaviour is
+  implementation-defined but MUST be documented.
 
 Validation
 - Outcome ids must be unique strings.

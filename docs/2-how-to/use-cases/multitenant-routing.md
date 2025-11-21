@@ -17,11 +17,11 @@ Route requests to different upstream backends based on tenant identity:
 
 ## Example – multitenant-routing
 
-Workflow: `multitenant-routing.workflow.yaml`
+Journey definition: `multitenant-routing.journey.yaml`
 
 ```yaml
 apiVersion: v1
-kind: Workflow
+kind: Journey
 metadata:
   name: multitenant-routing
   version: 0.1.0

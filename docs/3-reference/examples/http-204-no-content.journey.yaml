@@ -1,0 +1,46 @@
+apiVersion: v1
+kind: Journey
+metadata:
+  name: http-204-no-content
+  version: 0.1.0
+spec:
+  inputSchemaRef: schemas/http-204-no-content-input.json
+  outputSchemaRef: schemas/http-204-no-content-output.json
+  apis:
+    items: { openApiRef: apis/items.openapi.yaml }
+    users: { openApiRef: apis/users.openapi.yaml }
+    accounts: { openApiRef: apis/accounts.openapi.yaml }
+    serviceA: { openApiRef: apis/serviceA.openapi.yaml }
+    serviceB: { openApiRef: apis/serviceB.openapi.yaml }
+  start: purge
+  states:
+    purge:
+      type: task
+      task:
+        kind: httpCall
+        method: DELETE
+        url: "https://api.example.com/cache/${context.key}"
+        headers: { Accept: application/json }
+        timeoutMs: 5000
+        resultVar: api
+      next: decide
+
+    decide:
+      type: choice
+      choices:
+        - when:
+            predicate:
+              lang: dataweave
+              expr: |
+                context.api.ok == true and context.api.status == 204
+          next: done
+      default: failed
+
+    done:
+      type: succeed
+      outputVar: api
+
+    failed:
+      type: fail
+      errorCode: NOT_204
+      reason: "Expected 204 No Content"

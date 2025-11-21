@@ -4,10 +4,10 @@ Date: 2025-11-20 | Status: Proposed
 
 ## Context
 
-JourneyForge initially defined a single top-level kind:
-- `kind: Workflow` – journeys that are started via `/api/v1/journeys/{workflowName}/start`, identified by a `journeyId`, and observed via `/journeys/{journeyId}` and `/journeys/{journeyId}/result`.
+JourneyForge defines a primary journeys kind:
+- `kind: Journey` – journeys that are started via `/api/v1/journeys/{journeyName}/start`, identified by a `journeyId`, and observed via `/journeys/{journeyId}` and `/journeys/{journeyId}/result`.
 
-This works well for long-lived or externally-driven workflows (for example, `wait`/`webhook` steps, manual approvals, callbacks). However, many frontend and BFF scenarios only need:
+This works well for long-lived or externally-driven journeys (for example, `wait`/`webhook` steps, manual approvals, callbacks). However, many frontend and BFF scenarios only need:
 - A single synchronous HTTP request.
 - One or more downstream HTTP calls (fan-out, chaining, or simple mapping).
 - A composed response in the same HTTP call.
@@ -17,19 +17,19 @@ For these cases:
 - Clients want a “pure REST” endpoint that looks like a normal JSON API: `POST /api/v1/apis/<name>` with a direct JSON body and response.
 
 We also want to:
-- Reuse the existing DSL surface (states, policies, error model) and runtime engine.
+  - Reuse the existing DSL surface (states, policies, error model) and engine.
 - Avoid introducing a completely separate DSL or execution model for “API endpoints”.
 
 ## Decision
 
 We introduce a second top-level kind:
-- `kind: Api` – synchronous HTTP endpoints that reuse the workflow state machine but do not surface journeys.
+- `kind: Api` – synchronous HTTP endpoints that reuse the same state machine model as journeys but do not surface journeys.
 
 Shape:
 - Both kinds share the same core shape:
   ```yaml
   apiVersion: v1
-  kind: Workflow | Api
+  kind: Journey | Api
   metadata:
     name: <string>
     version: <semver>
@@ -82,15 +82,15 @@ Positive:
 - Frontend and BFF consumers get first-class REST APIs that feel like normal synchronous HTTP endpoints, without journey ids or status polling.
 - Authors can model both journeys and simple APIs using the same DSL surface and mental model (states, choices, transforms, policies).
 - Implementations can reuse the same engine, policies (`httpResilience`, `httpSecurity`), and error model (ADR-0003) across journeys and APIs.
-- The OpenAPI story becomes clearer: per-journey OAS for `kind: Workflow`, and per-API OAS for `kind: Api`.
+- The OpenAPI story becomes clearer: per-journey OAS for `kind: Journey`, and per-API OAS for `kind: Api`.
 
 Negative / trade-offs:
-- The runtime must support an additional HTTP surface (`/api/v1/apis/...`) and routing semantics for `kind: Api`.
+- The engine must support an additional HTTP surface (`/api/v1/apis/...`) and routing semantics for `kind: Api`.
 - We now have two kinds at the top level; tooling (e.g., editors, validators, exporters) must understand both.
 - Error status mapping for `kind: Api` (how `fail` / `spec.outcomes` map to HTTP status codes) is only partially specified and will need refinement as we build implementations.
 
 Related:
 - DSL Reference: `docs/3-reference/dsl.md` (top-level shape and `kind: Api` semantics).
 - OpenAPI Export Guideline: `docs/4-architecture/spec-guidelines/openapi-export.md`.
-- Example API workflow and OAS: `docs/3-reference/examples/http-chained-calls-api.workflow.yaml`, `docs/3-reference/examples/oas/http-chained-calls-api.openapi.yaml`.
+- Example API spec and OAS: `docs/3-reference/examples/http-chained-calls-api.journey.yaml`, `docs/3-reference/examples/oas/http-chained-calls-api.openapi.yaml`.
 - Error Model and Problem Details: `docs/6-decisions/ADR-0003-error-model-rfc9457-problem-details.md`.

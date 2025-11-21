@@ -20,11 +20,11 @@ Avoid hitting a downstream user profile service on every request by:
 
 ## Example – cache-user-profile
 
-Workflow: `cache-user-profile.workflow.yaml`
+Journey definition: `cache-user-profile.journey.yaml`
 
 ```yaml
 apiVersion: v1
-kind: Workflow
+kind: Journey
 metadata:
   name: cache-user-profile
   version: 0.1.0

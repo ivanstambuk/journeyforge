@@ -4,14 +4,14 @@ Date: 2025-11-20 | Status: Proposed
 
 ## Context
 
-JourneyForge workflows sometimes need to emit events to external systems (for example, Kafka topics) as part of their execution:
+JourneyForge journeys sometimes need to emit events to external systems (for example, Kafka topics) as part of their execution:
 - Notify downstream systems that an order has changed.
 - Emit audit or activity events.
 - Drive other services via event-driven architectures.
 
 Today, the DSL supports HTTP side effects via `task` with `kind: httpCall` (including `mode: notify` for fire-and-forget HTTP). However:
 - HTTP is not always the right transport; many teams use Kafka or other brokers as their primary integration channel.
-- Modelling event emission as an HTTP call to a gateway is possible but hides intent and couples the workflow to a particular HTTP façade.
+- Modelling event emission as an HTTP call to a gateway is possible but hides intent and couples the journey to a particular HTTP façade.
 
 We want a first-class way to describe “publish an event to Kafka” while:
 - Reusing the existing `task` pattern and DataWeave mappers.
@@ -46,19 +46,19 @@ next: <stateId>
 ```
 
 Semantics:
-- The engine evaluates `key.mapper` (when present) and `value.mapper` with `context` bound to the current workflow context.
+- The engine evaluates `key.mapper` (when present) and `value.mapper` with `context` bound to the current journey context.
 - It publishes a record to Kafka with `{topic, key, value, headers}`:
-  - Cluster and connection details are configured at deployment/runtime, not in the DSL.
-  - Serialisation (e.g. JSON, Avro) is a runtime concern; the DSL describes logical JSON objects.
-- The task does not produce a `resultVar`; the workflow cannot branch on publish outcomes.
+  - Cluster and connection details are configured at engine configuration time, not in the DSL.
+  - Serialisation (e.g. JSON, Avro) is an engine concern; the DSL describes logical JSON objects.
+- The task does not produce a `resultVar`; the journey instance cannot branch on publish outcomes.
 - On successful publish, execution continues to `next`.
-- On repeated publish failure (after any configured retries), runtimes may:
-  - Treat this as a runtime error that fails the journey/API call, or
+- On repeated publish failure (after any configured retries), the engine may:
+  - Treat this as an engine execution error that fails the journey/API call, or
   - Apply operator-configured policies; the DSL does not expose partial success states.
 
 Schema integration:
 - `eventPublish.valueSchemaRef` points at a JSON Schema that describes the payload shape (for example `schemas/order-updated-event.json`).
-  - Runtimes SHOULD validate the mapped payload against this schema before publishing.
+  - Engine implementations SHOULD validate the mapped payload against this schema before publishing.
   - Tooling MAY use it for schema registry integration or IDE support.
 - `eventPublish.keySchemaRef` plays the same role for the key when used.
 
@@ -76,12 +76,12 @@ Validation rules:
 ## Consequences
 
 Positive:
-- Workflows can emit Kafka events as first-class side effects, without having to route through HTTP proxies just to reach Kafka.
+- Journeys can emit Kafka events as first-class side effects, without having to route through HTTP proxies just to reach Kafka.
 - The DSL stays compact by reusing the `task` pattern and DataWeave mappers.
-- Schema-conscious workflows can validate event payloads and integrate cleanly with schema registries and event consumers.
+- Schema-conscious journey definitions can validate event payloads and integrate cleanly with schema registries and event consumers.
 
 Negative / trade-offs:
-- Runtimes must integrate with Kafka (or provide an abstraction that maps `eventPublish` to a configured broker).
+- Engine implementations must integrate with Kafka (or provide an abstraction that maps `eventPublish` to a configured broker).
 - Because `eventPublish` does not expose outcomes to the DSL, debugging failed publishes relies on logs/metrics rather than control-flow states.
 
 Future work:
