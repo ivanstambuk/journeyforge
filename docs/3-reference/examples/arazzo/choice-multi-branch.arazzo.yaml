@@ -3,19 +3,20 @@ info:
   title: JourneyForge – choice-multi-branch workflows
   version: 0.1.0
   summary: Workflows for multi-branch HTTP decisioning.
+  description: Workflows for multi-branch HTTP decisioning.
 sourceDescriptions:
   - name: choiceMultiBranch
     type: openapi
     url: ../oas/choice-multi-branch.openapi.yaml
 workflows:
-  choice-multi-branch-happy-path:
+  - workflowId: choice-multi-branch-happy-path
     summary: Start a choice-multi-branch journey and retrieve the final outcome.
-    sourceDescriptions:
-      - choiceMultiBranch
+    description: Start a choice-multi-branch journey and retrieve the final outcome.
     inputs:
-      startRequest:
-        description: Initial payload for the choice-multi-branch journey.
-        schema:
+      type: object
+      properties:
+        startRequest:
+          description: Initial payload for the choice-multi-branch journey.
           type: object
           required:
             - inputId
@@ -24,20 +25,20 @@ workflows:
               type: string
           additionalProperties: true
     steps:
-      - name: startJourney
+      - stepId: startJourney
         description: Start a new choice-multi-branch journey instance.
-        call:
-          source: choiceMultiBranch
-          operationId: choiceMultiBranch_start
-        parameters:
-          requestBody: $inputs.startRequest
+        operationId: choiceMultiBranch_start
+        x-source: choiceMultiBranch
+        requestBody:
+          contentType: application/json
+          payload: $inputs.startRequest
         outputs:
           journeyId: $response.body.journeyId
-      - name: getResult
+      - stepId: getResult
         description: Retrieve the final outcome after branching.
-        call:
-          source: choiceMultiBranch
-          operationId: choiceMultiBranch_getResult
+        operationId: choiceMultiBranch_getResult
+        x-source: choiceMultiBranch
         parameters:
-          path:
-            journeyId: $steps.startJourney.outputs.journeyId
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId

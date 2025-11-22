@@ -1,0 +1,17 @@
+extends:
+  - spectral:arazzo
+
+formats:
+  - arazzo1_0
+
+rules:
+  arazzo-json-schema:
+    description: "Arazzo documents MUST conform to the official Arazzo 1.0.x JSON Schema."
+    message: "Arazzo document does not conform to the published Arazzo 1.0.x JSON Schema."
+    given: "$"
+    severity: error
+    then:
+      function: schema
+      functionOptions:
+        schema:
+          $ref: "./docs/3-reference/arazzo-1.0.schema.json"

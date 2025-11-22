@@ -2,6 +2,8 @@
 
 Status: Draft | Last updated: 2025-11-21
 
+This document is **normative** for the JourneyForge journey DSL (for `kind: Journey` and `kind: Api`) supported by Feature 001. It defines language surface and semantics only; **engine implementation status is non-normative and tracked in feature specs** (for example `docs/4-architecture/features/001/spec.md`). See Q-004 in `docs/4-architecture/open-questions.md` for background.
+
 This document normatively defines the JourneyForge journey DSL (for `kind: Journey` and `kind: Api`) supported by Feature 001. It aims to be explicit about behaviour and limitations so we can refine before implementation.
 
 ## 1. Overview
@@ -22,11 +24,11 @@ The DSL surface defines the following state types and configuration blocks. All 
 | `succeed`                                | Terminal success                                 | Fully specified                                        |
 | `fail`                                   | Terminal failure with error code/reason          | Fully specified; aligned with RFC 9457 Problem Details |
 | `transform`                              | DataWeave mapping into context/vars              | Fully specified                                        |
-| `wait`                                   | Manual/external input                            | DSL shape + REST export defined; long-running impl TBD |
-| `webhook`                                | Callback input                                   | DSL shape + REST export defined; security impl TBD     |
-| `parallel`                               | Parallel branches with join                      | DSL shape + join contract defined; concurrency impl TBD|
-| Cache resources/tasks (`cacheGet`/`cachePut`) | Named caches and cache operations           | DSL shape defined; cache backend semantics TBD         |
-| Policies (`httpResilience`, `httpSecurity`, `httpClientAuth`) | Resiliency/auth configuration (inbound & outbound) | Configuration model defined; enforcement impl TBD      |
+| `wait`                                   | Manual/external input                            | DSL shape + REST callback surface defined              |
+| `webhook`                                | Callback input                                   | DSL shape + callback surface and security hooks defined|
+| `parallel`                               | Parallel branches with join                      | DSL shape + join contract defined                      |
+| Cache resources/tasks (`cacheGet`/`cachePut`) | Named caches and cache operations           | DSL shape defined; cache semantics described in section 15 |
+| Policies (`httpResilience`, `httpSecurity`, `httpClientAuth`) | Resiliency/auth configuration (inbound & outbound) | Configuration surface defined; policy semantics described in sections 17–19 |
 
 ## 2. Top-level shape
 

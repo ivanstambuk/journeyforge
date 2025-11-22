@@ -3,58 +3,60 @@ info:
   title: JourneyForge – sync-wrapper-wait workflows
   version: 0.1.0
   summary: Workflows for long-running operations wrapped by a manual wait step.
+  description: Workflows for long-running operations wrapped by a manual wait step.
 sourceDescriptions:
   - name: syncWrapperWait
     type: openapi
     url: ../oas/sync-wrapper-wait.openapi.yaml
 workflows:
-  sync-wrapper-wait-happy-path:
+  - workflowId: sync-wrapper-wait-happy-path
     summary: Start a sync-wrapper-wait journey, submit a completion event, and retrieve the final result.
-    sourceDescriptions:
-      - syncWrapperWait
+    description: Start a sync-wrapper-wait journey, submit a completion event, and retrieve the final result.
     inputs:
-      startRequest:
-        description: Initial payload for the sync-wrapper-wait journey.
-        schema:
+      type: object
+      properties:
+        startRequest:
+          description: Initial payload for the sync-wrapper-wait journey.
           type: object
           properties:
             status:
               type: string
           additionalProperties: true
-      completionEvent:
-        description: Completion event for the waitStep, marking the operation as DONE.
-        schema:
+        completionEvent:
+          description: Completion event for the waitStep, marking the operation as DONE.
           type: object
           properties:
             status:
               type: string
           additionalProperties: true
     steps:
-      - name: startJourney
+      - stepId: startJourney
         description: Start a new sync-wrapper-wait journey instance.
-        call:
-          source: syncWrapperWait
-          operationId: syncWrapperWait_start
-        parameters:
-          requestBody: $inputs.startRequest
+        operationId: syncWrapperWait_start
+        x-source: syncWrapperWait
+        requestBody:
+          contentType: application/json
+          payload: $inputs.startRequest
         outputs:
           journeyId: $response.body.journeyId
-      - name: submitCompletionEvent
+      - stepId: submitCompletionEvent
         description: Submit a completion event to the waitStep.
-        call:
-          source: syncWrapperWait
-          operationId: syncWrapperWait_waitStep
+        operationId: syncWrapperWait_waitStep
+        x-source: syncWrapperWait
         parameters:
-          path:
-            journeyId: $steps.startJourney.outputs.journeyId
-          requestBody: $inputs.completionEvent
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId
+        requestBody:
+          contentType: application/json
+          payload: $inputs.completionEvent
         outputs:
           phase: $response.body.phase
-      - name: getResult
+      - stepId: getResult
         description: Retrieve the final outcome after the wait step completes.
-        call:
-          source: syncWrapperWait
-          operationId: syncWrapperWait_getResult
+        operationId: syncWrapperWait_getResult
+        x-source: syncWrapperWait
         parameters:
-          path:
-            journeyId: $steps.startJourney.outputs.journeyId
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId

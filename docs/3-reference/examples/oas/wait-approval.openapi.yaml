@@ -1,7 +1,10 @@
 openapi: 3.1.0
 info:
-  title: JourneyForge – wait-approval (provisional)
+  title: "JourneyForge \u2013 wait-approval (provisional)"
   version: 0.1.0
+  description: "JourneyForge \u2013 wait-approval (provisional)"
+  contact:
+    name: JourneyForge
 servers:
   - url: /api/v1
 tags:
@@ -11,17 +14,22 @@ paths:
     post:
       summary: Start wait-approval journey
       operationId: waitApproval_start
-      tags: [wait-approval]
+      tags:
+        - wait-approval
       requestBody:
         required: true
         content:
           application/json:
             schema:
               type: object
-              required: [id, name]
+              required:
+                - id
+                - name
               properties:
-                id: { type: string }
-                name: { type: string }
+                id:
+                  type: string
+                name:
+                  type: string
               additionalProperties: true
       responses:
         "202":
@@ -30,16 +38,19 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/JourneyStartResponse"
+      description: Start wait-approval journey
   /journeys/{journeyId}:
     get:
       summary: Get journey status
       operationId: waitApproval_getStatus
-      tags: [wait-approval]
+      tags:
+        - wait-approval
       parameters:
         - in: path
           name: journeyId
           required: true
-          schema: { type: string }
+          schema:
+            type: string
       responses:
         "200":
           description: Status
@@ -47,16 +58,19 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/JourneyStatus"
+      description: Get journey status
   /journeys/{journeyId}/steps/waitForApproval:
     post:
       summary: Provide manual approval input for step waitForApproval
       operationId: waitApproval_waitForApproval
-      tags: [wait-approval]
+      tags:
+        - wait-approval
       parameters:
         - in: path
           name: journeyId
           required: true
-          schema: { type: string }
+          schema:
+            type: string
       requestBody:
         required: true
         content:
@@ -64,11 +78,14 @@ paths:
             schema:
               type: object
               description: Manual approval input
-              required: [decision]
+              required:
+                - decision
               properties:
                 decision:
                   type: string
-                  enum: [approved, rejected]
+                  enum:
+                    - approved
+                    - rejected
                 comment:
                   type: string
               additionalProperties: false
@@ -79,16 +96,19 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/WaitApprovalStepResponse"
+      description: Provide manual approval input for step waitForApproval
   /journeys/{journeyId}/result:
     get:
       summary: Retrieve final outcome
       operationId: waitApproval_getResult
-      tags: [wait-approval]
+      tags:
+        - wait-approval
       parameters:
         - in: path
           name: journeyId
           required: true
-          schema: { type: string }
+          schema:
+            type: string
       responses:
         "200":
           description: Final outcome
@@ -98,89 +118,161 @@ paths:
                 $ref: "#/components/schemas/JourneyOutcome"
         "409":
           description: Journey not terminal yet
+      description: Retrieve final outcome
 components:
   schemas:
     JourneyStartResponse:
       type: object
-      required: [journeyId, journeyName, statusUrl]
+      required:
+        - journeyId
+        - journeyName
+        - statusUrl
       properties:
-        journeyId: { type: string }
-        journeyName: { type: string }
-        statusUrl: { type: string, format: uri }
+        journeyId:
+          type: string
+        journeyName:
+          type: string
+        statusUrl:
+          type: string
+          format: uri
         _links:
-          description: |
-            Optional hypermedia links (HAL-style) describing related resources and next actions.
-            Presence is controlled per-journey via spec.httpSurface.links.enabled; when enabled,
+          description: "Optional hypermedia links (HAL-style) describing related resources
+            and next actions.
+
+            Presence is controlled per-journey via spec.httpSurface.links.enabled;
+            when enabled,
+
             the engine typically includes at least `self` and `result` links.
+
+            "
           type: object
           additionalProperties:
             $ref: "#/components/schemas/Link"
     JourneyStatus:
       type: object
-      required: [journeyId, journeyName, phase, currentState, updatedAt]
+      required:
+        - journeyId
+        - journeyName
+        - phase
+        - currentState
+        - updatedAt
       properties:
-        journeyId: { type: string }
-        journeyName: { type: string }
-        phase: { type: string, enum: [Running, Succeeded, Failed] }
-        currentState: { type: string }
-        updatedAt: { type: string, format: date-time }
+        journeyId:
+          type: string
+        journeyName:
+          type: string
+        phase:
+          type: string
+          enum:
+            - Running
+            - Succeeded
+            - Failed
+        currentState:
+          type: string
+        updatedAt:
+          type: string
+          format: date-time
         tags:
           type: array
-          description: |
-            Effective tags for this journey instance, derived from the journey's metadata.tags
-            and any instance tag sourcing rules. Tags are non-sensitive, short identifiers intended
+          description: "Effective tags for this journey instance, derived from the
+            journey's metadata.tags
+
+            and any instance tag sourcing rules. Tags are non-sensitive, short identifiers
+            intended
+
             for filtering and grouping.
-          items: { type: string }
+
+            "
+          items:
+            type: string
         attributes:
           type: object
-          description: |
-            Lightweight metadata for this journey instance, such as subjectId, tenantId, channel,
-            and correlation ids (orderId, paymentIntentId, crmCaseId). Values are strings and
+          description: "Lightweight metadata for this journey instance, such as subjectId,
+            tenantId, channel,
+
+            and correlation ids (orderId, paymentIntentId, crmCaseId). Values are
+            strings and
+
             MUST respect the limits configured via MetadataLimits.
+
+            "
           additionalProperties:
             type: string
         _links:
-          description: |
-            Optional hypermedia links (HAL-style) describing related resources and next actions.
-            When links are enabled for a journey, the engine SHOULD include at least `self` and `result`,
-            and MAY include links for active step endpoints. For step links, the relation name MUST equal
-            the external-input state id (for example `waitForApproval`, `confirm`). When the journey is
-            Running and user-cancellable, the engine SHOULD also expose a `cancel` link pointing to the
-            canonical cancellation step `/api/v1/journeys/{journeyId}/steps/cancel` with method POST.
+          description: "Optional hypermedia links (HAL-style) describing related resources
+            and next actions.
+
+            When links are enabled for a journey, the engine SHOULD include at least
+            `self` and `result`,
+
+            and MAY include links for active step endpoints. For step links, the relation
+            name MUST equal
+
+            the external-input state id (for example `waitForApproval`, `confirm`).
+            When the journey is
+
+            Running and user-cancellable, the engine SHOULD also expose a `cancel`
+            link pointing to the
+
+            canonical cancellation step `/api/v1/journeys/{journeyId}/steps/cancel`
+            with method POST.
+
+            "
           type: object
           additionalProperties:
             $ref: "#/components/schemas/Link"
     JourneyOutcome:
       allOf:
         - type: object
-          required: [journeyId, journeyName, phase]
+          required:
+            - journeyId
+            - journeyName
+            - phase
           properties:
-            journeyId: { type: string }
-            journeyName: { type: string }
-            phase: { type: string, enum: [Succeeded, Failed] }
+            journeyId:
+              type: string
+            journeyName:
+              type: string
+            phase:
+              type: string
+              enum:
+                - Succeeded
+                - Failed
             output: {}
             error:
               type: object
               properties:
-                code: { type: string }
-                reason: { type: string }
+                code:
+                  type: string
+                reason:
+                  type: string
             tags:
               type: array
-              description: |
-                Effective tags for this journey instance, repeated here for convenience when reading
+              description: "Effective tags for this journey instance, repeated here
+                for convenience when reading
+
                 final outcomes.
-              items: { type: string }
+
+                "
+              items:
+                type: string
             attributes:
               type: object
-              description: |
-                Instance attributes such as subjectId, tenantId, channel, and correlation ids,
+              description: "Instance attributes such as subjectId, tenantId, channel,
+                and correlation ids,
+
                 repeated here for convenience when reading final outcomes.
+
+                "
               additionalProperties:
                 type: string
             _links:
-              description: |
-                Optional hypermedia links (HAL-style) describing related resources (for example `self`)
+              description: "Optional hypermedia links (HAL-style) describing related
+                resources (for example `self`)
+
                 when a journey is terminal. Presence is controlled per-journey via spec.httpSurface.links.enabled.
+
+                "
               type: object
               additionalProperties:
                 $ref: "#/components/schemas/Link"
@@ -189,19 +281,25 @@ components:
             output:
               type: object
               properties:
-                status: { type: integer }
-                ok: { type: boolean }
-                body: { type: object }
+                status:
+                  type: integer
+                ok:
+                  type: boolean
+                body:
+                  type: object
               additionalProperties: true
     WaitApprovalStepResponse:
       allOf:
         - $ref: "#/components/schemas/JourneyStatus"
         - type: object
-          description: Additional top-level fields returned from the waitForApproval step.
+          description: Additional top-level fields returned from the waitForApproval
+            step.
           properties:
             decision:
               type: string
-              enum: [approved, rejected]
+              enum:
+                - approved
+                - rejected
               description: The decision recorded at the approval step.
             comment:
               type: string
@@ -209,11 +307,13 @@ components:
           additionalProperties: true
     Link:
       type: object
-      required: [href]
+      required:
+        - href
       properties:
         href:
           type: string
           description: Target URI for this link
         method:
           type: string
-          description: HTTP method to use when following this link (for example GET, POST, DELETE)
+          description: HTTP method to use when following this link (for example GET,
+            POST, DELETE)

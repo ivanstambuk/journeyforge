@@ -3,19 +3,20 @@ info:
   title: JourneyForge – http-failure-branch workflows
   version: 0.1.0
   summary: Workflows for HTTP failure branching.
+  description: Workflows for HTTP failure branching.
 sourceDescriptions:
   - name: httpFailureBranch
     type: openapi
     url: ../oas/http-failure-branch.openapi.yaml
 workflows:
-  http-failure-branch-happy-path:
+  - workflowId: http-failure-branch-happy-path
     summary: Start an http-failure-branch journey and retrieve the final outcome.
-    sourceDescriptions:
-      - httpFailureBranch
+    description: Start an http-failure-branch journey and retrieve the final outcome.
     inputs:
-      startRequest:
-        description: Initial payload for the http-failure-branch journey.
-        schema:
+      type: object
+      properties:
+        startRequest:
+          description: Initial payload for the http-failure-branch journey.
           type: object
           required:
             - inputId
@@ -24,20 +25,20 @@ workflows:
               type: string
           additionalProperties: true
     steps:
-      - name: startJourney
+      - stepId: startJourney
         description: Start a new http-failure-branch journey instance.
-        call:
-          source: httpFailureBranch
-          operationId: httpFailureBranch_start
-        parameters:
-          requestBody: $inputs.startRequest
+        operationId: httpFailureBranch_start
+        x-source: httpFailureBranch
+        requestBody:
+          contentType: application/json
+          payload: $inputs.startRequest
         outputs:
           journeyId: $response.body.journeyId
-      - name: getResult
+      - stepId: getResult
         description: Retrieve the final outcome after failure branching.
-        call:
-          source: httpFailureBranch
-          operationId: httpFailureBranch_getResult
+        operationId: httpFailureBranch_getResult
+        x-source: httpFailureBranch
         parameters:
-          path:
-            journeyId: $steps.startJourney.outputs.journeyId
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId

@@ -1,6 +1,12 @@
 openapi: 3.1.0
-info: { title: Accounts API, version: 1.0.0 }
-servers: [{ url: https://api.example.com }]
+info:
+  title: Accounts API
+  version: 1.0.0
+  description: Accounts API
+  contact:
+    name: JourneyForge
+servers:
+  - url: https://api.example.com
 paths:
   /accounts:
     post:
@@ -12,7 +18,20 @@ paths:
             schema:
               type: object
               properties:
-                ownerId: { type: string }
-                email: { type: string, format: email }
+                ownerId:
+                  type: string
+                email:
+                  type: string
+                  format: email
       responses:
-        "201": { description: Created, content: { application/json: { schema: { type: object } } } }
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                type: object
+      description: accounts POST /accounts
+      tags:
+        - accounts
+tags:
+  - name: accounts

@@ -2,6 +2,9 @@ openapi: 3.1.0
 info:
   title: Payments API
   version: 1.0.0
+  description: Payments API
+  contact:
+    name: JourneyForge
 servers:
   - url: https://payments.example.com
 paths:
@@ -12,7 +15,8 @@ paths:
         - in: path
           name: paymentId
           required: true
-          schema: { type: string }
+          schema:
+            type: string
       requestBody:
         required: true
         content:
@@ -20,10 +24,16 @@ paths:
             schema:
               type: object
               properties:
-                amount: { type: number }
-                currency: { type: string }
+                amount:
+                  type: number
+                currency:
+                  type: string
       responses:
-        "202": { description: Authorization accepted }
+        "202":
+          description: Authorization accepted
+      description: payments POST /payments/{paymentId}/authorize
+      tags:
+        - payments
   /payments/{paymentId}/capture:
     post:
       operationId: capturePayment
@@ -31,7 +41,8 @@ paths:
         - in: path
           name: paymentId
           required: true
-          schema: { type: string }
+          schema:
+            type: string
       requestBody:
         required: true
         content:
@@ -39,6 +50,13 @@ paths:
             schema:
               type: object
               properties:
-                amount: { type: number }
+                amount:
+                  type: number
       responses:
-        "200": { description: Captured }
+        "200":
+          description: Captured
+      description: payments POST /payments/{paymentId}/capture
+      tags:
+        - payments
+tags:
+  - name: payments

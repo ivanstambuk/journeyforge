@@ -1,6 +1,12 @@
 openapi: 3.1.0
-info: { title: ServiceA API, version: 1.0.0 }
-servers: [{ url: https://api.example.com }]
+info:
+  title: ServiceA API
+  version: 1.0.0
+  description: ServiceA API
+  contact:
+    name: JourneyForge
+servers:
+  - url: https://api.example.com
 paths:
   /serviceA/{id}:
     get:
@@ -9,7 +15,19 @@ paths:
         - in: path
           name: id
           required: true
-          schema: { type: string }
+          schema:
+            type: string
       responses:
-        "200": { description: OK, content: { application/json: { schema: { type: object } } } }
-        "500": { description: Error }
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        "500":
+          description: Error
+      description: serviceA GET /serviceA/{id}
+      tags:
+        - serviceA
+tags:
+  - name: serviceA

@@ -3,19 +3,20 @@ info:
   title: JourneyForge – wait-approval workflows
   version: 0.1.0
   summary: Workflows for manual approval over the wait-approval journey.
+  description: Workflows for manual approval over the wait-approval journey.
 sourceDescriptions:
   - name: waitApproval
     type: openapi
     url: ../oas/wait-approval.openapi.yaml
 workflows:
-  wait-approval-happy-path:
+  - workflowId: wait-approval-happy-path
     summary: Start a wait-approval journey, approve, and read the final result.
-    sourceDescriptions:
-      - waitApproval
+    description: Start a wait-approval journey, approve, and read the final result.
     inputs:
-      startRequest:
-        description: Initial payload for the wait-approval journey.
-        schema:
+      type: object
+      properties:
+        startRequest:
+          description: Initial payload for the wait-approval journey.
           type: object
           required:
             - id
@@ -26,9 +27,8 @@ workflows:
             name:
               type: string
           additionalProperties: true
-      approvalInput:
-        description: Manual approval decision (approved).
-        schema:
+        approvalInput:
+          description: Manual approval decision (approved).
           type: object
           required:
             - decision
@@ -41,43 +41,45 @@ workflows:
               type: string
           additionalProperties: false
     steps:
-      - name: startJourney
+      - stepId: startJourney
         description: Start a new wait-approval journey instance.
-        call:
-          source: waitApproval
-          operationId: waitApproval_start
-        parameters:
-          requestBody: $inputs.startRequest
+        operationId: waitApproval_start
+        x-source: waitApproval
+        requestBody:
+          contentType: application/json
+          payload: $inputs.startRequest
         outputs:
           journeyId: $response.body.journeyId
-      - name: provideApproval
+      - stepId: provideApproval
         description: Provide an approved decision to the waitForApproval step.
-        call:
-          source: waitApproval
-          operationId: waitApproval_waitForApproval
+        operationId: waitApproval_waitForApproval
+        x-source: waitApproval
         parameters:
-          path:
-            journeyId: $steps.startJourney.outputs.journeyId
-          requestBody: $inputs.approvalInput
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId
+        requestBody:
+          contentType: application/json
+          payload: $inputs.approvalInput
         outputs:
           phase: $response.body.phase
-      - name: getResult
+      - stepId: getResult
         description: Retrieve the final outcome after approval.
-        call:
-          source: waitApproval
-          operationId: waitApproval_getResult
+        operationId: waitApproval_getResult
+        x-source: waitApproval
         parameters:
-          path:
-            journeyId: $steps.startJourney.outputs.journeyId
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId
 
-  wait-approval-rejected:
+  - workflowId: wait-approval-rejected
     summary: Start a wait-approval journey, reject, and read the failure outcome.
-    sourceDescriptions:
-      - waitApproval
+    description: Start a wait-approval journey, reject, and read the failure outcome.
     inputs:
-      startRequest:
-        description: Initial payload for the wait-approval journey.
-        schema:
+      type: object
+      properties:
+        startRequest:
+          description: Initial payload for the wait-approval journey.
           type: object
           required:
             - id
@@ -88,9 +90,8 @@ workflows:
             name:
               type: string
           additionalProperties: true
-      rejectionInput:
-        description: Manual approval decision (rejected).
-        schema:
+        rejectionInput:
+          description: Manual approval decision (rejected).
           type: object
           required:
             - decision
@@ -103,31 +104,33 @@ workflows:
               type: string
           additionalProperties: false
     steps:
-      - name: startJourney
+      - stepId: startJourney
         description: Start a new wait-approval journey instance.
-        call:
-          source: waitApproval
-          operationId: waitApproval_start
-        parameters:
-          requestBody: $inputs.startRequest
+        operationId: waitApproval_start
+        x-source: waitApproval
+        requestBody:
+          contentType: application/json
+          payload: $inputs.startRequest
         outputs:
           journeyId: $response.body.journeyId
-      - name: provideRejection
+      - stepId: provideRejection
         description: Provide a rejected decision to the waitForApproval step.
-        call:
-          source: waitApproval
-          operationId: waitApproval_waitForApproval
+        operationId: waitApproval_waitForApproval
+        x-source: waitApproval
         parameters:
-          path:
-            journeyId: $steps.startJourney.outputs.journeyId
-          requestBody: $inputs.rejectionInput
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId
+        requestBody:
+          contentType: application/json
+          payload: $inputs.rejectionInput
         outputs:
           phase: $response.body.phase
-      - name: getResult
+      - stepId: getResult
         description: Retrieve the final (failed) outcome after rejection.
-        call:
-          source: waitApproval
-          operationId: waitApproval_getResult
+        operationId: waitApproval_getResult
+        x-source: waitApproval
         parameters:
-          path:
-            journeyId: $steps.startJourney.outputs.journeyId
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId

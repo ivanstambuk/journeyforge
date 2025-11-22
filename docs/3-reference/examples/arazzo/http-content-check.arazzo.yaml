@@ -3,19 +3,20 @@ info:
   title: JourneyForge – http-content-check workflows
   version: 0.1.0
   summary: Workflows for HTTP status and content checks.
+  description: Workflows for HTTP status and content checks.
 sourceDescriptions:
   - name: httpContentCheck
     type: openapi
     url: ../oas/http-content-check.openapi.yaml
 workflows:
-  http-content-check-happy-path:
+  - workflowId: http-content-check-happy-path
     summary: Start an http-content-check journey and retrieve the final outcome.
-    sourceDescriptions:
-      - httpContentCheck
+    description: Start an http-content-check journey and retrieve the final outcome.
     inputs:
-      startRequest:
-        description: Initial payload for the http-content-check journey.
-        schema:
+      type: object
+      properties:
+        startRequest:
+          description: Initial payload for the http-content-check journey.
           type: object
           required:
             - inputId
@@ -24,20 +25,20 @@ workflows:
               type: string
           additionalProperties: true
     steps:
-      - name: startJourney
+      - stepId: startJourney
         description: Start a new http-content-check journey instance.
-        call:
-          source: httpContentCheck
-          operationId: httpContentCheck_start
-        parameters:
-          requestBody: $inputs.startRequest
+        operationId: httpContentCheck_start
+        x-source: httpContentCheck
+        requestBody:
+          contentType: application/json
+          payload: $inputs.startRequest
         outputs:
           journeyId: $response.body.journeyId
-      - name: getResult
+      - stepId: getResult
         description: Retrieve the final outcome after the content check.
-        call:
-          source: httpContentCheck
-          operationId: httpContentCheck_getResult
+        operationId: httpContentCheck_getResult
+        x-source: httpContentCheck
         parameters:
-          path:
-            journeyId: $steps.startJourney.outputs.journeyId
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId

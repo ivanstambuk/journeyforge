@@ -1,3 +1,5 @@
+import org.gradle.api.tasks.Exec
+
 plugins {
     base
     id("com.diffplug.spotless") version "6.25.0"
@@ -52,11 +54,39 @@ spotless {
     }
 }
 
+tasks.register<Exec>("lintOas") {
+    group = "verification"
+    description = "Lint OpenAPI specs under docs/ with Spectral (Q-005)."
+    commandLine(
+        "npx",
+        "--yes",
+        "@stoplight/spectral-cli",
+        "lint",
+        "--fail-severity=warn",
+        "docs/3-reference/**/*.openapi.yaml"
+    )
+}
+
+tasks.register<Exec>("lintArazzo") {
+    group = "verification"
+    description = "Lint Arazzo workflows under docs/ with Spectral (Q-005)."
+    commandLine(
+        "npx",
+        "--yes",
+        "@stoplight/spectral-cli",
+        "lint",
+        "-r",
+        ".spectral-arazzo.yaml",
+        "--fail-severity=warn",
+        "docs/3-reference/examples/arazzo/*.arazzo.yaml"
+    )
+}
+
 // Minimal quality gate: formatting + tests
 val qualityGate = tasks.register("qualityGate") {
     group = "verification"
     description = "Runs the minimal quality automation gate"
-    dependsOn("spotlessCheck", "check")
+    dependsOn("spotlessCheck", "check", "lintOas", "lintArazzo")
 }
 
 subprojects {

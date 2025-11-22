@@ -3,19 +3,20 @@ info:
   title: JourneyForge – metadata-from-payload workflows
   version: 0.1.0
   summary: Workflow for a journey that binds tags and attributes from the start payload.
+  description: Workflow for a journey that binds tags and attributes from the start payload.
 sourceDescriptions:
   - name: metadataFromPayload
     type: openapi
     url: ../oas/metadata-from-payload.openapi.yaml
 workflows:
-  metadata-from-payload-happy-path:
+  - workflowId: metadata-from-payload-happy-path
     summary: Start the metadata-from-payload journey and read the final outcome.
-    sourceDescriptions:
-      - metadataFromPayload
+    description: Start the metadata-from-payload journey and read the final outcome.
     inputs:
-      startRequest:
-        description: Initial payload for the metadata-from-payload journey.
-        schema:
+      type: object
+      properties:
+        startRequest:
+          description: Initial payload for the metadata-from-payload journey.
           type: object
           required:
             - order
@@ -23,7 +24,8 @@ workflows:
           properties:
             order:
               type: object
-              required: [id]
+              required:
+                - id
               additionalProperties: true
               properties:
                 id:
@@ -38,20 +40,20 @@ workflows:
               type: string
           additionalProperties: true
     steps:
-      - name: startJourney
+      - stepId: startJourney
         description: Start a new metadata-from-payload journey instance.
-        call:
-          source: metadataFromPayload
-          operationId: metadataFromPayload_start
-        parameters:
-          requestBody: $inputs.startRequest
+        operationId: metadataFromPayload_start
+        x-source: metadataFromPayload
+        requestBody:
+          contentType: application/json
+          payload: $inputs.startRequest
         outputs:
           journeyId: $response.body.journeyId
-      - name: getResult
+      - stepId: getResult
         description: Retrieve the final outcome for the journey instance.
-        call:
-          source: metadataFromPayload
-          operationId: metadataFromPayload_getResult
+        operationId: metadataFromPayload_getResult
+        x-source: metadataFromPayload
         parameters:
-          path:
-            journeyId: $steps.startJourney.outputs.journeyId
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId

@@ -1,6 +1,12 @@
 openapi: 3.1.0
-info: { title: Items API, version: 1.0.0 }
-servers: [{ url: https://api.example.com }]
+info:
+  title: Items API
+  version: 1.0.0
+  description: Items API
+  contact:
+    name: JourneyForge
+servers:
+  - url: https://api.example.com
 paths:
   /items/{id}:
     get:
@@ -9,35 +15,58 @@ paths:
         - in: path
           name: id
           required: true
-          schema: { type: string }
+          schema:
+            type: string
       responses:
-        "200": { description: OK, content: { application/json: { schema: { type: object } } } }
-        "404": { description: Not Found }
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+        "404":
+          description: Not Found
+      description: items GET /items/{id}
+      tags:
+        - items
     put:
       operationId: updateItemById
       parameters:
         - in: path
           name: id
           required: true
-          schema: { type: string }
+          schema:
+            type: string
       requestBody:
         required: true
         content:
           application/json:
-            schema: { type: object }
+            schema:
+              type: object
       responses:
-        "200": { description: Updated }
-        "204": { description: No Content }
+        "200":
+          description: Updated
+        "204":
+          description: No Content
+      description: items PUT /items/{id}
+      tags:
+        - items
     delete:
       operationId: deleteItemById
       parameters:
         - in: path
           name: id
           required: true
-          schema: { type: string }
+          schema:
+            type: string
       responses:
-        "200": { description: Deleted }
-        "204": { description: No Content }
+        "200":
+          description: Deleted
+        "204":
+          description: No Content
+      description: items DELETE /items/{id}
+      tags:
+        - items
   /items:
     post:
       operationId: createItem
@@ -48,10 +77,20 @@ paths:
             schema:
               type: object
               properties:
-                id: { type: string }
-                name: { type: string }
+                id:
+                  type: string
+                name:
+                  type: string
       responses:
-        "201": { description: Created, content: { application/json: { schema: { type: object } } } }
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                type: object
+      description: items POST /items
+      tags:
+        - items
   /trace:
     get:
       operationId: getTrace
@@ -59,9 +98,18 @@ paths:
         - in: header
           name: traceparent
           required: true
-          schema: { type: string }
+          schema:
+            type: string
       responses:
-        "200": { description: OK, content: { application/json: { schema: { type: object } } } }
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+      description: items GET /trace
+      tags:
+        - items
   /slow/{id}:
     get:
       operationId: getSlowById
@@ -69,9 +117,18 @@ paths:
         - in: path
           name: id
           required: true
-          schema: { type: string }
+          schema:
+            type: string
       responses:
-        "200": { description: OK, content: { application/json: { schema: { type: object } } } }
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+      description: items GET /slow/{id}
+      tags:
+        - items
   /cache/{key}:
     delete:
       operationId: purgeCacheByKey
@@ -79,6 +136,13 @@ paths:
         - in: path
           name: key
           required: true
-          schema: { type: string }
+          schema:
+            type: string
       responses:
-        "204": { description: No Content }
+        "204":
+          description: No Content
+      description: items DELETE /cache/{key}
+      tags:
+        - items
+tags:
+  - name: items

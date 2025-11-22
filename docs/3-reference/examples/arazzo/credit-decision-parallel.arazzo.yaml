@@ -3,36 +3,37 @@ info:
   title: JourneyForge – credit-decision-parallel workflows
   version: 0.1.0
   summary: Workflows for parallel credit decision evaluation.
+  description: Workflows for parallel credit decision evaluation.
 sourceDescriptions:
   - name: creditDecisionParallel
     type: openapi
     url: ../oas/credit-decision-parallel.openapi.yaml
 workflows:
-  credit-decision-parallel-happy-path:
+  - workflowId: credit-decision-parallel-happy-path
     summary: Start a credit-decision-parallel journey and retrieve the final credit decision.
-    sourceDescriptions:
-      - creditDecisionParallel
+    description: Start a credit-decision-parallel journey and retrieve the final credit decision.
     inputs:
-      startRequest:
-        description: Initial payload for the credit-decision-parallel journey.
-        schema:
+      type: object
+      properties:
+        startRequest:
+          description: Initial payload for the credit-decision-parallel journey.
           type: object
           additionalProperties: true
     steps:
-      - name: startJourney
+      - stepId: startJourney
         description: Start a new credit-decision-parallel journey instance.
-        call:
-          source: creditDecisionParallel
-          operationId: creditDecisionParallel_start
-        parameters:
-          requestBody: $inputs.startRequest
+        operationId: creditDecisionParallel_start
+        x-source: creditDecisionParallel
+        requestBody:
+          contentType: application/json
+          payload: $inputs.startRequest
         outputs:
           journeyId: $response.body.journeyId
-      - name: getResult
+      - stepId: getResult
         description: Retrieve the final parallel credit decision outcome.
-        call:
-          source: creditDecisionParallel
-          operationId: creditDecisionParallel_getResult
+        operationId: creditDecisionParallel_getResult
+        x-source: creditDecisionParallel
         parameters:
-          path:
-            journeyId: $steps.startJourney.outputs.journeyId
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId

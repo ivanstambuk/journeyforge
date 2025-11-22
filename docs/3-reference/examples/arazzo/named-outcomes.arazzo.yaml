@@ -3,19 +3,20 @@ info:
   title: JourneyForge – named-outcomes workflows
   version: 0.1.0
   summary: Workflows for journeys with named outcomes.
+  description: Workflows for journeys with named outcomes.
 sourceDescriptions:
   - name: namedOutcomes
     type: openapi
     url: ../oas/named-outcomes.openapi.yaml
 workflows:
-  named-outcomes-happy-path:
+  - workflowId: named-outcomes-happy-path
     summary: Start a named-outcomes journey and retrieve the final outcome.
-    sourceDescriptions:
-      - namedOutcomes
+    description: Start a named-outcomes journey and retrieve the final outcome.
     inputs:
-      startRequest:
-        description: Initial payload for the named-outcomes journey.
-        schema:
+      type: object
+      properties:
+        startRequest:
+          description: Initial payload for the named-outcomes journey.
           type: object
           required:
             - amount
@@ -24,20 +25,20 @@ workflows:
               type: number
           additionalProperties: true
     steps:
-      - name: startJourney
+      - stepId: startJourney
         description: Start a new named-outcomes journey instance.
-        call:
-          source: namedOutcomes
-          operationId: namedOutcomes_start
-        parameters:
-          requestBody: $inputs.startRequest
+        operationId: namedOutcomes_start
+        x-source: namedOutcomes
+        requestBody:
+          contentType: application/json
+          payload: $inputs.startRequest
         outputs:
           journeyId: $response.body.journeyId
-      - name: getResult
+      - stepId: getResult
         description: Retrieve the final outcome including named outcome classification.
-        call:
-          source: namedOutcomes
-          operationId: namedOutcomes_getResult
+        operationId: namedOutcomes_getResult
+        x-source: namedOutcomes
         parameters:
-          path:
-            journeyId: $steps.startJourney.outputs.journeyId
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId

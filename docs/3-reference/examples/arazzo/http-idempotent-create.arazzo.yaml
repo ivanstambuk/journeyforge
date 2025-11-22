@@ -3,36 +3,37 @@ info:
   title: JourneyForge – http-idempotent-create workflows
   version: 0.1.0
   summary: Workflows for idempotent create-or-get semantics.
+  description: Workflows for idempotent create-or-get semantics.
 sourceDescriptions:
   - name: httpIdempotentCreate
     type: openapi
     url: ../oas/http-idempotent-create.openapi.yaml
 workflows:
-  http-idempotent-create-happy-path:
+  - workflowId: http-idempotent-create-happy-path
     summary: Start an http-idempotent-create journey and retrieve the final outcome.
-    sourceDescriptions:
-      - httpIdempotentCreate
+    description: Start an http-idempotent-create journey and retrieve the final outcome.
     inputs:
-      startRequest:
-        description: Initial payload for the http-idempotent-create journey.
-        schema:
+      type: object
+      properties:
+        startRequest:
+          description: Initial payload for the http-idempotent-create journey.
           type: object
           additionalProperties: true
     steps:
-      - name: startJourney
+      - stepId: startJourney
         description: Start a new http-idempotent-create journey instance.
-        call:
-          source: httpIdempotentCreate
-          operationId: httpIdempotentCreate_start
-        parameters:
-          requestBody: $inputs.startRequest
+        operationId: httpIdempotentCreate_start
+        x-source: httpIdempotentCreate
+        requestBody:
+          contentType: application/json
+          payload: $inputs.startRequest
         outputs:
           journeyId: $response.body.journeyId
-      - name: getResult
+      - stepId: getResult
         description: Retrieve the final outcome with idempotent semantics applied.
-        call:
-          source: httpIdempotentCreate
-          operationId: httpIdempotentCreate_getResult
+        operationId: httpIdempotentCreate_getResult
+        x-source: httpIdempotentCreate
         parameters:
-          path:
-            journeyId: $steps.startJourney.outputs.journeyId
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId

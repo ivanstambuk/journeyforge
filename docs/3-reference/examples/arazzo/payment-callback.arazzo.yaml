@@ -3,19 +3,20 @@ info:
   title: JourneyForge – payment-callback workflows
   version: 0.1.0
   summary: Workflows for payment authorization and webhook callback completion.
+  description: Workflows for payment authorization and webhook callback completion.
 sourceDescriptions:
   - name: paymentCallback
     type: openapi
     url: ../oas/payment-callback.openapi.yaml
 workflows:
-  payment-callback-happy-path:
+  - workflowId: payment-callback-happy-path
     summary: Start a payment-callback journey, wait for a SUCCESS callback (from the provider), and read the final result.
-    sourceDescriptions:
-      - paymentCallback
+    description: Start a payment-callback journey, wait for a SUCCESS callback (from the provider), and read the final result.
     inputs:
-      startRequest:
-        description: Initial payment details for the payment-callback journey.
-        schema:
+      type: object
+      properties:
+        startRequest:
+          description: Initial payment details for the payment-callback journey.
           type: object
           required:
             - paymentId
@@ -30,45 +31,42 @@ workflows:
               type: string
           additionalProperties: true
     steps:
-      - name: startJourney
+      - stepId: startJourney
         description: Start a new payment-callback journey instance.
-        call:
-          source: paymentCallback
-          operationId: paymentCallback_start
-        parameters:
-          requestBody: $inputs.startRequest
+        operationId: paymentCallback_start
+        x-source: paymentCallback
+        requestBody:
+          contentType: application/json
+          payload: $inputs.startRequest
         outputs:
           journeyId: $response.body.journeyId
-      - name: getStatusWhilePending
+      - stepId: getStatusWhilePending
         description: Optionally poll journey status while waiting for the callback.
-        call:
-          source: paymentCallback
-          operationId: paymentCallback_getStatus
+        operationId: paymentCallback_getStatus
+        x-source: paymentCallback
         parameters:
-          path:
-            journeyId: $steps.startJourney.outputs.journeyId
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId
         outputs:
           phase: $response.body.phase
-      - name: getResult
+      - stepId: getResult
         description: Retrieve the final outcome after a successful callback.
-        call:
-          source: paymentCallback
-          operationId: paymentCallback_getResult
+        operationId: paymentCallback_getResult
+        x-source: paymentCallback
         parameters:
-          path:
-            journeyId: $steps.startJourney.outputs.journeyId
-    successCriteria:
-      - name: paymentSucceeded
-        condition: $steps.getResult.response.body.output.status == "SUCCESS"
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId
 
-  payment-callback-failed:
+  - workflowId: payment-callback-failed
     summary: Start a payment-callback journey, wait for a FAILED callback or timeout, and read the failure outcome.
-    sourceDescriptions:
-      - paymentCallback
+    description: Start a payment-callback journey, wait for a FAILED callback or timeout, and read the failure outcome.
     inputs:
-      startRequest:
-        description: Initial payment details for the payment-callback journey.
-        schema:
+      type: object
+      properties:
+        startRequest:
+          description: Initial payment details for the payment-callback journey.
           type: object
           required:
             - paymentId
@@ -83,33 +81,30 @@ workflows:
               type: string
           additionalProperties: true
     steps:
-      - name: startJourney
+      - stepId: startJourney
         description: Start a new payment-callback journey instance.
-        call:
-          source: paymentCallback
-          operationId: paymentCallback_start
-        parameters:
-          requestBody: $inputs.startRequest
+        operationId: paymentCallback_start
+        x-source: paymentCallback
+        requestBody:
+          contentType: application/json
+          payload: $inputs.startRequest
         outputs:
           journeyId: $response.body.journeyId
-      - name: getStatusWhilePending
+      - stepId: getStatusWhilePending
         description: Optionally poll journey status while waiting for the callback.
-        call:
-          source: paymentCallback
-          operationId: paymentCallback_getStatus
+        operationId: paymentCallback_getStatus
+        x-source: paymentCallback
         parameters:
-          path:
-            journeyId: $steps.startJourney.outputs.journeyId
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId
         outputs:
           phase: $response.body.phase
-      - name: getResult
+      - stepId: getResult
         description: Retrieve the final (failed) outcome after the callback.
-        call:
-          source: paymentCallback
-          operationId: paymentCallback_getResult
+        operationId: paymentCallback_getResult
+        x-source: paymentCallback
         parameters:
-          path:
-            journeyId: $steps.startJourney.outputs.journeyId
-    successCriteria:
-      - name: paymentFailed
-        condition: $steps.getResult.response.body.output.status == "FAILED"
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId

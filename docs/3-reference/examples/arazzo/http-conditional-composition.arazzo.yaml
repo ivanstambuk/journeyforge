@@ -3,36 +3,37 @@ info:
   title: JourneyForge – http-conditional-composition workflows
   version: 0.1.0
   summary: Workflows for conditional HTTP composition based on context.
+  description: Workflows for conditional HTTP composition based on context.
 sourceDescriptions:
   - name: httpConditionalComposition
     type: openapi
     url: ../oas/http-conditional-composition.openapi.yaml
 workflows:
-  http-conditional-composition-happy-path:
+  - workflowId: http-conditional-composition-happy-path
     summary: Start an http-conditional-composition journey and retrieve the final outcome.
-    sourceDescriptions:
-      - httpConditionalComposition
+    description: Start an http-conditional-composition journey and retrieve the final outcome.
     inputs:
-      startRequest:
-        description: Initial payload for the http-conditional-composition journey.
-        schema:
+      type: object
+      properties:
+        startRequest:
+          description: Initial payload for the http-conditional-composition journey.
           type: object
           additionalProperties: true
     steps:
-      - name: startJourney
+      - stepId: startJourney
         description: Start a new http-conditional-composition journey instance.
-        call:
-          source: httpConditionalComposition
-          operationId: httpConditionalComposition_start
-        parameters:
-          requestBody: $inputs.startRequest
+        operationId: httpConditionalComposition_start
+        x-source: httpConditionalComposition
+        requestBody:
+          contentType: application/json
+          payload: $inputs.startRequest
         outputs:
           journeyId: $response.body.journeyId
-      - name: getResult
+      - stepId: getResult
         description: Retrieve the final outcome after conditional composition.
-        call:
-          source: httpConditionalComposition
-          operationId: httpConditionalComposition_getResult
+        operationId: httpConditionalComposition_getResult
+        x-source: httpConditionalComposition
         parameters:
-          path:
-            journeyId: $steps.startJourney.outputs.journeyId
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId
