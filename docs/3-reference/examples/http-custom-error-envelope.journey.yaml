@@ -53,7 +53,7 @@ spec:
         params:
           path: { id: "${context.id}" }
           headers: { Accept: application/json }
-        timeoutMs: 5000  
+        timeoutMs: 5000
         resultVar: api
       next: decide_result
 
@@ -113,7 +113,7 @@ spec:
             }
         target:
           kind: context
-          path: ''
+          path: ""
       next: fail_with_custom_error
 
     fail_with_custom_error:

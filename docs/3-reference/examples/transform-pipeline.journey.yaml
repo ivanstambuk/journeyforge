@@ -45,7 +45,7 @@ spec:
             }
         target:
           kind: context
-          path: ''
+          path: ""
       next: enrich
 
     enrich:
@@ -61,7 +61,7 @@ spec:
             }
         target:
           kind: context
-          path: ''
+          path: ""
       next: project
 
     project:

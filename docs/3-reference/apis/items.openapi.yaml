@@ -1,6 +1,6 @@
 openapi: 3.1.0
 info: { title: Items API, version: 1.0.0 }
-servers: [ { url: https://api.example.com } ]
+servers: [{ url: https://api.example.com }]
 paths:
   /items/{id}:
     get:
@@ -11,8 +11,8 @@ paths:
           required: true
           schema: { type: string }
       responses:
-        '200': { description: OK, content: { application/json: { schema: { type: object } } } }
-        '404': { description: Not Found }
+        "200": { description: OK, content: { application/json: { schema: { type: object } } } }
+        "404": { description: Not Found }
     put:
       operationId: updateItemById
       parameters:
@@ -26,8 +26,8 @@ paths:
           application/json:
             schema: { type: object }
       responses:
-        '200': { description: Updated }
-        '204': { description: No Content }
+        "200": { description: Updated }
+        "204": { description: No Content }
     delete:
       operationId: deleteItemById
       parameters:
@@ -36,8 +36,8 @@ paths:
           required: true
           schema: { type: string }
       responses:
-        '200': { description: Deleted }
-        '204': { description: No Content }
+        "200": { description: Deleted }
+        "204": { description: No Content }
   /items:
     post:
       operationId: createItem
@@ -51,7 +51,7 @@ paths:
                 id: { type: string }
                 name: { type: string }
       responses:
-        '201': { description: Created, content: { application/json: { schema: { type: object } } } }
+        "201": { description: Created, content: { application/json: { schema: { type: object } } } }
   /trace:
     get:
       operationId: getTrace
@@ -61,7 +61,7 @@ paths:
           required: true
           schema: { type: string }
       responses:
-        '200': { description: OK, content: { application/json: { schema: { type: object } } } }
+        "200": { description: OK, content: { application/json: { schema: { type: object } } } }
   /slow/{id}:
     get:
       operationId: getSlowById
@@ -71,7 +71,7 @@ paths:
           required: true
           schema: { type: string }
       responses:
-        '200': { description: OK, content: { application/json: { schema: { type: object } } } }
+        "200": { description: OK, content: { application/json: { schema: { type: object } } } }
   /cache/{key}:
     delete:
       operationId: purgeCacheByKey
@@ -81,4 +81,4 @@ paths:
           required: true
           schema: { type: string }
       responses:
-        '204': { description: No Content }
+        "204": { description: No Content }

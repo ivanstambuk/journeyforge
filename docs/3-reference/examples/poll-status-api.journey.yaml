@@ -32,7 +32,7 @@ spec:
             }
         target:
           kind: context
-          path: ''
+          path: ""
       next: poll
 
     poll:
@@ -82,7 +82,7 @@ spec:
             }
         target:
           kind: context
-          path: ''
+          path: ""
       next: poll
 
     done:
@@ -97,4 +97,3 @@ spec:
     stillRunning:
       type: succeed
       outputVar: status
-

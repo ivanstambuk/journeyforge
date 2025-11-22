@@ -41,4 +41,3 @@ workflows:
         parameters:
           path:
             journeyId: $steps.startJourney.outputs.journeyId
-

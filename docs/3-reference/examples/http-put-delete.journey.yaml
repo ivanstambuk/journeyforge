@@ -57,8 +57,6 @@ spec:
               {
                 name: context.newName
               }
-        params:
-          headers: { Accept: application/json }
         timeoutMs: 5000
         resultVar: put
       next: decide_update

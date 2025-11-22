@@ -31,7 +31,7 @@ spec:
             }
         target:
           kind: context
-          path: ''
+          path: ""
       next: waitForApproval
 
     waitForApproval:
@@ -77,7 +77,7 @@ spec:
             }
         target:
           kind: context
-          path: ''
+          path: ""
       next: decideLoop
 
     decideLoop:
@@ -113,4 +113,3 @@ spec:
       type: fail
       errorCode: APPROVAL_TIMEOUT
       reason: "No approval decision before timeout"
-

@@ -53,7 +53,7 @@ spec:
         method: GET
         url: "https://api.example.com/slow/${context.id}"
         headers: { Accept: application/json }
-        timeoutMs: 1   # intentionally tiny for illustration
+        timeoutMs: 1 # intentionally tiny for illustration
         resultVar: api
       next: decide
 

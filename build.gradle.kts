@@ -12,7 +12,30 @@ repositories {
 
 spotless {
     format("misc") {
-        target("*.md", "*.yml", "*.yaml", "*.json", "*.toml", "*.gitignore")
+        target("*.md", "*.json", "*.toml", "*.gitignore")
+        // Enforce basic whitespace rules for all misc text files.
+        replaceRegex("noTabs", "\t", "  ")
+        trimTrailingWhitespace()
+        endWithNewline()
+    }
+    format("yaml") {
+        // YAML formatting (Related: Q-003 in docs/4-architecture/open-questions.md)
+        target("**/*.yml", "**/*.yaml")
+        prettier()
+            .config(
+                mapOf(
+                    "tabWidth" to 2,
+                    "useTabs" to false,
+                    "singleQuote" to false,
+                    "printWidth" to 100,
+                    "proseWrap" to "preserve",
+                    "trailingComma" to "none",
+                    "endOfLine" to "lf"
+                )
+            )
+            .nodeExecutable("node")
+        // Enforce "no tabs anywhere" for YAML as per spec-format.md / Q-003.
+        replaceRegex("noTabsYaml", "\t", "  ")
         trimTrailingWhitespace()
         endWithNewline()
     }

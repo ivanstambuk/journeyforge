@@ -19,14 +19,14 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/JourneyStartRequest'
+              $ref: "#/components/schemas/JourneyStartRequest"
       responses:
-        '202':
+        "202":
           description: Accepted
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/JourneyStartResponse'
+                $ref: "#/components/schemas/JourneyStartResponse"
   /journeys:
     get:
       summary: List journeys (operator)
@@ -73,7 +73,7 @@ paths:
           schema: { type: string }
           description: Filters by attributes.crmCaseId, when present.
       responses:
-        '200':
+        "200":
           description: Paginated list of journeys
           content:
             application/json:
@@ -84,7 +84,7 @@ paths:
                   items:
                     type: array
                     items:
-                      $ref: '#/components/schemas/JourneyStatus'
+                      $ref: "#/components/schemas/JourneyStatus"
                   nextPageToken:
                     type: string
                     nullable: true
@@ -99,12 +99,12 @@ paths:
           required: true
           schema: { type: string }
       responses:
-        '200':
+        "200":
           description: Current status
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/JourneyStatus'
+                $ref: "#/components/schemas/JourneyStatus"
   /journeys/{journeyId}/result:
     get:
       summary: Retrieve final outcome once completed
@@ -115,13 +115,13 @@ paths:
           required: true
           schema: { type: string }
       responses:
-        '200':
+        "200":
           description: Final outcome (when terminal)
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/JourneyOutcome'
-        '409':
+                $ref: "#/components/schemas/JourneyOutcome"
+        "409":
           description: Journey not terminal yet
   /journeys/{journeyId}/steps/{stepId}:
     post:
@@ -141,15 +141,15 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/JourneyStepRequest'
+              $ref: "#/components/schemas/JourneyStepRequest"
       responses:
-        '200':
+        "200":
           description: Updated journey status after applying the step event
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/JourneyStatus'
-        '409':
+                $ref: "#/components/schemas/JourneyStatus"
+        "409":
           description: Journey is not in a compatible state for this step
 components:
   schemas:
@@ -174,7 +174,7 @@ components:
             the engine typically includes at least `self` and `result` links.
           type: object
           additionalProperties:
-            $ref: '#/components/schemas/Link'
+            $ref: "#/components/schemas/Link"
     JourneyStatus:
       type: object
       required: [journeyId, journeyName, phase, currentState, updatedAt]
@@ -209,7 +209,7 @@ components:
             canonical cancellation step `/api/v1/journeys/{journeyId}/steps/cancel` with method POST.
           type: object
           additionalProperties:
-            $ref: '#/components/schemas/Link'
+            $ref: "#/components/schemas/Link"
     JourneyStepRequest:
       type: object
       required: [eventType]
@@ -250,7 +250,7 @@ components:
             when a journey is terminal. Presence is controlled per-journey via spec.httpSurface.links.enabled.
           type: object
           additionalProperties:
-            $ref: '#/components/schemas/Link'
+            $ref: "#/components/schemas/Link"
     Link:
       type: object
       required: [href]

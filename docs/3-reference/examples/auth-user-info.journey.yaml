@@ -81,7 +81,7 @@ spec:
             }
         target:
           kind: context
-          path: ''
+          path: ""
       next: fetchUser
 
     fetchUser:

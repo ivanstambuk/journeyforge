@@ -38,7 +38,7 @@ spec:
             }
         target:
           kind: context
-          path: ''
+          path: ""
       next: waitForUserAction
 
     waitForUserAction:
@@ -76,4 +76,3 @@ spec:
       type: fail
       errorCode: SUBJECT_MISMATCH
       reason: "Authenticated principal does not match journey owner"
-

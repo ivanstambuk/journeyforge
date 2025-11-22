@@ -23,7 +23,7 @@ paths:
                 amount: { type: number }
                 currency: { type: string }
       responses:
-        '202': { description: Authorization accepted }
+        "202": { description: Authorization accepted }
   /payments/{paymentId}/capture:
     post:
       operationId: capturePayment
@@ -41,4 +41,4 @@ paths:
               properties:
                 amount: { type: number }
       responses:
-        '200': { description: Captured }
+        "200": { description: Captured }

@@ -37,7 +37,7 @@ spec:
         method: GET
         url: "https://api.example.com/profile"
         cookies:
-          useJar: true         # implicit; shown for clarity
+          useJar: true # implicit; shown for clarity
         headers:
           Accept: application/json
         timeoutMs: 5000
@@ -63,4 +63,3 @@ spec:
       type: fail
       errorCode: PROFILE_FAILED
       reason: "Profile call failed or did not return 200"
-

@@ -45,4 +45,3 @@ spec:
     doWork:
       type: succeed
       outputVar: order
-

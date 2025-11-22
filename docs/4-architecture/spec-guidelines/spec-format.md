@@ -22,10 +22,48 @@ JSON Schema dialect
 - Top‑level fields: `apiVersion`, `kind`, `metadata`, `spec`.
 - No secrets in specs; reference them indirectly (future: `secret://...`).
 
+## YAML Style Rules
+(Related: Q-003 in `docs/4-architecture/open-questions.md`.)
+- Indentation
+  - Use 2 spaces per indentation level.
+  - Tabs are not allowed anywhere in YAML files.
+  - Sequence items are written as:
+    ```yaml
+    items:
+      - name: foo
+        enabled: true
+      - name: bar
+        enabled: false
+    ```
+- Scalars and quoting
+  - Treat YAML as a strict JSON surface:
+    - Booleans: `true` / `false` (lowercase).
+    - Numbers: plain decimal; avoid leading `+` and leading zeros (except for `0`).
+  - Prefer unquoted scalars only for obviously safe identifiers (for example `http-custom-error-envelope-api`, `users`, `Succeeded`).
+  - Always quote scalars when they:
+    - Could be interpreted as special YAML values (`on`, `off`, `yes`, `no`, `y`, `n`, `null`, `~`) or as timestamps/IPv6 addresses.
+    - Start with `0` and are more than one digit (for example `"01"`, `"007"`).
+    - Contain characters that are ambiguous in YAML (`#`, `:`, `@`, leading/trailing spaces, or similar punctuation).
+  - Use double quotes for quoted scalars by default.
+- Multiline values and code
+  - Use block scalars for any multiline value, especially DataWeave expressions:
+    ```yaml
+    expr: |
+      {
+        orderId: context.orderId,
+        compensation: "completed",
+        cause: outcome
+      }
+    ```
+  - Avoid folded (`>`) scalars for code; prefer literal (`|`) so that newlines are preserved.
+- Documents and anchors
+  - Do not use YAML document markers (`---`, `...`) in journey specs and examples unless strictly necessary.
+  - YAML anchors and aliases are disallowed; parsers MUST reject them.
+- Whitespace
+  - Trim trailing whitespace on all lines.
+  - End each file with a single newline.
+
 ## Validation & CI
 - Lint in PRs: schema validation on the authored YAML.
 - CI MAY store derived JSON artefacts as build artefacts; commits should not re‑write YAML based on canonicalization alone.
-
-## Future Work
-- Richer expressions for `choice` (guarded by schema feature flag).
-- YAML style rules (indent=2, no tabs, quoted scalars policy) – TBD.
+  - Spotless configuration MUST enforce, at minimum, “no tabs” and trailing‑whitespace rules for all YAML files in this repository.

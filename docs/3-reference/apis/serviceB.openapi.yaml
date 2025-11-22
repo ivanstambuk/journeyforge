@@ -1,6 +1,6 @@
 openapi: 3.1.0
 info: { title: ServiceB API, version: 1.0.0 }
-servers: [ { url: https://api.example.com } ]
+servers: [{ url: https://api.example.com }]
 paths:
   /serviceB/{id}:
     get:
@@ -11,5 +11,5 @@ paths:
           required: true
           schema: { type: string }
       responses:
-        '200': { description: OK, content: { application/json: { schema: { type: object } } } }
-        '500': { description: Error }
+        "200": { description: OK, content: { application/json: { schema: { type: object } } } }
+        "500": { description: Error }

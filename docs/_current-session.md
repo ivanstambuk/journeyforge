@@ -17,3 +17,5 @@
 - 2025-11-19: Added examples: conditional composition, 204 No Content, and error aggregation.
 
 - 2025-11-19: Added OpenAPI export guideline and sample OAS for http-success and http-chained-calls, plus generic Journeys API.
+
+- 2025-11-22: Resolved Q-002 – kept `choice` predicates DataWeave-only, clarified internal-error semantics for predicate runtime failures (generic internal error + HTTP 500), and tightened guidance on compile-time validation/tooling; removed the “Richer expressions for choice” future-work bullet from spec-format.md.

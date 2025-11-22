@@ -25,7 +25,7 @@ spec:
         body:
           type: object
       additionalProperties: true
-# Provisional example: 'wait' state specified by DSL; engine support arrives in a later feature.
+  # Provisional example: 'wait' state specified by DSL; engine support arrives in a later feature.
   start: submit
   states:
     submit:

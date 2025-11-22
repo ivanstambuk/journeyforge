@@ -902,7 +902,12 @@ default: <stateId>              # optional but recommended
 
 Semantics
 - Evaluate branches in order; the first predicate that evaluates to `true` wins.
-- DataWeave predicate: evaluate `when.predicate.expr` with `context` bound to the current journey context. The expression must return a boolean; non‑boolean results are a validation error.
+- DataWeave predicate: evaluate `when.predicate.expr` with `context` bound to the current journey context. The expression must return a boolean; non‑boolean results are a validation error at spec validation / compile time.
+- Predicate runtime errors: when evaluating `when.predicate.expr` raises a DataWeave runtime error at execution time, the engine MUST treat this as an internal engine error (not a journey‑authored failure):
+  - The run terminates as a failure with a canonical internal error code (for example a Problem Details `type` such as `urn:journeyforge:error:internal`) and HTTP status 500 for externally visible APIs.
+  - For `kind: Journey`, the resulting `JourneyOutcome` MUST have `phase = Failed` and `error.code` set to the same internal error identifier; platform logging and telemetry SHOULD carry more detailed diagnostics.
+  - For `kind: Api`, the HTTP response MUST use the same internal error identifier as the Problem `type` / `JourneyOutcome.error.code` and status 500.
+  - This outcome indicates a bug or misconfiguration in the journey or platform; well‑behaved journeys SHOULD avoid triggering it in normal operation.
 - If no branch matches, transition to `default` if present; otherwise validation error.
 
 ### 5.3 `succeed`
@@ -1102,6 +1107,9 @@ spec:
 - Predicates: used in `choice` branches via `when.predicate`. The expression must evaluate to a boolean.
 - Transforms: `transform` states use DataWeave to compute values written into `context` or into variables under `context.<resultVar>`, according to the semantics in the Transform state section.
 - Determinism & safety: expressions must be pure (no I/O); the evaluator must enforce timeouts and resource limits.
+- Validation and tooling: journey compilers and linters SHOULD validate DataWeave expressions (including `choice` predicates and mappers) against any declared schemas (`spec.context.schema`, `spec.input.schema`, step‑level `*.schema`, etc.) when available, and MUST fail fast at spec validation / compile time when an expression can be statically determined to:
+  - Use invalid or non-existent paths, or
+  - Produce a non‑boolean result where a predicate is required.
 
 ### 10.1 Reusable mappers (`spec.mappers` and `mapperRef`)
 

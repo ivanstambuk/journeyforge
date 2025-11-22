@@ -29,7 +29,7 @@ spec:
             context ++ { 'startedAt': now() }
         target:
           kind: context
-          path: ''
+          path: ""
       next: waitStep
 
     waitStep:

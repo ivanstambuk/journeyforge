@@ -16,20 +16,20 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/Input'
+              $ref: "#/components/schemas/Input"
       responses:
         "200":
           description: Account created successfully
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Output'
+                $ref: "#/components/schemas/Output"
         "4XX":
           description: Error (mapped from fail/error outcomes)
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/Error'
+                $ref: "#/components/schemas/Error"
 components:
   schemas:
     Input:
