@@ -1,0 +1,44 @@
+arazzo: 1.0.1
+info:
+  title: JourneyForge – choice-multi-branch workflows
+  version: 0.1.0
+  summary: Workflows for multi-branch HTTP decisioning.
+sourceDescriptions:
+  - name: choiceMultiBranch
+    type: openapi
+    url: ../oas/choice-multi-branch.openapi.yaml
+workflows:
+  choice-multi-branch-happy-path:
+    summary: Start a choice-multi-branch journey and retrieve the final outcome.
+    sourceDescriptions:
+      - choiceMultiBranch
+    inputs:
+      startRequest:
+        description: Initial payload for the choice-multi-branch journey.
+        schema:
+          type: object
+          required:
+            - inputId
+          properties:
+            inputId:
+              type: string
+          additionalProperties: true
+    steps:
+      - name: startJourney
+        description: Start a new choice-multi-branch journey instance.
+        call:
+          source: choiceMultiBranch
+          operationId: choiceMultiBranch_start
+        parameters:
+          requestBody: $inputs.startRequest
+        outputs:
+          journeyId: $response.body.journeyId
+      - name: getResult
+        description: Retrieve the final outcome after branching.
+        call:
+          source: choiceMultiBranch
+          operationId: choiceMultiBranch_getResult
+        parameters:
+          path:
+            journeyId: $steps.startJourney.outputs.journeyId
+

@@ -1,0 +1,44 @@
+arazzo: 1.0.1
+info:
+  title: JourneyForge – http-content-check workflows
+  version: 0.1.0
+  summary: Workflows for HTTP status and content checks.
+sourceDescriptions:
+  - name: httpContentCheck
+    type: openapi
+    url: ../oas/http-content-check.openapi.yaml
+workflows:
+  http-content-check-happy-path:
+    summary: Start an http-content-check journey and retrieve the final outcome.
+    sourceDescriptions:
+      - httpContentCheck
+    inputs:
+      startRequest:
+        description: Initial payload for the http-content-check journey.
+        schema:
+          type: object
+          required:
+            - inputId
+          properties:
+            inputId:
+              type: string
+          additionalProperties: true
+    steps:
+      - name: startJourney
+        description: Start a new http-content-check journey instance.
+        call:
+          source: httpContentCheck
+          operationId: httpContentCheck_start
+        parameters:
+          requestBody: $inputs.startRequest
+        outputs:
+          journeyId: $response.body.journeyId
+      - name: getResult
+        description: Retrieve the final outcome after the content check.
+        call:
+          source: httpContentCheck
+          operationId: httpContentCheck_getResult
+        parameters:
+          path:
+            journeyId: $steps.startJourney.outputs.journeyId
+

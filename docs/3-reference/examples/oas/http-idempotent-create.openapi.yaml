@@ -10,6 +10,7 @@ paths:
   /journeys/http-idempotent-create/start:
     post:
       summary: Start http-idempotent-create journey
+      operationId: httpIdempotentCreate_start
       tags: [http-idempotent-create]
       requestBody:
         required: true
@@ -27,6 +28,7 @@ paths:
   /journeys/{journeyId}:
     get:
       summary: Get journey status
+      operationId: httpIdempotentCreate_getStatus
       tags: [http-idempotent-create]
       parameters:
         - in: path
@@ -43,6 +45,7 @@ paths:
   /journeys/{journeyId}/result:
     get:
       summary: Retrieve final outcome
+      operationId: httpIdempotentCreate_getResult
       tags: [http-idempotent-create]
       parameters:
         - in: path

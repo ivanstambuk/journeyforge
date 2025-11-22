@@ -33,11 +33,11 @@ task:
     key:                             # optional – mapper for Kafka key
       mapper:
         lang: dataweave
-        expr|exprRef: <expression>
+        expr: <expression>
     value:                           # required – mapper for event payload
       mapper:
         lang: dataweave
-        expr|exprRef: <expression>
+        expr: <expression>
     headers:                         # optional – Kafka record headers
       <k>: <string|interpolated>
     keySchemaRef: <string>           # optional – JSON Schema for the key
@@ -67,7 +67,7 @@ Validation rules:
 - For `kind: eventPublish`:
   - `eventPublish.transport` is required and must be `kafka` in the initial version.
   - `eventPublish.topic` is required and non-empty.
-  - `eventPublish.value.mapper` is required with `lang: dataweave` and `expr` or `exprRef`.
+  - `eventPublish.value.mapper` is required with `lang: dataweave` and an inline `expr`.
   - `eventPublish.key.mapper` (when present) must follow the same mapper rules.
   - `eventPublish.headers` (when present) is a map from header name to string/interpolated value.
   - `eventPublish.keySchemaRef` / `eventPublish.valueSchemaRef` (when present) must be non-empty strings.

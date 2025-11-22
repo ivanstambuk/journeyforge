@@ -10,6 +10,7 @@ paths:
   /journeys/http-success/start:
     post:
       summary: Start http-success journey
+      operationId: httpSuccess_start
       tags: [http-success]
       requestBody:
         required: true
@@ -27,6 +28,7 @@ paths:
   /journeys/{journeyId}:
     get:
       summary: Get journey status
+      operationId: httpSuccess_getStatus
       tags: [http-success]
       parameters:
         - in: path
@@ -43,6 +45,7 @@ paths:
   /journeys/{journeyId}/result:
     get:
       summary: Retrieve final outcome
+      operationId: httpSuccess_getResult
       tags: [http-success]
       parameters:
         - in: path

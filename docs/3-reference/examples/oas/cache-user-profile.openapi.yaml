@@ -10,6 +10,7 @@ paths:
   /journeys/cache-user-profile/start:
     post:
       summary: Start cache-user-profile journey
+      operationId: cacheUserProfile_start
       tags: [cache-user-profile]
       requestBody:
         required: true
@@ -27,6 +28,7 @@ paths:
   /journeys/{journeyId}:
     get:
       summary: Get journey status
+      operationId: cacheUserProfile_getStatus
       tags: [cache-user-profile]
       parameters:
         - in: path
@@ -43,6 +45,7 @@ paths:
   /journeys/{journeyId}/result:
     get:
       summary: Retrieve final outcome
+      operationId: cacheUserProfile_getResult
       tags: [cache-user-profile]
       parameters:
         - in: path

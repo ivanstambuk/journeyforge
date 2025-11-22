@@ -44,7 +44,7 @@ Key points:
   - Required when `spec.execution` is present.
   - Contains `errorCode` and `reason`, which shape the timeout failure in the same way as a `fail` state:
     - For journeys, they map to `JourneyOutcome.phase = Failed` and `JourneyOutcome.error.{code,reason}`.
-    - For APIs, they map to the error envelope exposed over HTTP, possibly transformed by `spec.errors` / `spec.outcomes`.
+    - For APIs, they map to the error envelope exposed over HTTP, following the same journey-level error configuration rules as other failures (see ADR‑0003 and `spec.errors`).
 
 Execution semantics:
 - Global deadline:
@@ -65,7 +65,7 @@ Execution semantics:
     - For `kind: Api`: terminate the HTTP request with a non‑2xx response that exposes the same `code` and `reason`.
 - Exporters and the engine:
     - MAY map global execution timeouts to HTTP 504 Gateway Timeout by default.
-    - MAY use `spec.errors` / `spec.outcomes` (when present) to choose HTTP status codes and shapes for the error payload, as long as the resulting `error.code` remains a stable identifier (ADR‑0003).
+    - MAY use `spec.outcomes` and canonical Problem Details `status` as inputs when choosing HTTP status codes for timeouts, as long as the resulting `error.code` remains a stable identifier (ADR‑0003).
 - Platform limits:
   - Platform- or environment-level maximums (for example “no run longer than 60 seconds in this cluster”) MAY further restrict execution time.
   - Engine implementations MAY clamp `spec.execution.maxDurationSec` to a configured upper bound; authors should not rely on being able to exceed platform caps by setting a large value.

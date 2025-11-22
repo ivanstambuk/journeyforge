@@ -1,4 +1,4 @@
-# DSL Examples (DataWeave predicates)
+# DSL Examples
 
 - Inline `spec.input.schema` / `spec.output.schema` blocks in these examples are JSON Schema 2020-12 and are authored to mirror OpenAPI 3.1 component schemas.
 
@@ -15,8 +15,8 @@ All examples assume `resultVar` stores the structured HTTP result object `{ stat
 - http-chained-calls.journey.yaml – GET a user, then POST an account using values from the first response.
 - http-conditional-composition.journey.yaml – route to alternate endpoint and headers/body based on context.
 - http-204-no-content.journey.yaml – expect 204 No Content and succeed if seen.
-- http-aggregate-errors.journey.yaml – call A then B; fail if either call failed.
-- http-problem-details.journey.yaml – normalise downstream errors into RFC 9457 Problem Details; can either succeed with a Problem document or fail with a mapped `errorCode`.
+- http-aggregate-errors.journey.yaml – call A then B; aggregate failures into a single custom error envelope (while still using Problem Details as the canonical internal model).
+- http-problem-details.journey.yaml – normalise downstream errors into RFC 9457 Problem Details as the canonical error model; can either succeed with a Problem document or fail with a mapped `errorCode`.
 - auth-user-info.journey.yaml – JWT-authenticated user lookup using httpSecurity + httpBindings.
 - credit-decision-parallel.journey.yaml – call risk/limits/KYC in parallel and join results into a credit decision.
 - http-resilience-degrade.journey.yaml – unstable upstream with resilience policy and degraded failure mode.
@@ -31,6 +31,8 @@ All examples assume `resultVar` stores the structured HTTP result object `{ stat
 - http-compensation.journey.yaml – order-style journey definition with a global compensation journey defined via `spec.compensation`.
 - auth-outbound-client-credentials.journey.yaml – outbound OAuth2 client-credentials auth using `spec.policies.httpClientAuth`.
  - http-cookie-jar.journey.yaml – maintains a per-run cookie jar and returns selected cookies to the caller on success.
+ - http-custom-error-envelope.journey.yaml – order-style lookup journey that exposes a single, journey-specific custom error envelope derived from canonical RFC 9457 Problem Details.
+ - metadata-from-payload.journey.yaml – metadata bindings example that lifts tags and attributes from the start payload.
 
 OpenAPI (per-journey) examples:
 - oas/choice-multi-branch.openapi.yaml
@@ -57,6 +59,36 @@ OpenAPI (per-journey) examples:
  - oas/wait-approval.openapi.yaml
  - oas/http-success.openapi.yaml
  - oas/payment-callback.openapi.yaml
+ - oas/http-custom-error-envelope.openapi.yaml
+ - oas/metadata-from-payload.openapi.yaml
+
+Arazzo workflow examples:
+- arazzo/http-success.arazzo.yaml – happy-path workflow for the http-success journey over the Journeys API.
+ - arazzo/wait-approval.arazzo.yaml – approval and rejection workflows for the wait-approval journey.
+ - arazzo/payment-callback.arazzo.yaml – SUCCESS and FAILED webhook workflows for the payment-callback journey.
+ - arazzo/auth-user-info.arazzo.yaml – workflow for the auth-user-info journey.
+ - arazzo/cache-user-profile.arazzo.yaml – workflow for the cache-user-profile journey.
+ - arazzo/choice-multi-branch.arazzo.yaml – workflow for the choice-multi-branch journey.
+ - arazzo/credit-decision-parallel.arazzo.yaml – workflow for the credit-decision-parallel journey.
+ - arazzo/http-204-no-content.arazzo.yaml – workflow for the http-204-no-content journey.
+ - arazzo/http-aggregate-errors.arazzo.yaml – workflow for the http-aggregate-errors journey.
+ - arazzo/http-chained-calls.arazzo.yaml – workflow for the http-chained-calls journey.
+ - arazzo/http-conditional-composition.arazzo.yaml – workflow for the http-conditional-composition journey.
+ - arazzo/http-content-check.arazzo.yaml – workflow for the http-content-check journey.
+ - arazzo/http-failure-branch.arazzo.yaml – workflow for the http-failure-branch journey.
+ - arazzo/http-header-interpolation.arazzo.yaml – workflow for the http-header-interpolation journey.
+ - arazzo/http-idempotent-create.arazzo.yaml – workflow for the http-idempotent-create journey.
+ - arazzo/http-post-json.arazzo.yaml – workflow for the http-post-json journey.
+ - arazzo/http-problem-details.arazzo.yaml – workflow for the http-problem-details journey.
+ - arazzo/http-put-delete.arazzo.yaml – workflow for the http-put-delete journey.
+ - arazzo/http-resilience-degrade.arazzo.yaml – workflow for the http-resilience-degrade journey.
+ - arazzo/http-timeout-branch.arazzo.yaml – workflow for the http-timeout-branch journey.
+ - arazzo/multitenant-routing.arazzo.yaml – workflow for the multitenant-routing journey.
+ - arazzo/named-outcomes.arazzo.yaml – workflow for the named-outcomes journey.
+ - arazzo/sync-wrapper-wait.arazzo.yaml – workflow for the sync-wrapper-wait journey.
+ - arazzo/transform-pipeline.arazzo.yaml – workflow for the transform-pipeline journey.
+ - arazzo/http-custom-error-envelope.arazzo.yaml – workflow for the http-custom-error-envelope journey.
+ - arazzo/metadata-from-payload.arazzo.yaml – workflow for the metadata-from-payload journey.
 
 API Catalog / downstream OpenAPI used by `operationRef`:
 - apis/accounts.openapi.yaml

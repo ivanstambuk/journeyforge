@@ -1,0 +1,100 @@
+apiVersion: v1
+kind: Api
+metadata:
+  name: poll-status-api
+  version: 0.1.0
+spec:
+  execution:
+    maxDurationSec: 10
+    onTimeout:
+      errorCode: POLL_TIMEOUT
+      reason: "Status polling exceeded 10 seconds"
+
+  input:
+    schema:
+      type: object
+      required: [jobId]
+      properties:
+        jobId: { type: string }
+      additionalProperties: true
+
+  start: init
+  states:
+    init:
+      type: transform
+      transform:
+        mapper:
+          lang: dataweave
+          expr: |
+            context ++ {
+              pollCount: 0,
+              maxPolls: 3
+            }
+        target:
+          kind: context
+          path: ''
+      next: poll
+
+    poll:
+      type: task
+      task:
+        kind: httpCall
+        operationRef: jobs.getStatus
+        params:
+          path:
+            jobId: "${context.jobId}"
+        timeoutMs: 2000
+        resiliencePolicyRef: standard
+        resultVar: status
+      next: decideStatus
+
+    decideStatus:
+      type: choice
+      choices:
+        - when:
+            predicate:
+              lang: dataweave
+              expr: |
+                context.status.ok == true and context.status.body.state == "COMPLETED"
+          next: done
+        - when:
+            predicate:
+              lang: dataweave
+              expr: |
+                context.status.ok == true and context.status.body.state == "FAILED"
+          next: failed
+        - when:
+            predicate:
+              lang: dataweave
+              expr: |
+                context.pollCount + 1 < context.maxPolls
+          next: incrementAndRepoll
+      default: stillRunning
+
+    incrementAndRepoll:
+      type: transform
+      transform:
+        mapper:
+          lang: dataweave
+          expr: |
+            context ++ {
+              pollCount: context.pollCount + 1
+            }
+        target:
+          kind: context
+          path: ''
+      next: poll
+
+    done:
+      type: succeed
+      outputVar: status
+
+    failed:
+      type: fail
+      errorCode: JOB_FAILED
+      reason: "Downstream job failed"
+
+    stillRunning:
+      type: succeed
+      outputVar: status
+

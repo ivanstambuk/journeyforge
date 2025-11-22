@@ -10,6 +10,7 @@ paths:
   /journeys/http-header-interpolation/start:
     post:
       summary: Start http-header-interpolation journey
+      operationId: httpHeaderInterpolation_start
       tags: [http-header-interpolation]
       requestBody:
         required: true
@@ -27,6 +28,7 @@ paths:
   /journeys/{journeyId}:
     get:
       summary: Get journey status
+      operationId: httpHeaderInterpolation_getStatus
       tags: [http-header-interpolation]
       parameters:
         - in: path
@@ -43,6 +45,7 @@ paths:
   /journeys/{journeyId}/result:
     get:
       summary: Retrieve final outcome
+      operationId: httpHeaderInterpolation_getResult
       tags: [http-header-interpolation]
       parameters:
         - in: path

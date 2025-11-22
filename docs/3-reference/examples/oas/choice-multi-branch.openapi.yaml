@@ -10,6 +10,7 @@ paths:
   /journeys/choice-multi-branch/start:
     post:
       summary: Start choice-multi-branch journey
+      operationId: choiceMultiBranch_start
       tags: [choice-multi-branch]
       requestBody:
         required: true
@@ -27,6 +28,7 @@ paths:
   /journeys/{journeyId}:
     get:
       summary: Get journey status
+      operationId: choiceMultiBranch_getStatus
       tags: [choice-multi-branch]
       parameters:
         - in: path
@@ -43,6 +45,7 @@ paths:
   /journeys/{journeyId}/result:
     get:
       summary: Retrieve final outcome
+      operationId: choiceMultiBranch_getResult
       tags: [choice-multi-branch]
       parameters:
         - in: path

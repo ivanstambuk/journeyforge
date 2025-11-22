@@ -9,7 +9,7 @@ This document normatively defines the JourneyForge journey DSL (for `kind: Journ
 - Files: `.journey.yaml` / `.journey.yml` or `.journey.json`.
 - States: `task` (HTTP call), `choice` (branch), `transform` (DataWeave mapping), `parallel` (branches with join), `wait` (external input), `webhook` (callback input), `succeed` (terminal), `fail` (terminal).
 - Expressions & transforms: DataWeave 2.x is the canonical language for predicates and (future) transform nodes.
-- Execution: starts at `spec.start`, mutates a JSON `context`, and terminates on `succeed`/`fail`, a global execution timeout (`spec.execution.maxDurationSec`), or an engine execution error. When `spec.compensation` is present, a separate compensation journey MAY run after non-successful termination.
+- Execution: starts at `spec.start`, mutates a JSON `context`, and terminates on `succeed`/`fail`, a global execution timeout (`spec.execution.maxDurationSec`), or an engine execution error. When `spec.compensation` is present, a separate compensation jo urney MAY run after non-successful termination.
 
 ### 1a. State types and surface
 
@@ -171,6 +171,22 @@ spec:
     schema: <JsonSchema>        # inline JSON Schema (2020-12) for request body
   output:                       # optional but strongly recommended
     schema: <JsonSchema>        # inline JSON Schema (2020-12) for successful response body
+  apiResponses:                 # optional; HTTP status mapping rules for kind: Api only
+    rules:
+      - when:
+          phase: Failed
+          errorType: <string>   # optional; Problem.type to match
+          predicate:            # optional; DataWeave predicate over context + error
+            lang: dataweave
+            expr: <expr>
+        status: <integer>       # literal HTTP status code
+        # or:
+        # statusExpr:
+        #   lang: dataweave
+        #   expr: <expr>        # DataWeave expression that evaluates to an HTTP status code
+    default:                    # optional; per-phase fallbacks when no rule matches
+      Succeeded: 200            # optional; defaults to 200 when omitted
+      Failed: fromProblemStatus # optional; defaults to Problem.status or 500 when omitted
   start: <stateId>
   states:
     <stateId>: <State>
@@ -201,7 +217,15 @@ Context and results for `kind: Api`
 - Error responses:
   - Reaching `fail` terminates execution and produces a non‑2xx HTTP response.
   - `errorCode` and `reason` follow the RFC 9457 alignment rules in section 5.6.
-  - Implementations MAY use `spec.errors` and `spec.outcomes` (when present) to choose HTTP status codes and to shape the error payload (for example, emitting an RFC 9457 Problem Details document).
+  - The structure of the error payload for a given journey or API MUST follow the journey’s error configuration:
+    - When `spec.errors.envelope` is omitted or uses `format: problemDetails`, the error body MUST use the Problem Details shape.
+    - When `spec.errors.envelope.format: custom` is present, the error body MUST be produced by the journey’s configured envelope mapper.
+  - HTTP status code selection for `kind: Api` is controlled by `spec.apiResponses` when present:
+    - Engines MUST evaluate `spec.apiResponses.rules` in order; the first rule whose `when` clause matches the terminal phase and (for failures) the canonical Problem object determines the HTTP status via `status` or `statusExpr`.
+    - When `spec.apiResponses` is omitted or when no rule matches:
+      - For `phase = Succeeded`, the engine MUST use HTTP 200.
+      - For `phase = Failed`, the engine MUST use the Problem `status` field when present and valid, or 500 when absent.
+  - The error envelope itself remains governed by `spec.errors.envelope` and MUST be uniform for a given journey or API; `spec.apiResponses` MUST NOT change the error body shape, only the HTTP status code.
 
 ## 2b. Defaults (spec.defaults)
 
@@ -266,7 +290,7 @@ Semantics
     - The resulting `JourneyOutcome` has `phase = Failed` and `error` populated from `onTimeout.errorCode` and `onTimeout.reason` (following the Problem Details alignment rules in section 5.6).
   - For `kind: Api`:
     - The engine terminates the HTTP request with a non‑2xx response that reflects the same error code and reason.
-    - Exporters and the engine MAY map execution timeouts to HTTP 504 Gateway Timeout by default, or use `spec.errors` and `spec.outcomes` (when present) for finer control.
+    - Exporters and the engine MAY map execution timeouts to HTTP 504 Gateway Timeout by default, or use `spec.outcomes` and canonical Problem Details `status` as inputs when choosing HTTP status codes for timeouts.
 - Relationship with platform limits:
   - Platform- or environment-level maximums MAY further restrict execution time; the engine MAY clamp `spec.execution.maxDurationSec` to a configured upper bound.
   - Setting a large `maxDurationSec` does not guarantee that a run is allowed to execute that long; platform limits take precedence.
@@ -743,7 +767,7 @@ task:
     when: nonOk                     # only nonOk is supported (result.ok == false)
     mapper:
       lang: dataweave
-      expr|exprRef: <expression>    # same shape as transform.mapper
+      expr: <expression>            # same shape as transform.mapper
     target:                         # same shape/semantics as transform.target
       kind: context                 # context | var
       path: problem                 # when kind == context; dot-path in context
@@ -824,11 +848,11 @@ task:
     key:                             # optional – mapper for Kafka key
       mapper:
         lang: dataweave
-        expr|exprRef: <expression>
+        expr: <expression>
     value:                           # required – mapper for event payload
       mapper:
         lang: dataweave
-        expr|exprRef: <expression>
+        expr: <expression>
     headers:                         # optional – Kafka record headers
       <k>: <string|interpolated>
     keySchemaRef: <string>           # optional – JSON Schema for the key
@@ -857,8 +881,8 @@ Validation
 - For `kind: eventPublish`:
   - `eventPublish.transport` is required and must be `kafka`.
   - `eventPublish.topic` is required and must be a non-empty string.
-  - `eventPublish.value` is required and must contain a `mapper` object with `lang: dataweave` and `expr` or `exprRef`.
-  - `eventPublish.key` (when present) must contain a `mapper` object with `lang: dataweave` and `expr` or `exprRef`.
+  - `eventPublish.value` is required and must contain a `mapper` object with `lang: dataweave` and an inline `expr`.
+  - `eventPublish.key` (when present) must contain a `mapper` object with `lang: dataweave` and an inline `expr`.
   - `eventPublish.headers` (when present) must be a map of header names to string or interpolated string values.
   - `eventPublish.keySchemaRef` and `eventPublish.valueSchemaRef` (when present) must be non-empty strings referring to JSON Schema documents.
 - `resultVar`, `errorMapping`, and `resiliencePolicyRef` MUST NOT be used with `kind: eventPublish`; event publishes do not produce structured results for branching or error mapping.
@@ -937,52 +961,81 @@ Semantics
     - The journey then either:
       - `succeed`s with `outputVar: problem` to return a pure Problem Details document, or
       - `fail`s, using `errorCode` from `context.problem.type` and `reason` from `context.problem.detail` or `title`.
-- Mapping RFC 9457 to other error formats
-  - When clients expect a non-RFC error format, journeys can map a canonical Problem Details object into a client-specific error envelope via `transform` states (for example `context.clientError`) and then:
-    - `succeed` with `outputVar: clientError`, or
-    - `fail` with a compact `errorCode`/`reason` while still keeping `context.problem` and/or `context.clientError` available for logging and diagnostics.
-- Reuse via shared mappers
-  - To keep error handling consistent across journeys, authors SHOULD define shared DataWeave modules (`.dwl` files) that implement common mappers such as “downstream error → Problem Details” and “Problem Details → client error”.
-  - These modules are referenced from `transform` and `choice` expressions via `exprRef`, so the canonical error logic lives in one place even though the DSL has no dedicated `spec.errors` block.
+	- Mapping RFC 9457 to other error formats
+	  - When a journey needs a non‑RFC error format for its external error responses, it MUST:
+	    - Normalise errors into a canonical Problem Details object, and
+	    - Map that Problem Details object into a single, journey‑specific error envelope (see `spec.errors.envelope`).
+	  - All external error responses for a given journey MUST share the same top‑level error structure; a journey MUST NOT expose different error envelope shapes at runtime for different callers or error paths.
+	- Reuse via shared mappers
+	  - Journeys MAY still use shared DataWeave modules (`.dwl` files) for common transformations in general, but `spec.errors` is defined in terms of inline mappers in this version (see Q-002 in `docs/4-architecture/open-questions.md`).
 
 ## 19. Error configuration (spec.errors)
-
-The `spec.errors` block allows journeys to centralise how they normalise and expose errors, building on the canonical RFC 9457 Problem Details model (see ADR‑0003).
-
-```yaml
-spec:
-  errors:
-    canonicalFormat: rfc9457
-    normalisers:
-      httpDefault:
-        mapper:
-          lang: dataweave
-          exprRef: "errors/http-to-problem.dwl"
-    clients:
-      backendClient:
-        mapper:
-          lang: dataweave
-          exprRef: "errors/problem-to-backend.dwl"
-```
-
-Shape
-- `canonicalFormat`: when present, MUST be `rfc9457`. Other values are reserved.
-- `normalisers`: map of ids to mappers that convert low-level error data (for example HTTP results) into Problem Details objects.
-- `clients`: map of ids to mappers that convert canonical Problem Details objects into client-specific error envelopes.
-
-Semantics (guidance)
-- `spec.errors` provides named mappers that can be reused from:
-  - `transform` states (via `mapperRef` to entries under `normalisers`/`clients`),
-  - HTTP task `errorMapping.mapperRef`, and
-  - future engine integration points.
-- Engine implementations MAY:
-  - Use a configured normaliser (for example `spec.errors.normalisers.httpDefault`) as the default `errorMapping` for HTTP tasks that do not specify one.
-  - Use a configured client mapper (for example `spec.errors.clients.backendClient`) when projecting internal Problem Details objects into the final `JourneyOutcome.error` representation, as long as the resulting `error.code` remains a stable identifier and aligns with ADR‑0003.
-
-Validation
-- `canonicalFormat`, when present, must be the string `rfc9457`.
-- `normalisers` and `clients` must be maps of ids to mapper objects with the same shape as `spec.mappers` entries (`lang`, `expr`/`exprRef`).
-- Tools SHOULD flag references to unknown normaliser/client ids in `mapperRef` or other configuration as validation errors.
+	
+	The `spec.errors` block allows journeys to centralise, per journey, how they normalise and expose errors, building on the canonical RFC 9457 Problem Details model (see ADR‑0003 and Q-002 in `docs/4-architecture/open-questions.md`).
+	
+	```yaml
+	spec:
+	  errors:
+	    canonicalFormat: rfc9457    # optional; defaults to rfc9457 when omitted
+	    normalisers:
+	      httpDefault:
+	        mapper:
+	          lang: dataweave
+	          expr: |
+	            // HTTP result → Problem Details
+	            ...
+	      ordersApi:
+	        mapper:
+	          lang: dataweave
+	          expr: |
+	            // Orders API error → Problem Details
+	            ...
+	    envelope:
+	      format: problemDetails    # default when envelope is omitted
+	      # When format: custom, define a mapper from Problem Details to the journey’s external error body:
+	      # format: custom
+	      # mapper:
+	      #   lang: dataweave
+	      #   expr: |
+	      #     ...
+	```
+	
+	Shape
+	- `spec.errors` is optional; when omitted:
+	  - The canonical internal error model for the journey is still RFC 9457 Problem Details.
+	  - The externally visible error structure for the journey MUST be the Problem Details shape (or a compact `{code,reason}` view over it as defined by ADR‑0003).
+	- `canonicalFormat`:
+	  - When present, MUST be the string `rfc9457`.
+	  - When omitted, it implicitly defaults to `rfc9457`; other values are reserved for future versions.
+	- `normalisers`:
+	  - Optional map of ids to mapper objects that convert low‑level error data (for example HTTP result objects) into Problem Details objects.
+	  - Each mapper MUST declare `lang: dataweave` and an inline `expr`.
+	- `envelope`:
+	  - Optional single configuration that defines the external error envelope for the journey.
+	  - `format` controls the envelope:
+	    - When omitted or set to `problemDetails`, the externally visible error structure for the journey MUST be the Problem Details shape.
+	    - When set to `custom`, the `envelope` block MUST include a `mapper` that transforms Problem Details objects into a single, stable error body structure for this journey.
+	  - The DSL does not allow multiple envelopes per journey; there is at most one `envelope` block.
+	
+	Semantics
+	- Canonical model:
+	  - Engines and tooling MUST treat RFC 9457 Problem Details as the canonical internal error model for all journeys, regardless of whether `spec.errors` is present.
+	  - All error handling logic (normalisation and envelope mapping) operates in terms of Problem Details objects.
+	- Normalisation:
+	  - `spec.errors.normalisers` provides per‑journey, inline mappers that journeys MAY reference explicitly from error‑producing operations (for example HTTP task `errorMapping`).
+	  - Engines MUST NOT implicitly pick or apply a normaliser based solely on its presence in `spec.errors`; usage MUST be explicit in the journey spec (for example via an id reference from `errorMapping` or future, clearly defined configuration fields).
+	- Envelope:
+	  - For a given journey, the externally visible error structure MUST be uniform across all error paths:
+	    - When `envelope` is omitted or `format: problemDetails`, all external error responses MUST use the Problem Details shape (with `JourneyOutcome.error` reflecting the canonical `{code,reason,...}` view).
+	    - When `envelope.format: custom` is declared, the journey MUST use the configured inline mapper to transform Problem Details objects into the journey’s external error body; all external error responses for that journey MUST use this single structure.
+	  - Engines MUST NOT vary the external error envelope for a journey at runtime based on caller identity, headers, or other request metadata.
+	
+	Validation
+	- `canonicalFormat`, when present, MUST be the string `rfc9457`.
+	- `normalisers` must be a map of ids to mapper objects with the same shape as `transform.mapper` entries (`lang`, inline `expr` only).
+	- `envelope.format`, when present, MUST be either `problemDetails` or `custom`.
+	- When `envelope.format` is `custom`, `envelope.mapper` MUST be present and must declare `lang: dataweave` and an inline `expr`.
+	- Tools SHOULD flag references to unknown normaliser ids from HTTP tasks or other configuration as validation errors.
 
 ## 6. Example
 ```yaml
@@ -1044,7 +1097,7 @@ spec:
 - DataWeave is the canonical expression language. Future convenience operators (e.g., `in`, numeric comparisons) may be added as sugar and compiled to DataWeave.
 
 ## 10. DataWeave – Expressions & Mappers
-- Language: DataWeave 2.x (expressions authored inline via `expr` or referenced via `exprRef` to an external `.dwl` file).
+- Language: DataWeave 2.x (expressions authored inline via `expr`; v1 does not support DSL-level references to external `.dwl` modules; see ADR-0015 and Q-003).
 - Binding: `context` variable is bound to the current journey context JSON value.
 - Predicates: used in `choice` branches via `when.predicate`. The expression must evaluate to a boolean.
 - Transforms: `transform` states use DataWeave to compute values written into `context` or into variables under `context.<resultVar>`, according to the semantics in the Transform state section.
@@ -1057,9 +1110,6 @@ To avoid repeating the same DataWeave snippets across multiple states, journey d
 ```yaml
 spec:
   mappers:
-    normaliseHttpError:
-      lang: dataweave
-      exprRef: "mappers/http-error-to-problem.dwl"
     buildProfile:
       lang: dataweave
       expr: |
@@ -1082,14 +1132,14 @@ next: done
 ```
 
 Semantics
-- `spec.mappers` is a map from mapper id to a mapper definition with the same shape as `transform.mapper` (`lang`, `expr`, `exprRef`).
+- `spec.mappers` is a map from mapper id to a mapper definition with the same shape as `transform.mapper` (`lang`, `expr`).
 - Anywhere the DSL allows a `mapper` object (for example `transform.mapper`, HTTP `body.mapper`, cache `key.mapper`, `errorMapping.mapper`), authors MAY use `mapperRef: <id>` instead:
   - The referenced mapper MUST be defined under `spec.mappers.<id>`.
   - Conceptually, `mapperRef: foo` is equivalent to copying `spec.mappers.foo` inline at that location.
 - A state MUST NOT mix `mapper` and `mapperRef` in the same location; this is a validation error.
 
 Validation
-- `spec.mappers` must be a map of ids to mapper objects; each mapper must declare `lang: dataweave` and either `expr` or `exprRef`.
+- `spec.mappers` must be a map of ids to mapper objects; each mapper must declare `lang: dataweave` and an inline `expr`.
 - `mapperRef` values must be non-empty strings that resolve to an existing entry in `spec.mappers`.
 
 ## 11. Schemas (optional)
@@ -1132,7 +1182,7 @@ Usage notes
 - `operationRef`: resolves `<apiName>` in `spec.apis` and `<operationId>` in the referenced OAS.
 - Server selection: the first OAS server is used by default; future features may allow server variables/overrides.
 - Params mapping: `params.path/query/headers` provide values for OAS params by name. Missing required params is a validation error.
-- Body mapping: if `body` is a string, it is sent as-is; if an object, it is JSON-encoded; if a `mapper` object with `lang: dataweave` and `expr|exprRef` is provided, the mapper result becomes the JSON body.
+- Body mapping: if `body` is a string, it is sent as-is; if an object, it is JSON-encoded; if a `mapper` object with `lang: dataweave` and `expr` is provided, the mapper result becomes the JSON body.
 - `accept` selects the response media type; default `application/json`.
 - Cannot mix `operationRef` with raw `method`/`url` in the same task.
 
@@ -1157,7 +1207,7 @@ wait:
   apply:                                # optional – update context before branching
     mapper:
       lang: dataweave
-      expr|exprRef
+      expr
   on:                                     # ordered branch evaluation
     - when:
         predicate:
@@ -1209,7 +1259,7 @@ webhook:
   apply:
     mapper:
       lang: dataweave
-      expr|exprRef
+      expr
   on:
     - when:
         predicate:
@@ -1312,7 +1362,7 @@ transform:
       {
         id: context.id,
         status: 'OK'
-      }   # or exprRef: transforms/example.dwl
+      }
   target:
     kind: context                 # context | var
     path: data.enriched           # used when kind == context; dot-path in context
@@ -1763,9 +1813,16 @@ Semantics
 - OAuth2 token acquisition:
   - For policies with `kind: oauth2ClientCredentials`, the engine obtains an access token by calling `tokenEndpoint` with the configured `auth` method and `form` payload.
   - The engine MUST treat `grant_type` as `client_credentials`; other grant types are invalid in this version.
-- Token caching:
-  - Engines MAY cache access tokens per (policy id + tokenEndpoint + `auth.method` + form payload) and reuse them across journey instances until expiry, accounting for clock skew.
-  - When a cached token is available and not expired, the engine SHOULD reuse it rather than calling the token endpoint again.
+- Token caching and refresh:
+  - Engines MUST cache access tokens per effective token request (at minimum: policy id, `tokenEndpoint`, `auth.method`, and `form` payload) and reuse them across journey instances until expiry.
+  - Engines MUST determine token lifetime from standard token metadata when available (for example the `exp` claim for JWT access tokens and/or `expires_in` fields in token responses) and apply a small pre‑expiry skew when deciding whether a token is still valid. When lifetime cannot be determined, caching behaviour is implementation-defined but MUST NOT violate auth server contracts.
+  - When a cached token is available and not expired (after applying skew), the engine MUST reuse it rather than calling the token endpoint again.
+  - For data-plane HTTP calls that use a `kind: oauth2ClientCredentials` policy, when the downstream service returns `401 Unauthorized`, the engine MUST treat this as a potential token invalidation and:
+    - Discard the cached token for that effective request.
+    - Obtain a fresh access token once.
+    - Retry the original HTTP request once with the new token.
+    - If the retry still fails with `401`, surface the error to the journey (for example as an HTTP error in the task result) and emit telemetry for diagnosis; the engine MUST NOT perform further automatic retries for that call.
+  - Implementations MAY provide configuration to disable the automatic `401` refresh/retry behaviour for specific policies or HTTP clients; such configuration is engine- or platform-level and not part of the DSL surface.
 
 Validation
 - `spec.policies.httpClientAuth.definitions` must be a map of ids to policy objects.
@@ -2104,3 +2161,25 @@ Domain behaviour
 Validation
 - When `spec.cookies.returnToClient` is present but `spec.cookies.jar` is absent, implementations SHOULD treat this as a configuration error (there is no jar to source cookies from).
 - Invalid regex patterns in `namePatterns` MUST be reported as spec validation errors.
+
+## 23. Journey Access Binding
+
+This section summarises the minimal, normative rules for journey access binding. For background and rationale, see
+ADR-0014 (`docs/6-decisions/ADR-0014-journey-access-binding-and-session-semantics.md`).
+
+Rules:
+- The DSL does **not** define a dedicated access-binding block (for example `spec.access`, `spec.accessBinding`, or a
+  first-class `participants` structure). No such blocks are allowed in the generic DSL surface.
+- Journeys that need access control or subject/participant binding MUST model the required identity and attributes in
+  ordinary `context` fields (for example `context.identity.*`, `context.participants.*`) and/or metadata, using the
+  existing DSL constructs (`transform`, `choice`, `wait`, `webhook`, etc.).
+- When external identity is present (for example from a JWT or client certificate), journey definitions that rely on it
+  SHOULD project it into `context` explicitly (for example via `httpBindings.start.headersToContext` followed by a
+  `transform`), so that journey logic can make clear, data-driven decisions.
+- For any external-input interaction (journey start, `wait` state, `webhook` state, or `POST /steps/{stepId}` call),
+  journey definitions that care about access control MUST implement their own checks over `context` and/or request
+  data (for example via predicates, guards, or preceding `choice` states). The engine does not infer access rules from
+  any special DSL fields.
+- `journeyId` is a resume token only. Specs and implementations MUST NOT treat possession of a `journeyId` by itself as
+  sufficient authorisation to read or mutate a journey; any additional access requirements MUST be modelled and enforced
+  by journey logic as described above.

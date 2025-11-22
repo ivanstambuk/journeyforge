@@ -10,6 +10,7 @@ paths:
   /journeys/credit-decision-parallel/start:
     post:
       summary: Start credit-decision-parallel journey
+      operationId: creditDecisionParallel_start
       tags: [credit-decision-parallel]
       requestBody:
         required: true
@@ -27,6 +28,7 @@ paths:
   /journeys/{journeyId}:
     get:
       summary: Get journey status
+      operationId: creditDecisionParallel_getStatus
       tags: [credit-decision-parallel]
       parameters:
         - in: path
@@ -43,6 +45,7 @@ paths:
   /journeys/{journeyId}/result:
     get:
       summary: Retrieve final outcome
+      operationId: creditDecisionParallel_getResult
       tags: [credit-decision-parallel]
       parameters:
         - in: path

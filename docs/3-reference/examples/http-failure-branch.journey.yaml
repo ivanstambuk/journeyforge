@@ -34,6 +34,10 @@ spec:
               type: string
           additionalProperties: true
       additionalProperties: true
+  # Error handling:
+  # - Branches on `api.ok` and either succeeds with the raw HTTP result or fails with a stable error code.
+  # - The exposed `{status, ok, headers, body, error{type,message,...}}` shape is a simple custom error envelope;
+  #   internally, the engine still treats Problem Details as the canonical error model (ADR-0003).
   apis:
     items: { openApiRef: apis/items.openapi.yaml }
     users: { openApiRef: apis/users.openapi.yaml }

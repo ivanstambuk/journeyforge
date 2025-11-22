@@ -1,0 +1,115 @@
+arazzo: 1.0.1
+info:
+  title: JourneyForge – payment-callback workflows
+  version: 0.1.0
+  summary: Workflows for payment authorization and webhook callback completion.
+sourceDescriptions:
+  - name: paymentCallback
+    type: openapi
+    url: ../oas/payment-callback.openapi.yaml
+workflows:
+  payment-callback-happy-path:
+    summary: Start a payment-callback journey, wait for a SUCCESS callback (from the provider), and read the final result.
+    sourceDescriptions:
+      - paymentCallback
+    inputs:
+      startRequest:
+        description: Initial payment details for the payment-callback journey.
+        schema:
+          type: object
+          required:
+            - paymentId
+            - amount
+            - currency
+          properties:
+            paymentId:
+              type: string
+            amount:
+              type: number
+            currency:
+              type: string
+          additionalProperties: true
+    steps:
+      - name: startJourney
+        description: Start a new payment-callback journey instance.
+        call:
+          source: paymentCallback
+          operationId: paymentCallback_start
+        parameters:
+          requestBody: $inputs.startRequest
+        outputs:
+          journeyId: $response.body.journeyId
+      - name: getStatusWhilePending
+        description: Optionally poll journey status while waiting for the callback.
+        call:
+          source: paymentCallback
+          operationId: paymentCallback_getStatus
+        parameters:
+          path:
+            journeyId: $steps.startJourney.outputs.journeyId
+        outputs:
+          phase: $response.body.phase
+      - name: getResult
+        description: Retrieve the final outcome after a successful callback.
+        call:
+          source: paymentCallback
+          operationId: paymentCallback_getResult
+        parameters:
+          path:
+            journeyId: $steps.startJourney.outputs.journeyId
+    successCriteria:
+      - name: paymentSucceeded
+        condition: $steps.getResult.response.body.output.status == "SUCCESS"
+
+  payment-callback-failed:
+    summary: Start a payment-callback journey, wait for a FAILED callback or timeout, and read the failure outcome.
+    sourceDescriptions:
+      - paymentCallback
+    inputs:
+      startRequest:
+        description: Initial payment details for the payment-callback journey.
+        schema:
+          type: object
+          required:
+            - paymentId
+            - amount
+            - currency
+          properties:
+            paymentId:
+              type: string
+            amount:
+              type: number
+            currency:
+              type: string
+          additionalProperties: true
+    steps:
+      - name: startJourney
+        description: Start a new payment-callback journey instance.
+        call:
+          source: paymentCallback
+          operationId: paymentCallback_start
+        parameters:
+          requestBody: $inputs.startRequest
+        outputs:
+          journeyId: $response.body.journeyId
+      - name: getStatusWhilePending
+        description: Optionally poll journey status while waiting for the callback.
+        call:
+          source: paymentCallback
+          operationId: paymentCallback_getStatus
+        parameters:
+          path:
+            journeyId: $steps.startJourney.outputs.journeyId
+        outputs:
+          phase: $response.body.phase
+      - name: getResult
+        description: Retrieve the final (failed) outcome after the callback.
+        call:
+          source: paymentCallback
+          operationId: paymentCallback_getResult
+        parameters:
+          path:
+            journeyId: $steps.startJourney.outputs.journeyId
+    successCriteria:
+      - name: paymentFailed
+        condition: $steps.getResult.response.body.output.status == "FAILED"

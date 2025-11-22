@@ -58,7 +58,10 @@ Execution semantics (`kind: Api`):
   - The engine returns a 2xx response with the body taken from `context.<outputVar>` (when set) or the full `context` otherwise.
 - On `fail`:
   - The engine returns a non-2xx response with an error payload derived from `errorCode` / `reason`, aligned with the RFC 9457 guidance in ADR-0003.
-  - Implementations MAY consult `spec.errors` and `spec.outcomes` to choose HTTP status codes and to shape an RFC 9457 Problem Details response.
+  - The structure of the error payload MUST follow the journey’s error configuration:
+    - When `spec.errors.envelope` is omitted or uses `format: problemDetails`, the error body MUST use the Problem Details shape.
+    - When `spec.errors.envelope.format: custom` is present, the error body MUST be produced by the journey’s configured envelope mapper.
+  - HTTP status code selection remains an implementation concern (see Q-001 in `docs/4-architecture/open-questions.md`); implementations MAY consult `spec.outcomes` and canonical Problem Details `status` to choose appropriate status codes.
 
 Constraints (`kind: Api`):
 - State surface:

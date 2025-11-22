@@ -10,6 +10,7 @@ paths:
   /journeys/http-content-check/start:
     post:
       summary: Start http-content-check journey
+      operationId: httpContentCheck_start
       tags: [http-content-check]
       requestBody:
         required: true
@@ -27,6 +28,7 @@ paths:
   /journeys/{journeyId}:
     get:
       summary: Get journey status
+      operationId: httpContentCheck_getStatus
       tags: [http-content-check]
       parameters:
         - in: path
@@ -43,6 +45,7 @@ paths:
   /journeys/{journeyId}/result:
     get:
       summary: Retrieve final outcome
+      operationId: httpContentCheck_getResult
       tags: [http-content-check]
       parameters:
         - in: path

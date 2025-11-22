@@ -10,6 +10,7 @@ paths:
   /journeys/wait-approval/start:
     post:
       summary: Start wait-approval journey
+      operationId: waitApproval_start
       tags: [wait-approval]
       requestBody:
         required: true
@@ -32,6 +33,7 @@ paths:
   /journeys/{journeyId}:
     get:
       summary: Get journey status
+      operationId: waitApproval_getStatus
       tags: [wait-approval]
       parameters:
         - in: path
@@ -48,6 +50,7 @@ paths:
   /journeys/{journeyId}/steps/waitForApproval:
     post:
       summary: Provide manual approval input for step waitForApproval
+      operationId: waitApproval_waitForApproval
       tags: [wait-approval]
       parameters:
         - in: path
@@ -79,6 +82,7 @@ paths:
   /journeys/{journeyId}/result:
     get:
       summary: Retrieve final outcome
+      operationId: waitApproval_getResult
       tags: [wait-approval]
       parameters:
         - in: path

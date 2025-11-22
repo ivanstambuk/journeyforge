@@ -30,6 +30,9 @@ spec:
         instance:
           type: string
       additionalProperties: true
+  # Error handling:
+  # - Normalises downstream HTTP errors into an RFC 9457 Problem Details object.
+  # - Uses Problem Details as the canonical error model for this journey (see ADR-0003 and `spec.errors`).
   apis:
     items: { openApiRef: apis/items.openapi.yaml }
   start: call_api

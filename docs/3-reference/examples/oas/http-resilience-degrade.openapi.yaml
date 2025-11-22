@@ -10,6 +10,7 @@ paths:
   /journeys/http-resilience-degrade/start:
     post:
       summary: Start http-resilience-degrade journey
+      operationId: httpResilienceDegrade_start
       tags: [http-resilience-degrade]
       requestBody:
         required: true
@@ -27,6 +28,7 @@ paths:
   /journeys/{journeyId}:
     get:
       summary: Get journey status
+      operationId: httpResilienceDegrade_getStatus
       tags: [http-resilience-degrade]
       parameters:
         - in: path
@@ -43,6 +45,7 @@ paths:
   /journeys/{journeyId}/result:
     get:
       summary: Retrieve final outcome
+      operationId: httpResilienceDegrade_getResult
       tags: [http-resilience-degrade]
       parameters:
         - in: path

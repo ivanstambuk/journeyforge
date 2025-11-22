@@ -10,6 +10,7 @@ paths:
   /journeys/http-chained-calls/start:
     post:
       summary: Start http-chained-calls journey
+      operationId: httpChainedCalls_start
       tags: [http-chained-calls]
       requestBody:
         required: true
@@ -27,6 +28,7 @@ paths:
   /journeys/{journeyId}:
     get:
       summary: Get journey status
+      operationId: httpChainedCalls_getStatus
       tags: [http-chained-calls]
       parameters:
         - in: path
@@ -43,6 +45,7 @@ paths:
   /journeys/{journeyId}/result:
     get:
       summary: Retrieve final outcome
+      operationId: httpChainedCalls_getResult
       tags: [http-chained-calls]
       parameters:
         - in: path

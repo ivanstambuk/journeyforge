@@ -10,6 +10,7 @@ paths:
   /journeys/sync-wrapper-wait/start:
     post:
       summary: Start sync-wrapper-wait journey
+      operationId: syncWrapperWait_start
       tags: [sync-wrapper-wait]
       requestBody:
         required: true
@@ -27,6 +28,7 @@ paths:
   /journeys/{journeyId}:
     get:
       summary: Get journey status
+      operationId: syncWrapperWait_getStatus
       tags: [sync-wrapper-wait]
       parameters:
         - in: path
@@ -43,6 +45,7 @@ paths:
   /journeys/{journeyId}/result:
     get:
       summary: Retrieve final outcome
+      operationId: syncWrapperWait_getResult
       tags: [sync-wrapper-wait]
       parameters:
         - in: path
@@ -61,6 +64,7 @@ paths:
   /journeys/{journeyId}/steps/waitStep:
     post:
       summary: Submit completion event
+      operationId: syncWrapperWait_waitStep
       tags: [sync-wrapper-wait]
       requestBody:
         required: true

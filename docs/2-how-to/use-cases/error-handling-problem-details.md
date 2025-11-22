@@ -15,7 +15,7 @@ Handle upstream failures and timeouts in a structured way:
 - `choice` for decision logic.
 - `transform` to build Problem Details.
 - `fail` with `errorCode` / `reason` aligned to Problem `type` / `title`/`detail`.
-- `spec.errors` and `task.errorMapping` for shared and inline normalisation.
+- `spec.errors.normalisers` and `task.errorMapping` for shared and inline normalisation.
 
 ## Example 1 – Branch on generic failure
 

@@ -1,0 +1,44 @@
+arazzo: 1.0.1
+info:
+  title: JourneyForge – named-outcomes workflows
+  version: 0.1.0
+  summary: Workflows for journeys with named outcomes.
+sourceDescriptions:
+  - name: namedOutcomes
+    type: openapi
+    url: ../oas/named-outcomes.openapi.yaml
+workflows:
+  named-outcomes-happy-path:
+    summary: Start a named-outcomes journey and retrieve the final outcome.
+    sourceDescriptions:
+      - namedOutcomes
+    inputs:
+      startRequest:
+        description: Initial payload for the named-outcomes journey.
+        schema:
+          type: object
+          required:
+            - amount
+          properties:
+            amount:
+              type: number
+          additionalProperties: true
+    steps:
+      - name: startJourney
+        description: Start a new named-outcomes journey instance.
+        call:
+          source: namedOutcomes
+          operationId: namedOutcomes_start
+        parameters:
+          requestBody: $inputs.startRequest
+        outputs:
+          journeyId: $response.body.journeyId
+      - name: getResult
+        description: Retrieve the final outcome including named outcome classification.
+        call:
+          source: namedOutcomes
+          operationId: namedOutcomes_getResult
+        parameters:
+          path:
+            journeyId: $steps.startJourney.outputs.journeyId
+

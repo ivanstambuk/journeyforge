@@ -1,0 +1,126 @@
+apiVersion: v1
+kind: Journey
+metadata:
+  name: http-custom-error-envelope
+  version: 0.1.0
+spec:
+  input:
+    schema:
+      type: object
+      required: [id]
+      additionalProperties: true
+      properties:
+        id:
+          type: string
+  output:
+    schema:
+      type: object
+      properties:
+        status:
+          type: integer
+        ok:
+          type: boolean
+        item: {}
+        error:
+          type: object
+          properties:
+            errorId:
+              type: string
+            message:
+              type: string
+            category:
+              type: string
+            status:
+              type: integer
+            details:
+              type: object
+              additionalProperties: true
+          additionalProperties: true
+      additionalProperties: true
+  # Error handling:
+  # - Builds a canonical RFC 9457 Problem Details object for upstream failures.
+  # - Projects a single, journey-specific custom error envelope from that Problem Details object.
+  #   (One journey, one external error structure; see ADR-0003 and `spec.errors.envelope`.)
+  apis:
+    items: { openApiRef: apis/items.openapi.yaml }
+  start: call_item
+  states:
+    call_item:
+      type: task
+      task:
+        kind: httpCall
+        operationRef: items.getItemById
+        params:
+          path: { id: "${context.id}" }
+          headers: { Accept: application/json }
+        timeoutMs: 5000  
+        resultVar: api
+      next: decide_result
+
+    decide_result:
+      type: choice
+      choices:
+        - when:
+            predicate:
+              lang: dataweave
+              expr: |
+                context.api.ok == true
+          next: project_success
+      default: map_error
+
+    project_success:
+      type: transform
+      transform:
+        mapper:
+          lang: dataweave
+          expr: |
+            {
+              status: context.api.status,
+              ok: context.api.ok,
+              item: context.api.body
+            }
+        target:
+          kind: var
+        resultVar: summary
+      next: done
+
+    map_error:
+      type: transform
+      transform:
+        mapper:
+          lang: dataweave
+          expr: |
+            context ++ {
+              lastError: {
+                type: "https://example.com/probs/order-error",
+                title: "Order lookup failed",
+                status: context.api.status default: 500,
+                detail: context.api.error.message default: "Upstream order service error"
+              },
+              summary: {
+                status: context.api.status default: 500,
+                ok: false,
+                error: {
+                  errorId: "order-error",
+                  message: "Order lookup failed",
+                  category: "BUSINESS",
+                  status: context.api.status default: 500,
+                  details: {
+                    orderId: context.id
+                  }
+                }
+              }
+            }
+        target:
+          kind: context
+          path: ''
+      next: fail_with_custom_error
+
+    fail_with_custom_error:
+      type: fail
+      errorCode: "https://example.com/probs/order-error"
+      reason: "Order lookup failed"
+
+    done:
+      type: succeed
+      outputVar: summary

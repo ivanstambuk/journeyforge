@@ -21,7 +21,7 @@ We want to:
 
 ## Example – Manual approval loop (Journey)
 
-Journey definition (conceptual): `approval-loop.journey.yaml` (TBD)
+Journey definition (conceptual): 
 
 This journey:
 - Waits for an approval decision.
@@ -153,7 +153,7 @@ This pattern combines:
 
 ## Example – Bounded polling of downstream status (Api)
 
-Journey (conceptual): `poll-status-api.journey.yaml` (TBD)
+Journey (conceptual): 
 
 This API:
 - Accepts a request with a `jobId`.

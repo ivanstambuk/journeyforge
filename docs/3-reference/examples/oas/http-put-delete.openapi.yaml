@@ -10,6 +10,7 @@ paths:
   /journeys/http-put-delete/start:
     post:
       summary: Start http-put-delete journey
+      operationId: httpPutDelete_start
       tags: [http-put-delete]
       requestBody:
         required: true
@@ -27,6 +28,7 @@ paths:
   /journeys/{journeyId}:
     get:
       summary: Get journey status
+      operationId: httpPutDelete_getStatus
       tags: [http-put-delete]
       parameters:
         - in: path
@@ -43,6 +45,7 @@ paths:
   /journeys/{journeyId}/result:
     get:
       summary: Retrieve final outcome
+      operationId: httpPutDelete_getResult
       tags: [http-put-delete]
       parameters:
         - in: path

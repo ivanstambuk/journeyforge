@@ -1,0 +1,39 @@
+arazzo: 1.0.1
+info:
+  title: JourneyForge – http-chained-calls workflows
+  version: 0.1.0
+  summary: Workflows for chained HTTP calls.
+sourceDescriptions:
+  - name: httpChainedCalls
+    type: openapi
+    url: ../oas/http-chained-calls.openapi.yaml
+workflows:
+  http-chained-calls-happy-path:
+    summary: Start an http-chained-calls journey and retrieve the final outcome.
+    sourceDescriptions:
+      - httpChainedCalls
+    inputs:
+      startRequest:
+        description: Initial payload for the http-chained-calls journey.
+        schema:
+          type: object
+          additionalProperties: true
+    steps:
+      - name: startJourney
+        description: Start a new http-chained-calls journey instance.
+        call:
+          source: httpChainedCalls
+          operationId: httpChainedCalls_start
+        parameters:
+          requestBody: $inputs.startRequest
+        outputs:
+          journeyId: $response.body.journeyId
+      - name: getResult
+        description: Retrieve the final outcome after chained calls.
+        call:
+          source: httpChainedCalls
+          operationId: httpChainedCalls_getResult
+        parameters:
+          path:
+            journeyId: $steps.startJourney.outputs.journeyId
+

@@ -8,7 +8,7 @@ JourneyForge needs a single, powerful expression/transform language for predicat
 ## Decision
 - Adopt DataWeave 2.x as the canonical expression language from the beginning.
 - In the initial version of the DSL:
-  - `choice` supports a DataWeave predicate form (`when.predicate: { lang: dataweave, expr|exprRef }`) that must evaluate to boolean.
+  - `choice` supports a DataWeave predicate form (`when.predicate: { lang: dataweave, expr }`) that must evaluate to boolean; expressions are authored inline in journey specs.
   - Equality checks remain as sugar for readability and can be compiled to equivalent DataWeave.
 - Transforms will use DataWeave as well (in a later feature that introduces a `transform` state).
 
@@ -19,3 +19,4 @@ JourneyForge needs a single, powerful expression/transform language for predicat
 
 ## Notes
 - Implementation details (e.g., embedding vs external CLI) are non‑normative and will be specified in the corresponding feature.
+- External DataWeave modules and DSL-level `exprRef` fields are explicitly out of scope for this version; see ADR-0015 and Q-003 in `docs/4-architecture/open-questions.md` for recorded reuse scenarios and the v1 decision to keep expressions inline-only.

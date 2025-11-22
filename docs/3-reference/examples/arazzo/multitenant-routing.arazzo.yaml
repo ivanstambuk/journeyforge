@@ -1,0 +1,44 @@
+arazzo: 1.0.1
+info:
+  title: JourneyForge – multitenant-routing workflows
+  version: 0.1.0
+  summary: Workflows for multitenant HTTP routing.
+sourceDescriptions:
+  - name: multitenantRouting
+    type: openapi
+    url: ../oas/multitenant-routing.openapi.yaml
+workflows:
+  multitenant-routing-happy-path:
+    summary: Start a multitenant-routing journey and retrieve the final outcome.
+    sourceDescriptions:
+      - multitenantRouting
+    inputs:
+      startRequest:
+        description: Initial payload for the multitenant-routing journey.
+        schema:
+          type: object
+          required:
+            - id
+          properties:
+            id:
+              type: string
+          additionalProperties: true
+    steps:
+      - name: startJourney
+        description: Start a new multitenant-routing journey instance.
+        call:
+          source: multitenantRouting
+          operationId: multitenantRouting_start
+        parameters:
+          requestBody: $inputs.startRequest
+        outputs:
+          journeyId: $response.body.journeyId
+      - name: getResult
+        description: Retrieve the final outcome after multitenant routing.
+        call:
+          source: multitenantRouting
+          operationId: multitenantRouting_getResult
+        parameters:
+          path:
+            journeyId: $steps.startJourney.outputs.journeyId
+

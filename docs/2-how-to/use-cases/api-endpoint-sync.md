@@ -21,7 +21,7 @@ There is no concept of journey initiation, status polling, or `journeyId` – fr
 - `choice` to branch on HTTP outcomes (for example `ok` and `status`).
 - `transform` for DataWeave-based response mapping.
 - `spec.defaults` for shared HTTP headers and timeouts.
-- `spec.errors` / `spec.outcomes` (optional) to map failures to stable error codes and HTTP statuses.
+- `spec.errors` / `spec.outcomes` (optional) to standardise failure envelopes and, in combination with implementations, map failures to stable error codes and HTTP statuses.
 
 ## Example – http-chained-calls-api
 

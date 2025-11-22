@@ -1,0 +1,44 @@
+arazzo: 1.0.1
+info:
+  title: JourneyForge – http-failure-branch workflows
+  version: 0.1.0
+  summary: Workflows for HTTP failure branching.
+sourceDescriptions:
+  - name: httpFailureBranch
+    type: openapi
+    url: ../oas/http-failure-branch.openapi.yaml
+workflows:
+  http-failure-branch-happy-path:
+    summary: Start an http-failure-branch journey and retrieve the final outcome.
+    sourceDescriptions:
+      - httpFailureBranch
+    inputs:
+      startRequest:
+        description: Initial payload for the http-failure-branch journey.
+        schema:
+          type: object
+          required:
+            - inputId
+          properties:
+            inputId:
+              type: string
+          additionalProperties: true
+    steps:
+      - name: startJourney
+        description: Start a new http-failure-branch journey instance.
+        call:
+          source: httpFailureBranch
+          operationId: httpFailureBranch_start
+        parameters:
+          requestBody: $inputs.startRequest
+        outputs:
+          journeyId: $response.body.journeyId
+      - name: getResult
+        description: Retrieve the final outcome after failure branching.
+        call:
+          source: httpFailureBranch
+          operationId: httpFailureBranch_getResult
+        parameters:
+          path:
+            journeyId: $steps.startJourney.outputs.journeyId
+

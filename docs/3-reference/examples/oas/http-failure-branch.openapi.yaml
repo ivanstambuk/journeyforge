@@ -10,6 +10,7 @@ paths:
   /journeys/http-failure-branch/start:
     post:
       summary: Start http-failure-branch journey
+      operationId: httpFailureBranch_start
       tags: [http-failure-branch]
       requestBody:
         required: true
@@ -27,6 +28,7 @@ paths:
   /journeys/{journeyId}:
     get:
       summary: Get journey status
+      operationId: httpFailureBranch_getStatus
       tags: [http-failure-branch]
       parameters:
         - in: path
@@ -43,6 +45,7 @@ paths:
   /journeys/{journeyId}/result:
     get:
       summary: Retrieve final outcome
+      operationId: httpFailureBranch_getResult
       tags: [http-failure-branch]
       parameters:
         - in: path

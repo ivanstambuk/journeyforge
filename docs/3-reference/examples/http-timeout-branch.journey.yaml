@@ -34,6 +34,10 @@ spec:
               type: string
           additionalProperties: true
       additionalProperties: true
+  # Error handling:
+  # - Inspects the structured HTTP result to detect timeouts explicitly and fails with a dedicated timeout error code.
+  # - The `{status, ok, headers, body, error{type,message,...}}` shape is a custom error envelope; Problem Details
+  #   remains the canonical internal model for errors (ADR-0003), with `errorCode`/`reason` surfacing a stable timeout code.
   apis:
     items: { openApiRef: apis/items.openapi.yaml }
     users: { openApiRef: apis/users.openapi.yaml }

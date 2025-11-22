@@ -1,0 +1,79 @@
+apiVersion: v1
+kind: Journey
+metadata:
+  name: subject-step-guard
+  version: 0.1.0
+spec:
+  policies:
+    httpSecurity:
+      default: jwtDefault
+      definitions:
+        jwtDefault:
+          kind: jwt
+          issuer: "https://issuer.example.com"
+          audience: ["journeyforge"]
+          jwks:
+            source: jwksUrl
+            url: "https://issuer.example.com/.well-known/jwks.json"
+            cacheTtlSeconds: 3600
+            clockSkewSeconds: 60
+            requiredClaims:
+              sub: { type: string }
+            scope: { contains: ["journey:self-service"] }
+
+  security:
+    journeyPolicyRef: jwtDefault
+
+  start: captureOwner
+
+  states:
+    captureOwner:
+      type: transform
+      transform:
+        mapper:
+          lang: dataweave
+          expr: |
+            context ++ {
+              ownerUserId: context.auth.jwt.claims.sub
+            }
+        target:
+          kind: context
+          path: ''
+      next: waitForUserAction
+
+    waitForUserAction:
+      type: wait
+      wait:
+        channel: manual
+        input:
+          schema:
+            type: object
+            properties:
+              decision: { type: string }
+            additionalProperties: true
+        apply:
+          mapper:
+            lang: dataweave
+            expr: |
+              context ++ {
+                stepUserId: context.auth.jwt.claims.sub,
+                lastPayload: payload
+              }
+        on:
+          - when:
+              predicate:
+                lang: dataweave
+                expr: |
+                  context.stepUserId == context.ownerUserId
+            next: proceed
+      default: subjectMismatch
+
+    proceed:
+      type: succeed
+      outputVar: lastPayload
+
+    subjectMismatch:
+      type: fail
+      errorCode: SUBJECT_MISMATCH
+      reason: "Authenticated principal does not match journey owner"
+

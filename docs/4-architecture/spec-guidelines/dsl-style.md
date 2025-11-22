@@ -36,7 +36,7 @@ Use this guide when authoring journey specs.
 
 ## Branching
 - Prefer a `default` branch in `choice`.
-- Use DataWeave predicates for `choice`; prefer short, readable expressions or `exprRef` files for complex logic.
+- Use DataWeave predicates for `choice`; prefer short, readable inline expressions. For complex logic, factor the mapping into named mappers under `spec.mappers` and reuse them via `mapperRef`.
 
 ## Loops
 - Avoid unbounded loops in the state graph; every cycle SHOULD be structurally bounded (for example, via an explicit max-attempt counter) or clearly convergent.

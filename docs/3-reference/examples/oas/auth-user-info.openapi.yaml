@@ -10,6 +10,7 @@ paths:
   /journeys/auth-user-info/start:
     post:
       summary: Start auth-user-info journey
+      operationId: authUserInfo_start
       tags: [auth-user-info]
       requestBody:
         required: true
@@ -27,6 +28,7 @@ paths:
   /journeys/{journeyId}:
     get:
       summary: Get journey status
+      operationId: authUserInfo_getStatus
       tags: [auth-user-info]
       parameters:
         - in: path
@@ -43,6 +45,7 @@ paths:
   /journeys/{journeyId}/result:
     get:
       summary: Retrieve final outcome
+      operationId: authUserInfo_getResult
       tags: [auth-user-info]
       parameters:
         - in: path

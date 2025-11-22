@@ -35,7 +35,7 @@ Any `transform` states shown below are for internal `context` shape only; they d
 
 ## Example – From Payload (Order & Customer IDs + Channel Tag)
 
-Journey definition (conceptual): `metadata-from-payload.journey.yaml` (TBD)
+Journey definition (conceptual):
 
 Goal:
 - Lift `order.id` and `customer.id` from the start payload and expose them as attributes on the journey instance via explicit bindings.
@@ -110,7 +110,7 @@ Resulting metadata (conceptual):
 
 ## Example – From Headers (Tenant & Channel)
 
-Journey definition (conceptual): `metadata-from-headers.journey.yaml` (TBD)
+Journey definition (conceptual): 
 
 Goal:
 - Capture tenant and channel information from headers and expose them as attributes on the journey instance.
@@ -186,7 +186,7 @@ Resulting metadata (conceptual):
 
 ## Example – From Baggage (Correlation & Experiment)
 
-Journey definition (conceptual): `metadata-from-baggage.journey.yaml` (TBD)
+Journey definition (conceptual): 
 
 Goal:
 - Use the W3C `baggage` header to capture correlation ids and experiment flags, and expose

@@ -1,0 +1,116 @@
+apiVersion: v1
+kind: Journey
+metadata:
+  name: approval-loop
+  version: 0.1.0
+spec:
+  execution:
+    maxDurationSec: 3600
+    onTimeout:
+      errorCode: APPROVAL_TIMEOUT
+      reason: "No decision within 60 minutes"
+
+  input:
+    schema:
+      type: object
+      required: [decision]
+      properties:
+        decision: { type: string }
+      additionalProperties: true
+
+  start: init
+  states:
+    init:
+      type: transform
+      transform:
+        mapper:
+          lang: dataweave
+          expr: |
+            context ++ {
+              approvalAttempts: (context.approvalAttempts default: 0) as Number
+            }
+        target:
+          kind: context
+          path: ''
+      next: waitForApproval
+
+    waitForApproval:
+      type: wait
+      wait:
+        channel: manual
+        input:
+          schema:
+            type: object
+            required: [decision]
+            properties:
+              decision: { type: string }
+        timeoutSec: 300
+        onTimeout: timedOut
+        apply:
+          mapper:
+            lang: dataweave
+            expr: |
+              context ++ { decision: payload.decision }
+      on:
+        - when:
+            predicate:
+              lang: dataweave
+              expr: |
+                payload.decision == "approved"
+          next: approved
+        - when:
+            predicate:
+              lang: dataweave
+              expr: |
+                payload.decision == "needs_more_info"
+          next: incrementAttempts
+      default: rejected
+
+    incrementAttempts:
+      type: transform
+      transform:
+        mapper:
+          lang: dataweave
+          expr: |
+            context ++ {
+              approvalAttempts: (context.approvalAttempts default: 0) + 1
+            }
+        target:
+          kind: context
+          path: ''
+      next: decideLoop
+
+    decideLoop:
+      type: choice
+      choices:
+        - when:
+            predicate:
+              lang: dataweave
+              expr: |
+                context.approvalAttempts < 3
+          next: notifyAndReenter
+      default: rejected
+
+    notifyAndReenter:
+      type: task
+      task:
+        kind: httpCall
+        operationRef: notifications.sendApprovalReminder
+        timeoutMs: 5000
+        resultVar: reminder
+      next: waitForApproval
+
+    approved:
+      type: succeed
+      outputVar: decision
+
+    rejected:
+      type: fail
+      errorCode: APPROVAL_REJECTED
+      reason: "Approval rejected or attempts exhausted"
+
+    timedOut:
+      type: fail
+      errorCode: APPROVAL_TIMEOUT
+      reason: "No approval decision before timeout"
+

@@ -10,6 +10,7 @@ paths:
   /journeys/http-aggregate-errors/start:
     post:
       summary: Start http-aggregate-errors journey
+      operationId: httpAggregateErrors_start
       tags: [http-aggregate-errors]
       requestBody:
         required: true
@@ -27,6 +28,7 @@ paths:
   /journeys/{journeyId}:
     get:
       summary: Get journey status
+      operationId: httpAggregateErrors_getStatus
       tags: [http-aggregate-errors]
       parameters:
         - in: path
@@ -43,6 +45,7 @@ paths:
   /journeys/{journeyId}/result:
     get:
       summary: Retrieve final outcome
+      operationId: httpAggregateErrors_getResult
       tags: [http-aggregate-errors]
       parameters:
         - in: path

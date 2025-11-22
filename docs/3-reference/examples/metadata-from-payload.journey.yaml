@@ -1,0 +1,48 @@
+apiVersion: v1
+kind: Journey
+metadata:
+  name: metadata-from-payload
+  version: 0.1.0
+  description: >
+    Demonstrates metadata bindings sourced from the start payload.
+  tags:
+    - self-service
+    - kyc
+spec:
+  input:
+    schema:
+      type: object
+      required: [order, channel]
+      additionalProperties: true
+      properties:
+        order:
+          type: object
+          required: [id]
+          additionalProperties: true
+          properties:
+            id:
+              type: string
+        customer:
+          type: object
+          additionalProperties: true
+          properties:
+            id:
+              type: string
+        channel:
+          type: string
+  metadata:
+    bindings:
+      tags:
+        fromPayload:
+          - path: channel
+      attributes:
+        orderId:
+          path: order.id
+        customerId:
+          path: customer.id
+  start: doWork
+  states:
+    doWork:
+      type: succeed
+      outputVar: order
+

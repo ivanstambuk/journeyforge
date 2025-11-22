@@ -34,6 +34,11 @@ spec:
               type: string
           additionalProperties: true
       additionalProperties: true
+  # Error handling:
+  # - Aggregates failures from multiple upstream HTTP calls.
+  # - Exposes a simple custom error envelope `{status, ok, headers, body, error{type,message,...}}`
+  #   as the journey’s external error structure, while the engine still uses Problem Details
+  #   as the canonical internal error model (ADR-0003).
   apis:
     items: { openApiRef: apis/items.openapi.yaml }
     users: { openApiRef: apis/users.openapi.yaml }

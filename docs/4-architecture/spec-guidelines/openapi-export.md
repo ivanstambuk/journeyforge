@@ -5,6 +5,9 @@ Status: Draft | Last updated: 2025-11-21
 This document defines how each JourneyForge journey exports an OpenAPI 3.1 YAML contract for external consumers.
 It also introduces the export shape for synchronous API endpoints (`kind: Api`).
 
+For workflow-level descriptions over these OpenAPI surfaces (for example, “start journey → wait step → result” flows),
+see also `docs/4-architecture/spec-guidelines/arazzo-export.md`.
+
 ## Goals
 - Provide a stable REST surface for:
   - Journeys (`kind: Journey`):
@@ -78,8 +81,10 @@ API endpoints reuse the same logical JSON Schemas as journeys but without the `J
   - If `spec.output.schema` is present, the exporter uses that schema as the `200` response body.
   - If absent, the response body defaults to an untyped `object`.
 - Error response:
-  - At minimum, exporters SHOULD describe a generic error envelope `{ code: string, reason: string, ... }` aligned with the DSL `fail` shape.
-  - When the implementation exposes RFC 9457 Problem Details directly, exporters MAY instead reference a shared `ProblemDetails` schema.
+  - Exporters MUST follow the journey’s error configuration:
+    - When `spec.errors.envelope` is omitted or uses `format: problemDetails`, the error body SHOULD be described using a Problem Details schema (for example a shared `ProblemDetails` component).
+    - When `spec.errors.envelope.format: custom` is present, the error body SHOULD be described using the journey’s custom envelope schema.
+  - `JourneyOutcome.error.{code,reason}` remains available as the stable error code/reason view over the canonical Problem Details object (ADR‑0003); exporters MAY surface this view in documentation, but it is not a separate envelope.
 
 ## Per-journey / per-API binding
 - For journeys (`kind: Journey`):
@@ -92,7 +97,7 @@ API endpoints reuse the same logical JSON Schemas as journeys but without the `J
 ## Future work
 - Add per‑journey input/output JSON Schemas by sampling or from declared `spec.input.schema`/`spec.output.schema` in the spec.
 - Extend events to named signals for `wait`/webhook states when introduced.
-- Define a shared `ProblemDetails` schema and formalise how `kind: Api` exports error responses (including status code mapping from `spec.outcomes`).
+- Define a shared `ProblemDetails` schema and formalise how `kind: Api` exports error responses (including documenting status code mapping driven by `spec.apiResponses` and its Problem-Details-based defaults).
 
 ## Schema integration and bundling
 - The DSL exposes inline JSON Schemas via:

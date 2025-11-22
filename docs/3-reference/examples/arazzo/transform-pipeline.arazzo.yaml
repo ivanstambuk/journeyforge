@@ -1,0 +1,39 @@
+arazzo: 1.0.1
+info:
+  title: JourneyForge – transform-pipeline workflows
+  version: 0.1.0
+  summary: Workflows for multi-step DataWeave transform pipelines.
+sourceDescriptions:
+  - name: transformPipeline
+    type: openapi
+    url: ../oas/transform-pipeline.openapi.yaml
+workflows:
+  transform-pipeline-happy-path:
+    summary: Start a transform-pipeline journey and retrieve the transformed output.
+    sourceDescriptions:
+      - transformPipeline
+    inputs:
+      startRequest:
+        description: Initial payload for the transform-pipeline journey.
+        schema:
+          type: object
+          additionalProperties: true
+    steps:
+      - name: startJourney
+        description: Start a new transform-pipeline journey instance.
+        call:
+          source: transformPipeline
+          operationId: transformPipeline_start
+        parameters:
+          requestBody: $inputs.startRequest
+        outputs:
+          journeyId: $response.body.journeyId
+      - name: getResult
+        description: Retrieve the final transformed output.
+        call:
+          source: transformPipeline
+          operationId: transformPipeline_getResult
+        parameters:
+          path:
+            journeyId: $steps.startJourney.outputs.journeyId
+

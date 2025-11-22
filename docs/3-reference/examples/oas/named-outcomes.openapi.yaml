@@ -10,6 +10,7 @@ paths:
   /journeys/named-outcomes/start:
     post:
       summary: Start named-outcomes journey
+      operationId: namedOutcomes_start
       tags: [named-outcomes]
       requestBody:
         required: true
@@ -27,6 +28,7 @@ paths:
   /journeys/{journeyId}:
     get:
       summary: Get journey status
+      operationId: namedOutcomes_getStatus
       tags: [named-outcomes]
       parameters:
         - in: path
@@ -43,6 +45,7 @@ paths:
   /journeys/{journeyId}/result:
     get:
       summary: Retrieve final outcome
+      operationId: namedOutcomes_getResult
       tags: [named-outcomes]
       parameters:
         - in: path

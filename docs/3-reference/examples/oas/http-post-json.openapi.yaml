@@ -10,6 +10,7 @@ paths:
   /journeys/http-post-json/start:
     post:
       summary: Start http-post-json journey
+      operationId: httpPostJson_start
       tags: [http-post-json]
       requestBody:
         required: true
@@ -27,6 +28,7 @@ paths:
   /journeys/{journeyId}:
     get:
       summary: Get journey status
+      operationId: httpPostJson_getStatus
       tags: [http-post-json]
       parameters:
         - in: path
@@ -43,6 +45,7 @@ paths:
   /journeys/{journeyId}/result:
     get:
       summary: Retrieve final outcome
+      operationId: httpPostJson_getResult
       tags: [http-post-json]
       parameters:
         - in: path

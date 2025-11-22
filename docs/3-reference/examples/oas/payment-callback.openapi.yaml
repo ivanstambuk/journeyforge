@@ -10,6 +10,7 @@ paths:
   /journeys/payment-callback/start:
     post:
       summary: Start payment-callback journey
+      operationId: paymentCallback_start
       tags: [payment-callback]
       requestBody:
         required: true
@@ -33,6 +34,7 @@ paths:
   /journeys/{journeyId}:
     get:
       summary: Get journey status
+      operationId: paymentCallback_getStatus
       tags: [payment-callback]
       parameters:
         - in: path
@@ -49,6 +51,7 @@ paths:
   /journeys/{journeyId}/steps/waitForCallback:
     post:
       summary: Webhook callback for step waitForCallback
+      operationId: paymentCallback_waitForCallback
       tags: [payment-callback]
       parameters:
         - in: path
@@ -83,6 +86,7 @@ paths:
   /journeys/{journeyId}/result:
     get:
       summary: Retrieve final outcome
+      operationId: paymentCallback_getResult
       tags: [payment-callback]
       parameters:
         - in: path

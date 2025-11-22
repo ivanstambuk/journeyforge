@@ -10,6 +10,7 @@ paths:
   /journeys/http-timeout-branch/start:
     post:
       summary: Start http-timeout-branch journey
+      operationId: httpTimeoutBranch_start
       tags: [http-timeout-branch]
       requestBody:
         required: true
@@ -27,6 +28,7 @@ paths:
   /journeys/{journeyId}:
     get:
       summary: Get journey status
+      operationId: httpTimeoutBranch_getStatus
       tags: [http-timeout-branch]
       parameters:
         - in: path
@@ -43,6 +45,7 @@ paths:
   /journeys/{journeyId}/result:
     get:
       summary: Retrieve final outcome
+      operationId: httpTimeoutBranch_getResult
       tags: [http-timeout-branch]
       parameters:
         - in: path

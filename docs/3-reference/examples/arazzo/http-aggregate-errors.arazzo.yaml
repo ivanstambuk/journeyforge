@@ -1,0 +1,39 @@
+arazzo: 1.0.1
+info:
+  title: JourneyForge – http-aggregate-errors workflows
+  version: 0.1.0
+  summary: Workflows for aggregating errors across multiple HTTP calls.
+sourceDescriptions:
+  - name: httpAggregateErrors
+    type: openapi
+    url: ../oas/http-aggregate-errors.openapi.yaml
+workflows:
+  http-aggregate-errors-happy-path:
+    summary: Start an http-aggregate-errors journey and retrieve the aggregated outcome.
+    sourceDescriptions:
+      - httpAggregateErrors
+    inputs:
+      startRequest:
+        description: Initial context payload for the http-aggregate-errors journey.
+        schema:
+          type: object
+          additionalProperties: true
+    steps:
+      - name: startJourney
+        description: Start a new http-aggregate-errors journey instance.
+        call:
+          source: httpAggregateErrors
+          operationId: httpAggregateErrors_start
+        parameters:
+          requestBody: $inputs.startRequest
+        outputs:
+          journeyId: $response.body.journeyId
+      - name: getResult
+        description: Retrieve the final aggregated outcome.
+        call:
+          source: httpAggregateErrors
+          operationId: httpAggregateErrors_getResult
+        parameters:
+          path:
+            journeyId: $steps.startJourney.outputs.journeyId
+

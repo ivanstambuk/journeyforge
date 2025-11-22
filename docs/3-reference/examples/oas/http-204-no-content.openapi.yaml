@@ -10,6 +10,7 @@ paths:
   /journeys/http-204-no-content/start:
     post:
       summary: Start http-204-no-content journey
+      operationId: http204NoContent_start
       tags: [http-204-no-content]
       requestBody:
         required: true
@@ -27,6 +28,7 @@ paths:
   /journeys/{journeyId}:
     get:
       summary: Get journey status
+      operationId: http204NoContent_getStatus
       tags: [http-204-no-content]
       parameters:
         - in: path
@@ -43,6 +45,7 @@ paths:
   /journeys/{journeyId}/result:
     get:
       summary: Retrieve final outcome
+      operationId: http204NoContent_getResult
       tags: [http-204-no-content]
       parameters:
         - in: path

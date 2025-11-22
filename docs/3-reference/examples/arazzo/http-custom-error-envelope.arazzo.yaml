@@ -1,0 +1,43 @@
+arazzo: 1.0.1
+info:
+  title: JourneyForge – http-custom-error-envelope workflows
+  version: 0.1.0
+  summary: Workflow for order lookup with a single, journey-specific custom error envelope derived from canonical Problem Details.
+sourceDescriptions:
+  - name: httpCustomErrorEnvelope
+    type: openapi
+    url: ../oas/http-custom-error-envelope.openapi.yaml
+workflows:
+  http-custom-error-envelope-happy-path:
+    summary: Start the http-custom-error-envelope journey and read the final outcome.
+    sourceDescriptions:
+      - httpCustomErrorEnvelope
+    inputs:
+      startRequest:
+        description: Initial payload for the http-custom-error-envelope journey.
+        schema:
+          type: object
+          required:
+            - id
+          properties:
+            id:
+              type: string
+          additionalProperties: true
+    steps:
+      - name: startJourney
+        description: Start a new http-custom-error-envelope journey instance.
+        call:
+          source: httpCustomErrorEnvelope
+          operationId: httpCustomErrorEnvelope_start
+        parameters:
+          requestBody: $inputs.startRequest
+        outputs:
+          journeyId: $response.body.journeyId
+      - name: getResult
+        description: Retrieve the final outcome, including the journey's custom error envelope when the lookup fails.
+        call:
+          source: httpCustomErrorEnvelope
+          operationId: httpCustomErrorEnvelope_getResult
+        parameters:
+          path:
+            journeyId: $steps.startJourney.outputs.journeyId

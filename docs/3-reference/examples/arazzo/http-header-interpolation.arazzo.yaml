@@ -1,0 +1,44 @@
+arazzo: 1.0.1
+info:
+  title: JourneyForge – http-header-interpolation workflows
+  version: 0.1.0
+  summary: Workflows for header interpolation and echo verification.
+sourceDescriptions:
+  - name: httpHeaderInterpolation
+    type: openapi
+    url: ../oas/http-header-interpolation.openapi.yaml
+workflows:
+  http-header-interpolation-happy-path:
+    summary: Start an http-header-interpolation journey and retrieve the final outcome.
+    sourceDescriptions:
+      - httpHeaderInterpolation
+    inputs:
+      startRequest:
+        description: Initial payload for the http-header-interpolation journey.
+        schema:
+          type: object
+          required:
+            - traceparent
+          properties:
+            traceparent:
+              type: string
+          additionalProperties: true
+    steps:
+      - name: startJourney
+        description: Start a new http-header-interpolation journey instance.
+        call:
+          source: httpHeaderInterpolation
+          operationId: httpHeaderInterpolation_start
+        parameters:
+          requestBody: $inputs.startRequest
+        outputs:
+          journeyId: $response.body.journeyId
+      - name: getResult
+        description: Retrieve the final outcome after header interpolation.
+        call:
+          source: httpHeaderInterpolation
+          operationId: httpHeaderInterpolation_getResult
+        parameters:
+          path:
+            journeyId: $steps.startJourney.outputs.journeyId
+
