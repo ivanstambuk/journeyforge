@@ -1,0 +1,397 @@
+apiVersion: v1
+kind: Journey
+metadata:
+  name: monthly-invoicing-batch
+  version: 0.1.0
+  description: Monthly invoicing journey that configures scheduled batch runs with draft, validation, approval, sending, and chasing.
+spec:
+  apis:
+    billing:
+      openApiRef: apis/billing.openapi.yaml
+  input:
+    schema:
+      title: MonthlyInvoicingConfigRequest
+      type: object
+      required:
+        - tenantId
+        - batchId
+        - firstRunAt
+        - interval
+        - maxRuns
+      properties:
+        tenantId:
+          type: string
+        batchId:
+          type: string
+        firstRunAt:
+          type: string
+          format: date-time
+        interval:
+          type: string
+          description: ISO-8601 duration for batch cadence (for example P1M).
+        maxRuns:
+          type: integer
+        gracePeriodDuration:
+          type: string
+          description: ISO-8601 duration to wait after the due date before first reminders (for example P7D).
+        reminderGapDuration:
+          type: string
+          description: ISO-8601 duration between first reminder and final notice (for example P7D).
+      additionalProperties: true
+  output:
+    schema:
+      title: MonthlyInvoicingConfigOutcome
+      type: object
+      required:
+        - status
+        - tenantId
+        - batchId
+        - firstRunAt
+        - interval
+        - maxRuns
+      properties:
+        status:
+          type: string
+          enum:
+            - SCHEDULED
+        tenantId:
+          type: string
+        batchId:
+          type: string
+        firstRunAt:
+          type: string
+          format: date-time
+        interval:
+          type: string
+        maxRuns:
+          type: integer
+      additionalProperties: true
+  start: configureSchedule
+  states:
+    configureSchedule:
+      type: task
+      task:
+        kind: schedule
+        schedule:
+          start: draftInvoices
+          startAt:
+            mapper:
+              lang: dataweave
+              expr: context.firstRunAt
+          interval:
+            mapper:
+              lang: dataweave
+              expr: context.interval
+          maxRuns:
+            mapper:
+              lang: dataweave
+              expr: context.maxRuns
+          subjectId:
+            mapper:
+              lang: dataweave
+              expr: context.tenantId
+          context:
+            mapper:
+              lang: dataweave
+              expr: context
+          onExisting: upsert
+      next: prepareConfigOutcome
+
+    prepareConfigOutcome:
+      type: transform
+      transform:
+        mapper:
+          lang: dataweave
+          expr: |
+            context ++ {
+              configOutcome: {
+                status: "SCHEDULED",
+                tenantId: context.tenantId,
+                batchId: context.batchId,
+                firstRunAt: context.firstRunAt,
+                interval: context.interval,
+                maxRuns: context.maxRuns
+              }
+            }
+        target:
+          kind: context
+          path: ""
+      next: completeConfigured
+
+    completeConfigured:
+      type: succeed
+      outputVar: configOutcome
+
+    draftInvoices:
+      type: task
+      task:
+        kind: httpCall
+        operationRef: billing.draftInvoicesForBatch
+        params:
+          path:
+            batchId: "${context.batchId}"
+          headers:
+            Accept: application/json
+        body:
+          mapper:
+            lang: dataweave
+            expr: |
+              {
+                tenantId: context.tenantId,
+                billingPeriodStart: context.billingPeriodStart default null,
+                billingPeriodEnd: context.billingPeriodEnd default null
+              }
+        timeoutMs: 5000
+        resultVar: draftResult
+      next: validateDrafts
+
+    validateDrafts:
+      type: task
+      task:
+        kind: httpCall
+        operationRef: billing.validateInvoiceBatch
+        params:
+          path:
+            batchId: "${context.batchId}"
+          headers:
+            Accept: application/json
+        body:
+          mapper:
+            lang: dataweave
+            expr: |
+              {
+                tenantId: context.tenantId
+              }
+        timeoutMs: 5000
+        resultVar: validationResult
+      next: validationOutcome
+
+    validationOutcome:
+      type: choice
+      choices:
+        - when:
+            predicate:
+              lang: dataweave
+              expr: |
+                validationResult.ok == true
+          next: waitForFinanceApproval
+      default: recordValidationFailure
+
+    waitForFinanceApproval:
+      type: wait
+      wait:
+        channel: manual
+        input:
+          schema:
+            title: InvoiceBatchApprovalInput
+            description: Finance approval decision for the invoice batch.
+            type: object
+            required:
+              - decision
+            properties:
+              decision:
+                type: string
+                enum:
+                  - APPROVED
+                  - REJECTED
+              comment:
+                type: string
+            additionalProperties: false
+        response:
+          outputVar: approvalStepResponse
+          schema:
+            title: InvoiceBatchApprovalStepResponse
+            type: object
+            description: Additional top-level fields returned from the approveInvoiceBatch step.
+            properties:
+              decision:
+                type: string
+                enum:
+                  - APPROVED
+                  - REJECTED
+              comment:
+                type: string
+            additionalProperties: true
+        apply:
+          mapper:
+            lang: dataweave
+            expr: |
+              context ++ {
+                approval: payload,
+                approvalStepResponse: {
+                  decision: payload.decision,
+                  comment: payload.comment default null
+                }
+              }
+        on:
+          - when:
+              predicate:
+                lang: dataweave
+                expr: |
+                  payload.decision == "APPROVED"
+            next: sendInvoices
+        default: recordRejection
+
+    recordValidationFailure:
+      type: transform
+      transform:
+        mapper:
+          lang: dataweave
+          expr: |
+            context ++ {
+              lastRun: {
+                batchId: context.batchId,
+                runAt: now(),
+                status: "VALIDATION_FAILED"
+              }
+            }
+        target:
+          kind: context
+          path: ""
+      next: scheduledRunDone
+
+    recordRejection:
+      type: transform
+      transform:
+        mapper:
+          lang: dataweave
+          expr: |
+            context ++ {
+              lastRun: {
+                batchId: context.batchId,
+                runAt: now(),
+                status: "REJECTED",
+                reason: payload.comment default null
+              }
+            }
+        target:
+          kind: context
+          path: ""
+      next: scheduledRunDone
+
+    sendInvoices:
+      type: task
+      task:
+        kind: httpCall
+        operationRef: billing.sendInvoiceBatch
+        params:
+          path:
+            batchId: "${context.batchId}"
+          headers:
+            Accept: application/json
+        body:
+          mapper:
+            lang: dataweave
+            expr: |
+              {
+                tenantId: context.tenantId,
+                channel: context.channel default "email"
+              }
+        timeoutMs: 5000
+        resultVar: sendResult
+      next: recordSendOutcome
+
+    recordSendOutcome:
+      type: transform
+      transform:
+        mapper:
+          lang: dataweave
+          expr: |
+            context ++ {
+              lastRun: {
+                batchId: context.batchId,
+                runAt: now(),
+                status: if (sendResult.ok) "SENT" else "SEND_FAILED",
+                sentCount: sendResult.body.sentCount default null,
+                failedCount: sendResult.body.failedCount default null
+              }
+            }
+        target:
+          kind: context
+          path: ""
+      next: waitBeforeFirstReminder
+
+    waitBeforeFirstReminder:
+      type: timer
+      timer:
+        duration:
+          mapper:
+            lang: dataweave
+            expr: |
+              context.gracePeriodDuration default "P7D"
+      next: sendFirstReminder
+
+    sendFirstReminder:
+      type: task
+      task:
+        kind: httpCall
+        operationRef: billing.sendInvoiceReminder
+        params:
+          path:
+            batchId: "${context.batchId}"
+          headers:
+            Accept: application/json
+        body:
+          mapper:
+            lang: dataweave
+            expr: |
+              {
+                tenantId: context.tenantId
+              }
+        timeoutMs: 5000
+        resultVar: reminderResult
+      next: waitBeforeFinalNotice
+
+    waitBeforeFinalNotice:
+      type: timer
+      timer:
+        duration:
+          mapper:
+            lang: dataweave
+            expr: |
+              context.reminderGapDuration default "P7D"
+      next: sendFinalNotice
+
+    sendFinalNotice:
+      type: task
+      task:
+        kind: httpCall
+        operationRef: billing.sendInvoiceFinalNotice
+        params:
+          path:
+            batchId: "${context.batchId}"
+          headers:
+            Accept: application/json
+        body:
+          mapper:
+            lang: dataweave
+            expr: |
+              {
+                tenantId: context.tenantId
+              }
+        timeoutMs: 5000
+        resultVar: finalNoticeResult
+      next: recordChaseOutcome
+
+    recordChaseOutcome:
+      type: transform
+      transform:
+        mapper:
+          lang: dataweave
+          expr: |
+            context ++ {
+              lastRun: {
+                batchId: context.batchId,
+                runAt: now(),
+                status: "CHASE_COMPLETED",
+                remindedCount: reminderResult.body.remindedCount default null,
+                finalNoticeCount: finalNoticeResult.body.finalNoticeCount default null
+              }
+            }
+        target:
+          kind: context
+          path: ""
+      next: scheduledRunDone
+
+    scheduledRunDone:
+      type: succeed

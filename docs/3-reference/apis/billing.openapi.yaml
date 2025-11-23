@@ -1,0 +1,198 @@
+openapi: 3.1.0
+info:
+  title: Billing API
+  version: 1.0.0
+  description: Billing API for invoice batch drafting, validation, sending, and reminders.
+  contact:
+    name: JourneyForge
+servers:
+  - url: https://billing.example.com
+paths:
+  /billing/invoice-batches/{batchId}/draft:
+    post:
+      operationId: draftInvoicesForBatch
+      description: Draft invoices for a given billing period and tenant, without sending them to customers.
+      summary: Draft invoices for a billing period.
+      parameters:
+        - in: path
+          name: batchId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                tenantId:
+                  type: string
+                billingPeriodStart:
+                  type: string
+                  format: date
+                billingPeriodEnd:
+                  type: string
+                  format: date
+              additionalProperties: true
+      responses:
+        "200":
+          description: Draft invoices created for the batch.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  draftCount:
+                    type: integer
+                  hasBlockingErrors:
+                    type: boolean
+                additionalProperties: true
+      tags:
+        - billing
+  /billing/invoice-batches/{batchId}/validate:
+    post:
+      operationId: validateInvoiceBatch
+      description: Validate drafted invoices for a batch and report any blocking issues before sending.
+      summary: Validate drafted invoices for a batch.
+      parameters:
+        - in: path
+          name: batchId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                tenantId:
+                  type: string
+              additionalProperties: true
+      responses:
+        "200":
+          description: Validation result for the invoice batch.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  issues:
+                    type: array
+                    items:
+                      type: object
+                additionalProperties: true
+      tags:
+        - billing
+  /billing/invoice-batches/{batchId}/send:
+    post:
+      operationId: sendInvoiceBatch
+      description: Send or enqueue invoices for delivery to customers for the given batch.
+      summary: Send invoices for a batch to customers.
+      parameters:
+        - in: path
+          name: batchId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                tenantId:
+                  type: string
+                channel:
+                  type: string
+              additionalProperties: true
+      responses:
+        "200":
+          description: Invoices sent (or enqueued) for the batch.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  sentCount:
+                    type: integer
+                  failedCount:
+                    type: integer
+                additionalProperties: true
+      tags:
+        - billing
+  /billing/invoice-batches/{batchId}/reminders:
+    post:
+      operationId: sendInvoiceReminder
+      description: Send reminder notifications for open invoices in the batch.
+      summary: Send payment reminders for a batch of invoices.
+      parameters:
+        - in: path
+          name: batchId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                tenantId:
+                  type: string
+              additionalProperties: true
+      responses:
+        "200":
+          description: Reminders sent (or enqueued) for open invoices.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  remindedCount:
+                    type: integer
+                additionalProperties: true
+      tags:
+        - billing
+  /billing/invoice-batches/{batchId}/final-notice:
+    post:
+      operationId: sendInvoiceFinalNotice
+      description: Send final payment notices for overdue invoices in the batch before collections.
+      summary: Send final payment notices for a batch of invoices.
+      parameters:
+        - in: path
+          name: batchId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                tenantId:
+                  type: string
+              additionalProperties: true
+      responses:
+        "200":
+          description: Final notices sent (or enqueued) for overdue invoices.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  finalNoticeCount:
+                    type: integer
+                additionalProperties: true
+      tags:
+        - billing
+tags:
+  - name: billing

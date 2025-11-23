@@ -1,0 +1,67 @@
+arazzo: 1.0.1
+info:
+  title: JourneyForge – daily-orders-batch-close workflows
+  version: 0.1.0
+  summary: Workflows for configuring and running a daily orders batch-close with OAuth token exchange and refresh.
+  description: Workflows for configuring a daily orders batch-close journey that runs at the end of day, waits for upstream systems to finish, accounts for replication delay, and calls downstream APIs using OAuth access tokens obtained via token exchange and refresh.
+sourceDescriptions:
+  - name: dailyOrdersBatch
+    type: openapi
+    url: daily-orders-batch-close.openapi.yaml
+workflows:
+  - workflowId: daily-orders-batch-close-configure
+    summary: Configure and schedule a daily orders batch-close run.
+    description: Start a daily-orders-batch-close journey, exchange the caller's access token for OAuth access/refresh tokens, schedule daily non-interactive runs, and read the configuration outcome.
+    inputs:
+      type: object
+      properties:
+        startRequest:
+          description: Configuration request for the daily batch-close.
+          type: object
+          required:
+            - tenantId
+            - batchId
+            - firstRunAt
+            - interval
+            - maxRuns
+          properties:
+            tenantId:
+              type: string
+            batchId:
+              type: string
+            firstRunAt:
+              type: string
+              format: date-time
+            interval:
+              type: string
+            maxRuns:
+              type: integer
+          additionalProperties: true
+    steps:
+      - stepId: startJourney
+        description: Start a new daily-orders-batch-close journey instance.
+        operationId: dailyOrdersBatchClose_start
+        x-source: dailyOrdersBatch
+        requestBody:
+          contentType: application/json
+          payload: $inputs.startRequest
+        outputs:
+          journeyId: $response.body.journeyId
+      - stepId: getStatus
+        description: Poll journey status while configuration and scheduling are in progress.
+        operationId: dailyOrdersBatchClose_getStatus
+        x-source: dailyOrdersBatch
+        parameters:
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId
+        outputs:
+          phase: $response.body.phase
+      - stepId: getResult
+        description: Retrieve the configuration outcome once the interactive run has completed.
+        operationId: dailyOrdersBatchClose_getResult
+        x-source: dailyOrdersBatch
+        parameters:
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId

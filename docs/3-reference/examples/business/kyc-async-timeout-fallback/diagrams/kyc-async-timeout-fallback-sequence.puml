@@ -1,0 +1,44 @@
+@startuml
+!include journey-diagram-theme.puml
+title kyc-async-timeout-fallback – sequence
+
+actor "Client" as Client
+actor "Primary KYC provider" as Primary
+actor "Fallback KYC provider" as Fallback
+participant "Journeys API" as Journeys
+
+Client -> Journeys: POST /api/v1/journeys/kyc-async-timeout-fallback/start\nKycAsyncTimeoutFallbackStartRequest
+Journeys -> Primary: POST https://kyc-primary.example.com/checks/start\n(customerId, requestId, channel)
+Primary --> Journeys: 202 Accepted\n(jobId)
+Journeys --> Client: 202 Accepted\nJourneyStartResponse (journeyId, ...)
+
+Client -> Journeys: GET /api/v1/journeys/{journeyId}\n(getStatusRunning)
+Journeys --> Client: 200 OK\nJourneyStatus (Running)
+
+== Primary completes within SLA ==
+
+Primary -> Journeys: POST /api/v1/journeys/{journeyId}/steps/waitForPrimaryKyc\nPrimaryKycCallbackInput
+Journeys --> Primary: 200 OK\nPrimaryKycStepResponse
+
+Client -> Journeys: GET /api/v1/journeys/{journeyId}/result\n(getResult)
+Journeys --> Client: 200 OK\nJourneyOutcome (KYC_COMPLETED_PRIMARY or KYC_FAILED)
+
+== Primary times out, fallback completes ==
+
+Client -> Journeys: GET /api/v1/journeys/{journeyId}\n(getStatusAfterTimeout)
+Journeys --> Client: 200 OK\nJourneyStatus (recovery / fallback path)
+
+Journeys -> Primary: GET https://kyc-primary.example.com/health\n(recovery attempts with backoff)
+Primary --> Journeys: 5xx or unhealthy\n(repeated attempts)
+
+Journeys -> Fallback: POST https://kyc-fallback.example.com/checks/start\n(customerId, requestId, channel)
+Fallback --> Journeys: 202 Accepted\n(fallback jobId)
+
+Fallback -> Journeys: POST /api/v1/journeys/{journeyId}/steps/waitForFallbackResult\nFallbackKycCallbackInput
+Journeys --> Fallback: 200 OK\nFallbackKycStepResponse
+
+Client -> Journeys: GET /api/v1/journeys/{journeyId}/result\n(getResult)
+Journeys --> Client: 200 OK\nJourneyOutcome (KYC_COMPLETED_FALLBACK or KYC_FAILED)
+
+@enduml
+

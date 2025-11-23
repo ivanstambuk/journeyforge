@@ -65,6 +65,7 @@ spec:
         notes:
           type: string
       additionalProperties: true
+  # Compensation for partial success: see docs for details.
   compensation:
     mode: async
     start: waitBeforeCleanup
@@ -338,7 +339,7 @@ spec:
                 expr: |
                   payload.status == "CONFIRMED"
                     or payload.status == "PARTIALLY_CONFIRMED"
-            next: waitForChangeOrCancel
+            next: changeOrCancelOrTimeout
           - when:
               predicate:
                 lang: dataweave
@@ -347,62 +348,103 @@ spec:
             next: prepareOutcome
         default: failed
 
-    waitForChangeOrCancel:
-      type: wait
-      wait:
-        channel: manual
-        input:
-          schema:
-            description: Post-booking change or cancel request from the traveler or agent.
-            type: object
-            required:
-              - action
-            properties:
-              action:
-                type: string
-                enum:
-                  - complete
-                  - change
-                  - cancel
-              notes:
-                type: string
-            additionalProperties: false
-        response:
-          outputVar: changeOrCancelResponse
-          schema:
-            title: ChangeOrCancelProjection
-            type: object
-            description: Additional top-level fields returned from the changeOrCancel step.
-            properties:
-              action:
-                type: string
-                enum:
-                  - complete
-                  - change
-                  - cancel
-              notes:
-                type: string
-            additionalProperties: true
-        apply:
-          mapper:
-            lang: dataweave
-            expr: |
-              context ++ {
-                changeRequest: payload,
-                overrideStatus: if (payload.action == "cancel") "CANCELLED" else null,
-                changeOrCancelResponse: {
-                  action: payload.action,
-                  notes: payload.notes
-                }
-              }
-        on:
-          - when:
-              predicate:
-                lang: dataweave
-                expr: |
-                  payload.action == "cancel"
-            next: prepareOutcome
-        default: prepareOutcome
+    changeOrCancelOrTimeout:
+      type: parallel
+      parallel:
+        branches:
+          - name: changeOrCancelBranch
+            start: waitForChangeOrCancel
+            states:
+              waitForChangeOrCancel:
+                type: wait
+                wait:
+                  channel: manual
+                  input:
+                    schema:
+                      description: Post-booking change or cancel request from the traveler or agent.
+                      type: object
+                      required:
+                        - action
+                      properties:
+                        action:
+                          type: string
+                          enum:
+                            - complete
+                            - change
+                            - cancel
+                        notes:
+                          type: string
+                      additionalProperties: false
+                  response:
+                    outputVar: changeOrCancelResponse
+                    schema:
+                      title: ChangeOrCancelProjection
+                      type: object
+                      description: Additional top-level fields returned from the changeOrCancel step.
+                      properties:
+                        action:
+                          type: string
+                          enum:
+                            - complete
+                            - change
+                            - cancel
+                        notes:
+                          type: string
+                      additionalProperties: true
+                  apply:
+                    mapper:
+                      lang: dataweave
+                      expr: |
+                        context ++ {
+                          changeRequest: payload,
+                          overrideStatus: if (payload.action == "cancel") "CANCELLED" else null,
+                          changeOrCancelResponse: {
+                            action: payload.action,
+                            notes: payload.notes
+                          }
+                        }
+                  on:
+                    - when:
+                        predicate:
+                          lang: dataweave
+                          expr: |
+                            payload.action == "cancel"
+                      next: changeOrCancelBranchDone
+                  default: changeOrCancelBranchDone
+
+              changeOrCancelBranchDone:
+                type: succeed
+
+          - name: changeWindowBranch
+            start: changeWindowTimer
+            states:
+              changeWindowTimer:
+                type: timer
+                timer:
+                  duration: "P2D"
+                next: markChangeWindowExpired
+
+              markChangeWindowExpired:
+                type: transform
+                transform:
+                  mapper:
+                    lang: dataweave
+                    expr: |
+                      context ++ {
+                        changeWindowExpired: true
+                      }
+                  target:
+                    kind: context
+                    path: ""
+                next: changeWindowDone
+
+              changeWindowDone:
+                type: succeed
+
+        join:
+          strategy: anyOf
+          errorPolicy: collectAll
+      next: feedbackOrTimeout
 
     prepareOutcome:
       type: transform
@@ -425,6 +467,74 @@ spec:
         target:
           kind: var
       resultVar: bookingOutcome
+      next: feedbackOrTimeout
+
+    feedbackOrTimeout:
+      type: parallel
+      parallel:
+        branches:
+          - name: feedbackBranch
+            start: waitForFeedback
+            states:
+              waitForFeedback:
+                type: wait
+                wait:
+                  channel: manual
+                  input:
+                    schema:
+                      description: Optional post-trip feedback from the traveler.
+                      type: object
+                      required:
+                        - rating
+                      properties:
+                        rating:
+                          type: integer
+                        comments:
+                          type: string
+                      additionalProperties: false
+                  response:
+                    outputVar: feedbackResponse
+                    schema:
+                      title: FeedbackProjection
+                      type: object
+                      description: Additional top-level fields returned from the submitFeedback step.
+                      properties:
+                        rating:
+                          type: integer
+                        comments:
+                          type: string
+                      additionalProperties: true
+                  apply:
+                    mapper:
+                      lang: dataweave
+                      expr: |
+                        context ++ {
+                          feedback: payload,
+                          feedbackResponse: {
+                            rating: payload.rating,
+                            comments: payload.comments
+                          }
+                        }
+                next: feedbackBranchDone
+
+              feedbackBranchDone:
+                type: succeed
+
+          - name: feedbackTimeoutBranch
+            start: feedbackTimer
+            states:
+              feedbackTimer:
+                type: timer
+                timer:
+                  duration: "P7D"
+                next: feedbackTimeoutDone
+
+              feedbackTimeoutDone:
+                type: succeed
+
+        join:
+          strategy: anyOf
+          errorPolicy: collectAll
       next: completeTrip
 
     completeTrip:

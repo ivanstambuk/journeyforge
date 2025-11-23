@@ -33,7 +33,7 @@ Here’s a breakdown of the steps you’ll call over the Journeys API for the pr
 
 ### Sequence diagram
 
-<img src="diagrams/http-204-no-content-sequence.png" alt="http-204-no-content – sequence" width="620" />
+<img src="diagrams/http-204-no-content-sequence.png" alt="http-204-no-content – sequence" width="420" />
 
 ### State diagram
 

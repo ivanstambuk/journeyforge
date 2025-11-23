@@ -1,0 +1,50 @@
+@startuml
+!include journey-diagram-theme.puml
+title kyc-async-timeout-fallback – state transitions
+
+[*] --> startPrimaryKyc
+
+state startPrimaryKyc
+state recordPrimaryJob
+state primaryKycRace
+state waitForPrimaryKyc
+state primarySlaTimer
+state recoveryLoop
+state waitBeforeRetry
+state retryPrimaryHealthCheck
+state evaluatePrimaryHealth
+state startFallbackKyc
+state recordFallbackJob
+state waitForFallbackResult
+state journeyCompleted
+
+startPrimaryKyc --> recordPrimaryJob
+recordPrimaryJob --> primaryKycRace
+
+primaryKycRace --> waitForPrimaryKyc : branch callbackBranch
+primaryKycRace --> primarySlaTimer : branch slaAndFallbackBranch
+
+waitForPrimaryKyc --> journeyCompleted : primary result (approved/rejected)
+primarySlaTimer --> recoveryLoop : SLA expired
+
+recoveryLoop --> waitBeforeRetry : attempt < 3
+recoveryLoop --> startFallbackKyc : attempts exhausted
+
+waitBeforeRetry --> retryPrimaryHealthCheck
+retryPrimaryHealthCheck --> evaluatePrimaryHealth
+evaluatePrimaryHealth --> startFallbackKyc : healthy
+evaluatePrimaryHealth --> recoveryLoop : still unhealthy
+
+startFallbackKyc --> recordFallbackJob
+recordFallbackJob --> waitForFallbackResult
+waitForFallbackResult --> journeyCompleted : fallback result
+
+journeyCompleted --> [*]
+
+note right of primarySlaTimer
+  SLA timer for the primary provider
+  (for example 5 minutes)
+end note
+
+@enduml
+

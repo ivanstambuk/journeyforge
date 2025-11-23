@@ -5,39 +5,74 @@ title subscription-lifecycle – internal DSL state graph
 [*] --> createTrial
 
 state createTrial
+state trialWaitOrExpire
 state waitForUpgrade
-state activatePaid
-state waitForStatusChange
+state activationOutcomeInitial
+state activationRetryDelay
+state retryActivatePaid
+state activationOutcomeRetry
+state activationFailed
 state trialExpired
+state trialOutcomeSwitch
+state activatePaid
+state statusChangeOrTimeout
 state completeActive
 state completeCancelled
 state completeReactivated
 
-createTrial --> waitForUpgrade : createTrialSubscription\nresultVar: trial
+createTrial --> trialWaitOrExpire : createTrialSubscription\nresultVar: trial
 
-waitForUpgrade --> activatePaid : payload.decision == "upgrade"
-waitForUpgrade --> trialExpired : decision == "expire"
+trialWaitOrExpire --> trialOutcomeSwitch : parallel(waitForUpgrade vs trialTimer)\ntrialOutcome set
 
-activatePaid --> waitForStatusChange : activateSubscription
+trialOutcomeSwitch --> activatePaid : trialOutcome == "UPGRADED"
+trialOutcomeSwitch --> trialExpired : trialOutcome == "EXPIRED"
 
-waitForStatusChange --> completeCancelled : action == "cancel"
-waitForStatusChange --> completeReactivated : action == "reactivate"
-waitForStatusChange --> completeActive : default (no further change)
+activatePaid --> activationOutcomeInitial : activateSubscription (first attempt)
+
+activationOutcomeInitial --> statusChangeOrTimeout : activation.ok == true
+activationOutcomeInitial --> activationRetryDelay : activation.ok != true
+
+activationRetryDelay --> retryActivatePaid : wait PT4H
+
+retryActivatePaid --> activationOutcomeRetry : activateSubscription (second attempt)
+
+activationOutcomeRetry --> statusChangeOrTimeout : activation.ok == true
+activationOutcomeRetry --> activationFailed : activation.ok != true
+
+statusChangeOrTimeout --> completeCancelled : action == "cancel"
+statusChangeOrTimeout --> completeReactivated : action == "reactivate"
+statusChangeOrTimeout --> completeActive : timer branch or default
 
 trialExpired --> [*]
 completeActive --> [*]
 completeCancelled --> [*]
 completeReactivated --> [*]
+activationFailed --> [*]
 
-note right of waitForUpgrade
-  type: wait (manual channel)
-  step id: upgradeSubscription
+note right of trialWaitOrExpire
+  type: parallel
+  branches:
+    - waitForUpgrade (wait step)
+    - trialTimer (timer; trialDays or 14d)
+  join.strategy: anyOf
+  sets trialOutcome to UPGRADED or EXPIRED
 end note
 
-note right of waitForStatusChange
-  type: wait (manual channel)
-  step id: changeSubscriptionStatus
+note right of activatePaid
+  First activation attempt via subscriptions.activateSubscription.
+  On failure, activationOutcomeInitial routes to a 4h
+  backoff timer and a second activation attempt; if that
+  also fails, activationFailed terminates with ACTIVATION_FAILED.
+end note
+
+note right of statusChangeOrTimeout
+  type: parallel
+  branches:
+    - waitForStatusChange (wait step – cancel/reactivate)
+    - statusChangeTimer (timer P30D)
+  join.strategy: anyOf
+  cancel/reactivate complete via dedicated states;
+  timer branch auto-completes as ACTIVE
 end note
 
 @enduml
-

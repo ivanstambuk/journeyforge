@@ -1,0 +1,313 @@
+apiVersion: v1
+kind: Journey
+metadata:
+  name: market-open-order-submission
+  version: 0.1.0
+  description: Order submission journey that defers pre-market orders until market open and allows a pre-open cancel window.
+spec:
+  apis:
+    orders: { openApiRef: apis/orders.openapi.yaml }
+  input:
+    schema:
+      title: MarketOpenOrderStartRequest
+      type: object
+      required:
+        - orderId
+        - accountId
+        - instrumentId
+        - side
+        - quantity
+        - timeInForce
+        - marketOpenHour
+      properties:
+        orderId:
+          type: string
+        accountId:
+          type: string
+        instrumentId:
+          type: string
+        side:
+          type: string
+          enum: [BUY, SELL]
+        quantity:
+          type: number
+        limitPrice:
+          type: number
+        timeInForce:
+          type: string
+          enum: [DAY, GTC]
+        marketOpenHour:
+          type: integer
+        channel:
+          type: string
+      additionalProperties: true
+  output:
+    schema:
+      title: MarketOpenOrderOutcome
+      type: object
+      required:
+        - orderId
+        - finalStatus
+      properties:
+        orderId:
+          type: string
+        finalStatus:
+          type: string
+          enum:
+            - SUBMITTED
+            - NOT_SUBMITTED
+            - FAILED
+        submissionMode:
+          type: string
+          enum:
+            - IMMEDIATE
+            - DEFERRED
+        timeInForce:
+          type: string
+        submittedAt:
+          type: string
+          format: date-time
+        failureReason:
+          type: string
+      additionalProperties: true
+  start: classifyOrderTiming
+  states:
+    classifyOrderTiming:
+      type: transform
+      transform:
+        mapper:
+          lang: dataweave
+          expr: |
+            context ++ {
+              orderTiming:
+                if (now().hour >= context.marketOpenHour)
+                  "in-session"
+                else
+                  "pre-open",
+              preOpenDelayDuration:
+                if (now().hour < context.marketOpenHour)
+                  "PT" ++ ((context.marketOpenHour - now().hour) as String) ++ "H"
+                else
+                  null
+            }
+        target:
+          kind: context
+          path: ""
+      next: orderTimingSwitch
+
+    orderTimingSwitch:
+      type: choice
+      choices:
+        - when:
+            predicate:
+              lang: dataweave
+              expr: |
+                context.orderTiming == "in-session"
+          next: submitOrder
+      default: preOpenWindow
+
+    preOpenWindow:
+      type: parallel
+      parallel:
+        branches:
+          - name: clientAction
+            start: waitForPreOpenAction
+            states:
+              waitForPreOpenAction:
+                type: wait
+                wait:
+                  channel: manual
+                  input:
+                    schema:
+                      description: Pre-open order decision (submit or cancel before market opens).
+                      type: object
+                      required:
+                        - action
+                      properties:
+                        action:
+                          type: string
+                          enum:
+                            - submit
+                            - cancel
+                      additionalProperties: false
+                  response:
+                    outputVar: preOpenActionResponse
+                    schema:
+                      title: PreOpenOrderActionProjection
+                      type: object
+                      description: Additional top-level fields returned from the preOpenAction step.
+                      properties:
+                        action:
+                          type: string
+                          enum:
+                            - submit
+                            - cancel
+                      additionalProperties: true
+                  apply:
+                    mapper:
+                      lang: dataweave
+                      expr: |
+                        context ++ {
+                          preOpenAction: payload.action,
+                          preOpenActionResponse: {
+                            action: payload.action
+                          }
+                        }
+                  on:
+                    - when:
+                        predicate:
+                          lang: dataweave
+                          expr: |
+                            payload.action == "submit"
+                      next: preOpenActionDone
+                    - when:
+                        predicate:
+                          lang: dataweave
+                          expr: |
+                            payload.action == "cancel"
+                      next: preOpenActionDone
+                  default: preOpenActionDone
+
+              preOpenActionDone:
+                type: succeed
+
+          - name: marketOpen
+            start: marketOpenTimer
+            states:
+              marketOpenTimer:
+                type: timer
+                timer:
+                  duration:
+                    mapper:
+                      lang: dataweave
+                      expr: |
+                        if (context.preOpenDelayDuration != null)
+                          context.preOpenDelayDuration
+                        else
+                          "PT0S"
+                next: marketOpenReached
+
+              marketOpenReached:
+                type: succeed
+
+        join:
+          strategy: anyOf
+          errorPolicy: collectAll
+      next: preOpenOutcomeSwitch
+
+    preOpenOutcomeSwitch:
+      type: choice
+      choices:
+        - when:
+            predicate:
+              lang: dataweave
+              expr: |
+                context.preOpenAction == "cancel"
+          next: completeNotSubmitted
+      default: submitOrder
+
+    submitOrder:
+      type: task
+      task:
+        kind: httpCall
+        operationRef: orders.createOrder
+        params:
+          headers:
+            Accept: application/json
+        body:
+          mapper:
+            lang: dataweave
+            expr: |
+              {
+                orderId: context.orderId,
+                accountId: context.accountId,
+                instrumentId: context.instrumentId,
+                side: context.side,
+                quantity: context.quantity,
+                limitPrice: context.limitPrice,
+                timeInForce: context.timeInForce,
+                channel: context.channel
+              }
+        timeoutMs: 3000
+        resultVar: orderResult
+      next: evaluateSubmission
+
+    evaluateSubmission:
+      type: choice
+      choices:
+        - when:
+            predicate:
+              lang: dataweave
+              expr: |
+                orderResult.ok == true
+          next: completeSubmitted
+      default: completeFailed
+
+    completeSubmitted:
+      type: transform
+      transform:
+        mapper:
+          lang: dataweave
+          expr: |
+            {
+              orderId: context.orderId,
+              finalStatus: "SUBMITTED",
+              submissionMode:
+                if (context.orderTiming == "in-session")
+                  "IMMEDIATE"
+                else
+                  "DEFERRED",
+              timeInForce: context.timeInForce,
+              submittedAt: now()
+            }
+        target:
+          kind: var
+      resultVar: orderOutcome
+      next: done
+
+    completeNotSubmitted:
+      type: transform
+      transform:
+        mapper:
+          lang: dataweave
+          expr: |
+            {
+              orderId: context.orderId,
+              finalStatus: "NOT_SUBMITTED",
+              submissionMode:
+                if (context.orderTiming == "in-session")
+                  "IMMEDIATE"
+                else
+                  "DEFERRED",
+              timeInForce: context.timeInForce
+            }
+        target:
+          kind: var
+      resultVar: orderOutcome
+      next: done
+
+    completeFailed:
+      type: transform
+      transform:
+        mapper:
+          lang: dataweave
+          expr: |
+            {
+              orderId: context.orderId,
+              finalStatus: "FAILED",
+              submissionMode:
+                if (context.orderTiming == "in-session")
+                  "IMMEDIATE"
+                else
+                  "DEFERRED",
+              timeInForce: context.timeInForce,
+              failureReason: orderResult.error.message
+            }
+        target:
+          kind: var
+      resultVar: orderOutcome
+      next: done
+
+    done:
+      type: succeed
+      outputVar: orderOutcome

@@ -1,0 +1,60 @@
+@startuml
+!include journey-diagram-theme.puml
+title customer-onboarding-kyc-kyb – internal DSL state graph
+
+[*] --> initialiseOnboarding
+
+state initialiseOnboarding
+state runChecksInParallel
+
+state startKyc
+state startKyb
+state registryLookup
+state startCreditAndCompliance
+
+state waitForKycCallbacks
+state waitForKybAndRisk
+
+state completeApproved
+state completeReferred
+state onboardingRejected
+state onboardingCompleted
+
+initialiseOnboarding --> runChecksInParallel
+
+runChecksInParallel --> startKyc : branch kyc
+runChecksInParallel --> startKyb : branch kybAndRegistry
+runChecksInParallel --> startCreditAndCompliance : branch creditAndCompliance
+
+startKyb --> registryLookup
+
+runChecksInParallel --> waitForKycCallbacks
+
+waitForKycCallbacks --> waitForKybAndRisk : KYC APPROVED / REFERRED
+waitForKycCallbacks --> onboardingRejected : KYC REJECTED
+
+waitForKybAndRisk --> completeApproved : KYB+credit+compliance APPROVED
+waitForKybAndRisk --> completeReferred : any REFERRED
+waitForKybAndRisk --> onboardingRejected : otherwise
+
+completeApproved --> onboardingCompleted
+completeReferred --> onboardingCompleted
+onboardingRejected --> onboardingCompleted
+
+onboardingCompleted --> [*]
+
+note right of runChecksInParallel
+  Parallel state that starts KYC,
+  KYB+registry, and risk (credit +
+  compliance) checks concurrently.
+end note
+
+note right of waitForKybAndRisk
+  Webhook that merges KYB status and
+  per-UBO results with creditDecision
+  and complianceDecision, then derives
+  APPROVED, REFERRED, or REJECTED.
+end note
+
+@enduml
+

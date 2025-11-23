@@ -1,0 +1,29 @@
+@startuml
+!include journey-diagram-theme.puml
+title healthcare-appointment-referral – activity flow
+
+start
+
+:Patient app sends\nPOST /journeys/healthcare-appointment-referral/start\nwith referral details;
+
+repeat
+  :Patient app polls\nGET /journeys/{journeyId}\nfor status and appointment options;
+  :Journeys API returns\nJourneyStatus (Running) and appointments\nvia downstream integration;
+repeat while (phase == "Running" and\nno final outcome yet)
+
+if (output.status == "APPOINTMENT_COMPLETED"?) then (completed)
+  :Patient app shows final\ncompleted appointment details;
+elseif (output.status == "APPOINTMENT_CONFIRMED"?) then (confirmed)
+  :Patient app shows confirmed appointment\nand allows follow-up actions;
+elseif (output.status == "PATIENT_CANCELLED"?) then (cancelled)
+  :Patient app reflects that the referral\nwas cancelled by the patient;
+elseif (output.status == "NO_PROVIDER_AVAILABLE"?) then (no provider)
+  :Patient app shows that no provider\nwas available and suggests alternatives;
+else (expired)
+  :Patient app shows that the referral\nexpired and may start a new referral;
+endif
+
+stop
+
+@enduml
+

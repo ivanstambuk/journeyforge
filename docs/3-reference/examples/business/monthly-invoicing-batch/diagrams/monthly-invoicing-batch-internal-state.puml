@@ -1,0 +1,65 @@
+@startuml
+!include journey-diagram-theme.puml
+title monthly-invoicing-batch – internal DSL state graph
+
+[*] --> configureSchedule
+
+state configureSchedule
+state prepareConfigOutcome
+state completeConfigured
+
+state draftInvoices
+state validateDrafts
+state waitForFinanceApproval
+state recordValidationFailure
+state recordRejection
+state sendInvoices
+state recordSendOutcome
+state waitBeforeFirstReminder
+state sendFirstReminder
+state waitBeforeFinalNotice
+state sendFinalNotice
+state recordChaseOutcome
+state scheduledRunDone
+
+configureSchedule --> prepareConfigOutcome
+prepareConfigOutcome --> completeConfigured
+completeConfigured --> [*]
+
+' scheduled runs (via schedule.start = draftInvoices)
+
+[*] --> draftInvoices : scheduled run start
+draftInvoices --> validateDrafts
+
+validateDrafts --> waitForFinanceApproval : validationResult.ok == true
+validateDrafts --> recordValidationFailure : validationResult.ok != true
+
+waitForFinanceApproval --> sendInvoices : decision = APPROVED
+waitForFinanceApproval --> recordRejection : decision = REJECTED
+
+recordValidationFailure --> scheduledRunDone
+recordRejection --> scheduledRunDone
+
+sendInvoices --> recordSendOutcome
+recordSendOutcome --> waitBeforeFirstReminder
+waitBeforeFirstReminder --> sendFirstReminder
+sendFirstReminder --> waitBeforeFinalNotice
+waitBeforeFinalNotice --> sendFinalNotice
+sendFinalNotice --> recordChaseOutcome
+recordChaseOutcome --> scheduledRunDone
+
+scheduledRunDone --> [*]
+
+note right of configureSchedule
+  type: task (schedule)
+  start: draftInvoices
+  cadence: interval (P1M)
+end note
+
+note right of waitForFinanceApproval
+  type: wait (manual)
+  step id: approveInvoiceBatch
+  input: InvoiceBatchApprovalInput
+end note
+
+@enduml

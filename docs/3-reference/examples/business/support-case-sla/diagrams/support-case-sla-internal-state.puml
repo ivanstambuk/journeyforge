@@ -6,7 +6,7 @@ title support-case-sla – internal DSL state graph
 
 state classifyPriority
 state notifyAssignment
-state waitOrEscalate
+state waitOrEscalateOrGiveUp
 state waitForAgentUpdate
 state ignoreUpdate
 state markResolved
@@ -15,12 +15,16 @@ state slaTimer
 state markEscalated
 state notifyEscalation
 state caseEscalated
+state giveUpTimer
+state markAutoClosed
+state caseAutoClosed
 
-classifyPriority --> notifyAssignment : compute slaDuration from priority
-notifyAssignment --> waitOrEscalate : POST support.example.com/cases/assign
+classifyPriority --> notifyAssignment : compute slaDuration + giveUpDuration
+notifyAssignment --> waitOrEscalateOrGiveUp : POST support.example.com/cases/assign
 
-waitOrEscalate --> waitForAgentUpdate : branch caseWorkBranch
-waitOrEscalate --> slaTimer : branch slaBranch
+waitOrEscalateOrGiveUp --> waitForAgentUpdate : branch caseWorkBranch
+waitOrEscalateOrGiveUp --> slaTimer : branch slaBranch
+waitOrEscalateOrGiveUp --> giveUpTimer : branch giveUpBranch
 
 waitForAgentUpdate --> markResolved : payload.status == "RESOLVED"
 waitForAgentUpdate --> ignoreUpdate : default (non-resolving update)
@@ -35,6 +39,10 @@ markEscalated --> notifyEscalation
 notifyEscalation --> caseEscalated
 caseEscalated --> [*]
 
+giveUpTimer --> markAutoClosed
+markAutoClosed --> caseAutoClosed
+caseAutoClosed --> [*]
+
 note right of waitForAgentUpdate
   type: wait (manual channel)
   step id: waitForAgentUpdate
@@ -44,7 +52,13 @@ end note
 note right of slaTimer
   type: timer
   duration: context.slaDuration
-  represents the SLA window based on priority
+  represents the response SLA window based on priority
+end note
+
+note right of giveUpTimer
+  type: timer
+  duration: context.giveUpDuration (default P2D)
+  represents a longer give-up window\nbefore the case is auto-closed
 end note
 
 @enduml

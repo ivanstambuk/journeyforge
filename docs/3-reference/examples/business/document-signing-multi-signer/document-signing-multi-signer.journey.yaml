@@ -1,0 +1,306 @@
+apiVersion: v1
+kind: Journey
+metadata:
+  name: document-signing-multi-signer
+  version: 0.1.0
+  description: Document signing journey that supports sequential or parallel signers, document-level expiry, and per-signer status tracking via a generic submitSignature step.
+spec:
+  input:
+    schema:
+      title: DocumentSigningStartRequest
+      type: object
+      required:
+        - documentId
+        - title
+        - signingMode
+        - signers
+      properties:
+        documentId:
+          type: string
+        title:
+          type: string
+        signingMode:
+          type: string
+          enum:
+            - SEQUENTIAL
+            - PARALLEL
+        documentExpiryHours:
+          type: integer
+          minimum: 1
+        signers:
+          type: array
+          minItems: 1
+          items:
+            type: object
+            required:
+              - signerId
+              - email
+            properties:
+              signerId:
+                type: string
+              email:
+                type: string
+              displayName:
+                type: string
+              order:
+                type: integer
+                minimum: 1
+              deadlineHours:
+                type: integer
+                minimum: 1
+            additionalProperties: true
+      additionalProperties: true
+  output:
+    schema:
+      title: DocumentSigningOutcome
+      type: object
+      required:
+        - documentId
+        - status
+      properties:
+        documentId:
+          type: string
+        title:
+          type: string
+        status:
+          type: string
+          enum:
+            - FULLY_SIGNED
+            - DECLINED
+            - EXPIRED
+        signingMode:
+          type: string
+        expiredAt:
+          type: string
+          format: date-time
+        declinedAt:
+          type: string
+          format: date-time
+        declinedBy:
+          type: string
+        signers:
+          type: array
+          items:
+            type: object
+            required:
+              - signerId
+              - status
+            properties:
+              signerId:
+                type: string
+              email:
+                type: string
+              displayName:
+                type: string
+              status:
+                type: string
+                enum:
+                  - PENDING
+                  - SIGNED
+                  - DECLINED
+                  - EXPIRED
+              order:
+                type: integer
+              deadlineHours:
+                type: integer
+              signedAt:
+                type: string
+                format: date-time
+          additionalProperties: true
+      additionalProperties: true
+  start: initialiseDocument
+  states:
+    initialiseDocument:
+      type: transform
+      transform:
+        mapper:
+          lang: dataweave
+          expr: |
+            context ++ {
+              signingMode: context.signingMode,
+              documentExpiryHours:
+                if (context.documentExpiryHours default 0) > 0
+                then context.documentExpiryHours
+                else 168, // default 7 days
+              signers:
+                context.signers map (s) -> s ++ {
+                  status: "PENDING"
+                }
+            }
+        target:
+          kind: context
+          path: ""
+      next: signingOrExpiry
+
+    signingOrExpiry:
+      type: parallel
+      parallel:
+        branches:
+          - name: signingBranch
+            start: submitSignature
+            states:
+              submitSignature:
+                type: wait
+                wait:
+                  channel: manual
+                  input:
+                    schema:
+                      title: SubmitSignatureInput
+                      type: object
+                      required:
+                        - signerId
+                        - decision
+                      properties:
+                        signerId:
+                          type: string
+                        decision:
+                          type: string
+                          enum:
+                            - SIGNED
+                            - DECLINED
+                        comment:
+                          type: string
+                      additionalProperties: true
+                  apply:
+                    mapper:
+                      lang: dataweave
+                      expr: |
+                        do {
+                          var isSequential = (context.signingMode default "PARALLEL") == "SEQUENTIAL"
+                          var pendingSigners =
+                            (context.signers default []) filter ((s) -> s.status == "PENDING")
+                          var nextSignerId =
+                            if (isSequential and sizeOf(pendingSigners) > 0)
+                            then
+                              (pendingSigners
+                                orderBy ((s1, s2) ->
+                                  (s1.order default 0) <=> (s2.order default 0)))[0].signerId
+                            else null
+                          var updatedSigners =
+                            (context.signers default []) map (s) ->
+                              if (s.signerId == payload.signerId
+                                  and s.status == "PENDING"
+                                  and (not isSequential or payload.signerId == nextSignerId))
+                              then
+                                s ++ {
+                                  status: payload.decision,
+                                  signedAt: now()
+                                }
+                              else s
+                          context ++ {
+                            signers: updatedSigners
+                          }
+                        }
+                  on:
+                    - when:
+                        predicate:
+                          lang: dataweave
+                          expr: |
+                            // Any signer declined -> immediate terminal outcome
+                            (context.signers default []) any ((s) -> s.status == "DECLINED")
+                      next: completeDeclined
+                    - when:
+                        predicate:
+                          lang: dataweave
+                          expr: |
+                            // All signers signed -> fully signed
+                            (context.signers default []) != []
+                              and (context.signers default []) all ((s) -> s.status == "SIGNED")
+                      next: completeFullySigned
+                  default: submitSignature
+
+              completeDeclined:
+                type: transform
+                transform:
+                  mapper:
+                    lang: dataweave
+                    expr: |
+                      do {
+                        var declining =
+                          (context.signers default []) filter ((s) -> s.status == "DECLINED")
+                        var decliningId =
+                          if (sizeOf(declining) > 0) then declining[0].signerId else null
+                        context ++ {
+                          outcome: {
+                            documentId: context.documentId,
+                            title: context.title,
+                            status: "DECLINED",
+                            signingMode: context.signingMode,
+                            declinedAt: now(),
+                            declinedBy: decliningId,
+                            signers: context.signers
+                          }
+                        }
+                      }
+                  target:
+                    kind: context
+                    path: ""
+                next: documentCompleted
+
+              completeFullySigned:
+                type: transform
+                transform:
+                  mapper:
+                    lang: dataweave
+                    expr: |
+                      context ++ {
+                        outcome: {
+                          documentId: context.documentId,
+                          title: context.title,
+                          status: "FULLY_SIGNED",
+                          signingMode: context.signingMode,
+                          signers: context.signers
+                        }
+                      }
+                  target:
+                    kind: context
+                    path: ""
+                next: documentCompleted
+
+          - name: expiryBranch
+            start: documentExpiryTimer
+            states:
+              documentExpiryTimer:
+                type: timer
+                timer:
+                  duration:
+                    mapper:
+                      lang: dataweave
+                      expr: |
+                        // Convert hours to ISO-8601 duration, default 7 days
+                        "PT" ++ ((context.documentExpiryHours default 168) as String) ++ "H"
+                next: markExpired
+
+              markExpired:
+                type: transform
+                transform:
+                  mapper:
+                    lang: dataweave
+                    expr: |
+                      context ++ {
+                        signers:
+                          (context.signers default []) map (s) ->
+                            if (s.status == "PENDING")
+                            then s ++ { status: "EXPIRED" }
+                            else s,
+                        outcome: {
+                          documentId: context.documentId,
+                          title: context.title,
+                          status: "EXPIRED",
+                          signingMode: context.signingMode,
+                          expiredAt: now(),
+                          signers:
+                            (context.signers default []) map (s) ->
+                              if (s.status == "PENDING")
+                              then s ++ { status: "EXPIRED" }
+                              else s
+                        }
+                      }
+                  target:
+                    kind: context
+                    path: ""
+                next: documentCompleted
+
+    documentCompleted:
+      type: succeed
+      outputVar: outcome

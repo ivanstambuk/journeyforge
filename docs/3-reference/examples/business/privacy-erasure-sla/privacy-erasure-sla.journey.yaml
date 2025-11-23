@@ -1,0 +1,506 @@
+apiVersion: v1
+kind: Journey
+metadata:
+  name: privacy-erasure-sla
+  version: 0.1.0
+  description: Privacy erasure request journey with a 2-business-day review SLA and escalation to a senior privacy officer when the SLA is breached.
+spec:
+  input:
+    schema:
+      title: PrivacyErasureStartRequest
+      type: object
+      required:
+        - requestId
+        - subjectId
+        - region
+      properties:
+        requestId:
+          type: string
+        subjectId:
+          type: string
+        customerId:
+          type: string
+        region:
+          type: string
+        channel:
+          type: string
+        requestedAt:
+          type: string
+          format: date-time
+      additionalProperties: true
+  output:
+    schema:
+      title: PrivacyErasureOutcome
+      type: object
+      required:
+        - status
+        - requestId
+        - subjectId
+      properties:
+        status:
+          type: string
+          enum:
+            - ERASURE_COMPLETED
+            - ERASURE_FAILED
+            - REJECTED
+            - INELIGIBLE
+        requestId:
+          type: string
+        subjectId:
+          type: string
+        region:
+          type: string
+        decisionLevel:
+          type: string
+          enum:
+            - PRIVACY_DESK
+            - SENIOR_PRIVACY_OFFICER
+        decisionAt:
+          type: string
+          format: date-time
+        escalatedAt:
+          type: string
+          format: date-time
+        erasureStartedAt:
+          type: string
+          format: date-time
+        erasureCompletedAt:
+          type: string
+          format: date-time
+        failureReasonCode:
+          type: string
+        failureReason:
+          type: string
+        rejectionReasonCode:
+          type: string
+        rejectionReason:
+          type: string
+        ineligibleReasonCode:
+          type: string
+        ineligibleReason:
+          type: string
+        escalationReasonCode:
+          type: string
+        escalationReason:
+          type: string
+      additionalProperties: true
+  start: classifyRequest
+  states:
+    classifyRequest:
+      type: transform
+      transform:
+        mapper:
+          lang: dataweave
+          expr: |
+            context ++ {
+              reviewSlaSeconds: 172800
+            }
+        target:
+          kind: context
+          path: ""
+      next: fetchProfile
+
+    fetchProfile:
+      type: task
+      task:
+        kind: httpCall
+        method: GET
+        url: "https://identity.example.com/customers/${context.customerId}"
+        params:
+          headers:
+            Accept: application/json
+        timeoutMs: 2000
+        resultVar: profile
+      next: checkEligibility
+
+    checkEligibility:
+      type: choice
+      choices:
+        - when:
+            predicate:
+              lang: dataweave
+              expr: |
+                context.profile.ok == false
+          next: buildIneligibleOutcome
+      default: inventoryData
+
+    inventoryData:
+      type: task
+      task:
+        kind: httpCall
+        method: POST
+        url: https://privacy.example.com/erasure/inventory
+        params:
+          headers:
+            Accept: application/json
+        body:
+          mapper:
+            lang: dataweave
+            expr: |
+              {
+                requestId: context.requestId,
+                subjectId: context.subjectId,
+                region: context.region
+              }
+        timeoutMs: 5000
+        resultVar: inventory
+      next: notifyPrivacyDesk
+
+    notifyPrivacyDesk:
+      type: task
+      task:
+        kind: httpCall
+        method: POST
+        url: https://privacy.example.com/erasure/notify-privacy-desk
+        params:
+          headers:
+            Accept: application/json
+        body:
+          mapper:
+            lang: dataweave
+            expr: |
+              {
+                requestId: context.requestId,
+                subjectId: context.subjectId,
+                region: context.region,
+                channel: context.channel,
+                reviewSlaSeconds: context.reviewSlaSeconds
+              }
+        timeoutMs: 2000
+        resultVar: notifyResult
+      next: privacyDeskReview
+
+    privacyDeskReview:
+      type: wait
+      wait:
+        channel: manual
+        input:
+          schema:
+            title: PrivacyDeskDecisionInput
+            type: object
+            required:
+              - decision
+            properties:
+              decision:
+                type: string
+                enum:
+                  - APPROVE
+                  - REJECT
+              reason:
+                type: string
+            additionalProperties: true
+        apply:
+          mapper:
+            lang: dataweave
+            expr: |
+              context ++ {
+                privacyDeskDecision: payload
+              }
+        on:
+          - when:
+              predicate:
+                lang: dataweave
+                expr: |
+                  payload.decision == "APPROVE"
+            next: markApprovedByDesk
+          - when:
+              predicate:
+                lang: dataweave
+                expr: |
+                  payload.decision == "REJECT"
+            next: markRejectedByDesk
+        default: ignoreDeskUpdate
+        timeoutSec: 172800
+        onTimeout: escalateToSenior
+
+    ignoreDeskUpdate:
+      type: transform
+      transform:
+        mapper:
+          lang: dataweave
+          expr: context
+        target:
+          kind: context
+          path: ""
+      next: privacyDeskReview
+
+    markApprovedByDesk:
+      type: transform
+      transform:
+        mapper:
+          lang: dataweave
+          expr: |
+            context ++ {
+              decisionLevel: "PRIVACY_DESK",
+              decisionAt: now()
+            }
+        target:
+          kind: context
+          path: ""
+      next: launchErasure
+
+    markRejectedByDesk:
+      type: transform
+      transform:
+        mapper:
+          lang: dataweave
+          expr: |
+            context ++ {
+              outcome: {
+                status: "REJECTED",
+                requestId: context.requestId,
+                subjectId: context.subjectId,
+                region: context.region,
+                decisionLevel: "PRIVACY_DESK",
+                decisionAt: now(),
+                rejectionReasonCode: "PRIVACY_DESK_REJECTED",
+                rejectionReason: context.privacyDeskDecision.reason
+              }
+            }
+        target:
+          kind: context
+          path: ""
+      next: journeyCompleted
+
+    escalateToSenior:
+      type: transform
+      transform:
+        mapper:
+          lang: dataweave
+          expr: |
+            context ++ {
+              escalatedAt: now(),
+              escalationReasonCode: "PRIVACY_DESK_SLA_BREACH",
+              escalationReason: "Privacy desk did not respond within 2 business days (modelled here as 48 hours)."
+            }
+        target:
+          kind: context
+          path: ""
+      next: notifySeniorEscalation
+
+    notifySeniorEscalation:
+      type: task
+      task:
+        kind: httpCall
+        method: POST
+        url: https://privacy.example.com/erasure/escalate
+        params:
+          headers:
+            Accept: application/json
+        body:
+          mapper:
+            lang: dataweave
+            expr: |
+              {
+                requestId: context.requestId,
+                subjectId: context.subjectId,
+                region: context.region,
+                escalatedAt: context.escalatedAt,
+                escalationReason: context.escalationReason
+              }
+        timeoutMs: 2000
+        resultVar: escalationResult
+      next: seniorReview
+
+    seniorReview:
+      type: wait
+      wait:
+        channel: manual
+        input:
+          schema:
+            title: SeniorPrivacyDecisionInput
+            type: object
+            required:
+              - decision
+            properties:
+              decision:
+                type: string
+                enum:
+                  - APPROVE
+                  - REJECT
+              reason:
+                type: string
+            additionalProperties: true
+        apply:
+          mapper:
+            lang: dataweave
+            expr: |
+              context ++ {
+                seniorDecision: payload
+              }
+        on:
+          - when:
+              predicate:
+                lang: dataweave
+                expr: |
+                  payload.decision == "APPROVE"
+            next: markApprovedBySenior
+          - when:
+              predicate:
+                lang: dataweave
+                expr: |
+                  payload.decision == "REJECT"
+            next: markRejectedBySenior
+        default: ignoreSeniorUpdate
+
+    ignoreSeniorUpdate:
+      type: transform
+      transform:
+        mapper:
+          lang: dataweave
+          expr: context
+        target:
+          kind: context
+          path: ""
+      next: seniorReview
+
+    markApprovedBySenior:
+      type: transform
+      transform:
+        mapper:
+          lang: dataweave
+          expr: |
+            context ++ {
+              decisionLevel: "SENIOR_PRIVACY_OFFICER",
+              decisionAt: now()
+            }
+        target:
+          kind: context
+          path: ""
+      next: launchErasure
+
+    markRejectedBySenior:
+      type: transform
+      transform:
+        mapper:
+          lang: dataweave
+          expr: |
+            context ++ {
+              outcome: {
+                status: "REJECTED",
+                requestId: context.requestId,
+                subjectId: context.subjectId,
+                region: context.region,
+                decisionLevel: "SENIOR_PRIVACY_OFFICER",
+                decisionAt: now(),
+                rejectionReasonCode: "SENIOR_PRIVACY_OFFICER_REJECTED",
+                rejectionReason: context.seniorDecision.reason
+              }
+            }
+        target:
+          kind: context
+          path: ""
+      next: journeyCompleted
+
+    launchErasure:
+      type: task
+      task:
+        kind: httpCall
+        method: POST
+        url: https://privacy.example.com/erasure/run
+        params:
+          headers:
+            Accept: application/json
+        body:
+          mapper:
+            lang: dataweave
+            expr: |
+              {
+                requestId: context.requestId,
+                subjectId: context.subjectId,
+                region: context.region
+              }
+        timeoutMs: 10000
+        resultVar: erasureRun
+      next: evaluateErasureResult
+
+    evaluateErasureResult:
+      type: choice
+      choices:
+        - when:
+            predicate:
+              lang: dataweave
+              expr: |
+                context.erasureRun.ok == true and context.erasureRun.body.status == "COMPLETED"
+          next: buildErasureCompletedOutcome
+      default: buildErasureFailedOutcome
+
+    buildErasureCompletedOutcome:
+      type: transform
+      transform:
+        mapper:
+          lang: dataweave
+          expr: |
+            context ++ {
+              outcome: {
+                status: "ERASURE_COMPLETED",
+                requestId: context.requestId,
+                subjectId: context.subjectId,
+                region: context.region,
+                decisionLevel: context.decisionLevel,
+                decisionAt: context.decisionAt,
+                escalatedAt: context.escalatedAt,
+                erasureStartedAt: now(),
+                erasureCompletedAt: now()
+              }
+            }
+        target:
+          kind: context
+          path: ""
+      next: journeyCompleted
+
+    buildErasureFailedOutcome:
+      type: transform
+      transform:
+        mapper:
+          lang: dataweave
+          expr: |
+            context ++ {
+              outcome: {
+                status: "ERASURE_FAILED",
+                requestId: context.requestId,
+                subjectId: context.subjectId,
+                region: context.region,
+                decisionLevel: context.decisionLevel,
+                decisionAt: context.decisionAt,
+                escalatedAt: context.escalatedAt,
+                erasureStartedAt: now(),
+                failureReasonCode:
+                  if (context.erasureRun.error != null)
+                  then "ERASURE_ENGINE_ERROR"
+                  else "ERASURE_ENGINE_NON_SUCCESS_STATUS",
+                failureReason:
+                  if (context.erasureRun.error != null)
+                  then context.erasureRun.error.message
+                  else "Erasure engine returned non-success status."
+              }
+            }
+        target:
+          kind: context
+          path: ""
+      next: journeyCompleted
+
+    buildIneligibleOutcome:
+      type: transform
+      transform:
+        mapper:
+          lang: dataweave
+          expr: |
+            context ++ {
+              outcome: {
+                status: "INELIGIBLE",
+                requestId: context.requestId,
+                subjectId: context.subjectId,
+                region: context.region,
+                ineligibleReasonCode: "SUBJECT_OR_REGION_INELIGIBLE",
+                ineligibleReason: "Subject or region not eligible for erasure."
+              }
+            }
+        target:
+          kind: context
+          path: ""
+      next: journeyCompleted
+
+    journeyCompleted:
+      type: succeed
+      outputVar: outcome

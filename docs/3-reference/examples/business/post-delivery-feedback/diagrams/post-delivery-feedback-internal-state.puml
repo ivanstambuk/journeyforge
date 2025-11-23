@@ -1,0 +1,29 @@
+@startuml
+!include journey-diagram-theme.puml
+title post-delivery-feedback – internal DSL state graph
+
+[*] --> waitForDelivery
+
+state waitForDelivery
+state completeDelivered
+state completeCancelled
+
+waitForDelivery --> completeDelivered : delivery.status == delivered
+waitForDelivery --> completeCancelled : delivery.status == cancelled (or default)
+
+completeDelivered --> [*]
+completeCancelled --> [*]
+
+note right of waitForDelivery
+  type: wait (manual channel)
+  step id: confirmDelivery
+  input: DeliveryConfirmationInput
+end note
+
+note bottom of completeDelivered
+  spec.compensation (async) waits N days
+  and then sends a feedback request via
+  notifications.sendFeedbackRequest
+end note
+
+@enduml

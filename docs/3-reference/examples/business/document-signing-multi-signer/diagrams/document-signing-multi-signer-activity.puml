@@ -1,0 +1,25 @@
+@startuml
+!include journey-diagram-theme.puml
+title document-signing-multi-signer – activity flow
+
+start
+
+:Client sends\nPOST /api/v1/journeys/document-signing-multi-signer/start\nwith DocumentSigningStartRequest;
+
+repeat
+  :Client polls\nGET /journeys/{journeyId}\nfor status;
+  :Journeys API returns\nJourneyStatus with per-signer statuses;
+repeat while (phase == "Running") is (signatures or expiry pending)
+
+if (output.status == "FULLY_SIGNED"?) then (fully signed)
+  :Client releases the signed document\nand updates downstream systems;
+elseif (output.status == "DECLINED"?) then (declined)
+  :Client notifies stakeholders that the\ndocument was declined and may start a new workflow;
+else (expired)
+  :Client treats the document as expired\nand may initiate a new signing round;
+endif
+
+stop
+
+@enduml
+

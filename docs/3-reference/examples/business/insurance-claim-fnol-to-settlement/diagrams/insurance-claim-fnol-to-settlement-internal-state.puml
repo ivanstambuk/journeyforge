@@ -19,7 +19,7 @@ createClaim --> waitForFnolDetails : claims.createClaim
 waitForFnolDetails --> assessmentParallel : payload.decision == "submit"
 waitForFnolDetails --> denied : default (no FNOL details)
 
-assessmentParallel --> evaluateAssessment : adjuster & provider assessments
+assessmentParallel --> evaluateAssessment : adjuster & provider assessments\n(including SLA timers + notifications)
 
 evaluateAssessment --> waitForSettlementApproval : both decisions == "approve"
 evaluateAssessment --> denied : default (adjuster or provider denied)
@@ -42,9 +42,11 @@ end note
 note right of assessmentParallel
   type: parallel
   branches: adjuster, provider
-  each branch uses wait state:
-    - submitAdjusterReport
-    - submitProviderEstimate
+  each branch combines:
+    - a manual wait step (submitAdjusterReport / submitProviderEstimate)
+    - an internal SLA timer that marks assessment.*.slaBreached and
+      sends an SLA-breach notification via the Claims API,
+      without changing the main approve/deny control flow
 end note
 
 note right of waitForSettlementApproval
@@ -54,4 +56,3 @@ note right of waitForSettlementApproval
 end note
 
 @enduml
-

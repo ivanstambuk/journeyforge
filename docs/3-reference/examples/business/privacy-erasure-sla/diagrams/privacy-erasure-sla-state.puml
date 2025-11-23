@@ -1,0 +1,50 @@
+@startuml
+!include journey-diagram-theme.puml
+title privacy-erasure-sla – state transitions
+
+[*] --> classifyRequest
+
+state classifyRequest
+state fetchProfile
+state checkEligibility
+state inventoryData
+state notifyPrivacyDesk
+state privacyDeskReview
+state seniorReview
+state launchErasure
+state evaluateErasureResult
+state journeyCompleted
+
+classifyRequest --> fetchProfile
+fetchProfile --> checkEligibility
+checkEligibility --> inventoryData : eligible
+checkEligibility --> journeyCompleted : ineligible
+
+inventoryData --> notifyPrivacyDesk
+notifyPrivacyDesk --> privacyDeskReview
+
+privacyDeskReview --> launchErasure : decision = APPROVE
+privacyDeskReview --> journeyCompleted : decision = REJECT
+privacyDeskReview --> seniorReview : SLA timeout (escalate)
+
+seniorReview --> launchErasure : decision = APPROVE
+seniorReview --> journeyCompleted : decision = REJECT
+
+launchErasure --> evaluateErasureResult
+evaluateErasureResult --> journeyCompleted
+
+journeyCompleted --> [*]
+
+note right of privacyDeskReview
+  type: wait (manual channel)
+  review SLA: 2 business days
+  modelled as timeoutSec: 172800
+end note
+
+note right of seniorReview
+  type: wait (manual channel)
+  used only for escalated requests
+end note
+
+@enduml
+

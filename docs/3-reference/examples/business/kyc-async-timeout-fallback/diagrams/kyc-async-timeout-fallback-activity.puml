@@ -1,0 +1,28 @@
+@startuml
+!include journey-diagram-theme.puml
+title kyc-async-timeout-fallback – client activity flow
+
+start
+
+:Client sends\nPOST /api/v1/journeys/kyc-async-timeout-fallback/start\nwith KycAsyncTimeoutFallbackStartRequest;
+
+repeat
+  :Client polls\nGET /journeys/{journeyId}\nfor status;
+  :Journeys API returns\nJourneyStatus with phase/currentState;
+repeat while (phase == "Running") is (primary KYC, SLA, recovery, or fallback in progress)
+
+:Client calls\nGET /journeys/{journeyId}/result\nwhen phase is terminal;
+:Journeys API returns\nJourneyOutcome with final status\n(KYC_COMPLETED_PRIMARY, KYC_COMPLETED_FALLBACK,\nKYC_TIMED_OUT, or KYC_FAILED);
+
+if (output.status == "KYC_COMPLETED_PRIMARY"?) then (primary)
+  :Client records that primary KYC\ncompleted successfully;
+elseif (output.status == "KYC_COMPLETED_FALLBACK"?) then (fallback)
+  :Client records that fallback KYC\ncompleted successfully and may flag\nthat the primary path timed out;
+else (timed out / failed)
+  :Client routes the case to\nan operator queue or review,\nusing failure/timeout codes to drive actions;
+endif
+
+stop
+
+@enduml
+

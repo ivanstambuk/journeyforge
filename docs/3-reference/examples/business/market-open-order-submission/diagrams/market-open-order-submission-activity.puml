@@ -1,0 +1,27 @@
+@startuml
+!include journey-diagram-theme.puml
+title market-open-order-submission – client activity flow
+
+start
+
+:Client sends\nPOST /api/v1/journeys/market-open-order-submission/start\nwith MarketOpenOrderStartRequest;
+
+repeat
+  :Client calls\nGET /api/v1/journeys/{journeyId}/result;
+  :Journeys API returns\nJourneyOutcome with phase/output;
+repeat while (phase == "Running") is (waiting or submitting)
+
+if (phase == "Running" and pre-open window active?) then (pre-open)
+  :Client may submit pre-open action\nPOST /journeys/{journeyId}/steps/preOpenAction\n(action: submit or cancel);
+endif
+
+if (phase == "Succeeded" and finalStatus == "SUBMITTED"?) then (submitted)
+  :Client records submitted order and\nsubmissionMode (IMMEDIATE or DEFERRED);
+  stop
+else (not submitted / failed)
+  :Client handles NOT_SUBMITTED or FAILED\nbased on failureReason and submissionMode;
+  stop
+endif
+
+@enduml
+

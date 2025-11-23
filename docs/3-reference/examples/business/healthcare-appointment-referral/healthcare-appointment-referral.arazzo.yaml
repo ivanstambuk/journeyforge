@@ -1,0 +1,201 @@
+arazzo: 1.0.1
+info:
+  title: JourneyForge – healthcare-appointment-referral workflows
+  version: 0.1.0
+  summary: Workflows for healthcare referrals with patient decisions and provider callbacks.
+  description: >
+    Workflows for starting a healthcare-appointment-referral journey, letting patients confirm/reschedule/cancel
+    appointments, handling provider/EMR callbacks for appointment status, and retrieving final referral outcomes.
+sourceDescriptions:
+  - name: healthcareAppointmentReferral
+    type: openapi
+    url: healthcare-appointment-referral.openapi.yaml
+workflows:
+  - workflowId: referral-appointment-confirmed
+    summary: Start a referral, let the patient confirm an appointment, and confirm the booking.
+    description: >
+      Start a healthcare-appointment-referral journey, let the patient confirm one of the proposed appointments,
+      process a CONFIRMED provider callback, and retrieve an APPOINTMENT_CONFIRMED outcome.
+    inputs:
+      type: object
+      properties:
+        startRequest:
+          description: Initial referral request payload.
+          type: object
+          required:
+            - referralId
+            - patientId
+            - reason
+            - specialty
+          properties:
+            referralId:
+              type: string
+            patientId:
+              type: string
+            reason:
+              type: string
+            specialty:
+              type: string
+            preferredWindowStart:
+              type: string
+              format: date-time
+            preferredWindowEnd:
+              type: string
+              format: date-time
+          additionalProperties: true
+        patientDecision:
+          description: Patient decision to confirm an appointment.
+          type: object
+          required:
+            - action
+            - appointmentId
+          properties:
+            action:
+              type: string
+              enum:
+                - CONFIRM
+            appointmentId:
+              type: string
+            comment:
+              type: string
+          additionalProperties: true
+        providerCallback:
+          description: Provider/EMR callback indicating the appointment is CONFIRMED.
+          type: object
+          required:
+            - appointmentId
+            - status
+          properties:
+            appointmentId:
+              type: string
+            status:
+              type: string
+              enum:
+                - CONFIRMED
+          additionalProperties: true
+    steps:
+      - stepId: startJourney
+        description: Start a new healthcare-appointment-referral journey instance.
+        operationId: healthcareAppointmentReferral_start
+        x-source: healthcareAppointmentReferral
+        requestBody:
+          contentType: application/json
+          payload: $inputs.startRequest
+        outputs:
+          journeyId: $response.body.journeyId
+      - stepId: getStatusAfterSearch
+        description: Optional status check after appointments have been proposed.
+        operationId: healthcareAppointmentReferral_getStatus
+        x-source: healthcareAppointmentReferral
+        parameters:
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId
+        outputs:
+          phase: $response.body.phase
+          currentState: $response.body.currentState
+      - stepId: patientConfirm
+        description: Patient confirms an appointment via the patientDecision step.
+        operationId: healthcareAppointmentReferral_patientDecision
+        x-source: healthcareAppointmentReferral
+        parameters:
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId
+        requestBody:
+          contentType: application/json
+          payload: $inputs.patientDecision
+        outputs:
+          phase: $response.body.phase
+      - stepId: providerConfirms
+        description: Provider/EMR posts a CONFIRMED status for the appointment.
+        operationId: healthcareAppointmentReferral_waitForAppointmentStatus
+        x-source: healthcareAppointmentReferral
+        parameters:
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId
+        requestBody:
+          contentType: application/json
+          payload: $inputs.providerCallback
+        outputs:
+          phase: $response.body.phase
+      - stepId: getResult
+        description: Retrieve the APPOINTMENT_CONFIRMED referral outcome.
+        operationId: healthcareAppointmentReferral_getResult
+        x-source: healthcareAppointmentReferral
+        parameters:
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId
+
+  - workflowId: referral-patient-cancels
+    summary: Start a referral and have the patient cancel before booking.
+    description: >
+      Start a healthcare-appointment-referral journey, let the patient cancel via the patientDecision step,
+      and retrieve a PATIENT_CANCELLED outcome.
+    inputs:
+      type: object
+      properties:
+        startRequest:
+          description: Initial referral request payload.
+          type: object
+          required:
+            - referralId
+            - patientId
+            - reason
+            - specialty
+          properties:
+            referralId:
+              type: string
+            patientId:
+              type: string
+            reason:
+              type: string
+            specialty:
+              type: string
+          additionalProperties: true
+        patientDecision:
+          description: Patient decision to cancel the referral.
+          type: object
+          required:
+            - action
+          properties:
+            action:
+              type: string
+              enum:
+                - CANCEL
+            comment:
+              type: string
+          additionalProperties: true
+    steps:
+      - stepId: startJourney
+        description: Start a new healthcare-appointment-referral journey instance.
+        operationId: healthcareAppointmentReferral_start
+        x-source: healthcareAppointmentReferral
+        requestBody:
+          contentType: application/json
+          payload: $inputs.startRequest
+        outputs:
+          journeyId: $response.body.journeyId
+      - stepId: patientCancels
+        description: Patient cancels the referral via the patientDecision step.
+        operationId: healthcareAppointmentReferral_patientDecision
+        x-source: healthcareAppointmentReferral
+        parameters:
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId
+        requestBody:
+          contentType: application/json
+          payload: $inputs.patientDecision
+        outputs:
+          phase: $response.body.phase
+      - stepId: getResult
+        description: Retrieve the PATIENT_CANCELLED referral outcome.
+        operationId: healthcareAppointmentReferral_getResult
+        x-source: healthcareAppointmentReferral
+        parameters:
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId

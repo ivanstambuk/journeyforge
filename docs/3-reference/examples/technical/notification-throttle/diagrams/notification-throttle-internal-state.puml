@@ -1,0 +1,60 @@
+@startuml
+!include journey-diagram-theme.puml
+title notification-throttle – internal DSL state graph
+
+[*] --> classifyPacingWindows
+
+state classifyPacingWindows
+state notificationWindowSwitch
+state sendNotification
+state recordNotificationSent
+state suppressNotification
+state integrationWindowSwitch
+state callIntegration
+state recordIntegrationCalled
+state skipIntegration
+state completeOutcome
+state done
+
+classifyPacingWindows --> notificationWindowSwitch : compute nowTs and pacing gaps
+
+notificationWindowSwitch --> sendNotification : gap >= minNotificationGapSec
+notificationWindowSwitch --> suppressNotification : default (within gap)
+
+sendNotification --> recordNotificationSent : notifications.sendNotification
+recordNotificationSent --> integrationWindowSwitch
+
+suppressNotification --> integrationWindowSwitch
+
+integrationWindowSwitch --> callIntegration : integrationPayload present\nand gap >= minIntegrationGapSec
+integrationWindowSwitch --> skipIntegration : default (no payload or within gap)
+
+callIntegration --> recordIntegrationCalled : integrations.callThrottledEndpoint
+recordIntegrationCalled --> completeOutcome
+
+skipIntegration --> completeOutcome
+
+completeOutcome --> done
+done --> [*]
+
+note right of classifyPacingWindows
+  type: transform
+  normalises:
+    - minNotificationGapSec (default 300)
+    - minIntegrationGapSec (default 60)
+    - lastNotificationAt / lastIntegrationCallAt
+end note
+
+note right of notificationWindowSwitch
+  type: choice
+  models per-user notification pacing
+  based on lastNotificationAt and nowTs
+end note
+
+note right of integrationWindowSwitch
+  type: choice
+  models third-party API throttling
+  based on lastIntegrationCallAt and nowTs
+end note
+
+@enduml

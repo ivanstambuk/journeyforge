@@ -1,0 +1,32 @@
+@startuml
+!include journey-diagram-theme.puml
+title business-hours-payment-authorization – business-time window sequence
+
+actor "Client" as Client
+participant "Journeys API" as Journeys
+
+Client -> Journeys: POST /api/v1/journeys/business-hours-payment-authorization/start\nBusinessHoursPaymentStartRequest
+Journeys --> Client: 202 Accepted\nJourneyStartResponse (journeyId, ...)
+
+Client -> Journeys: GET /api/v1/journeys/{journeyId}\n(getStatus)
+Journeys --> Client: 200 OK\nJourneyStatus (Running or terminal)
+
+alt Submitted during business hours
+  note over Journeys
+    The journey classifies the submission as
+    within business hours and calls the Payments
+    API immediately.
+  end note
+else Submitted after business hours
+  note over Journeys
+    The journey classifies the submission as
+    after-hours and waits until the next business
+    day at 09:00 before calling the Payments API.
+  end note
+end
+
+Client -> Journeys: GET /api/v1/journeys/{journeyId}/result\n(getResult)
+Journeys --> Client: 200 OK\nJourneyOutcome (AUTHORIZED or FAILED,\nprocessingMode IMMEDIATE or DEFERRED)
+
+@enduml
+

@@ -1,0 +1,81 @@
+@startuml
+!include journey-diagram-theme.puml
+title privacy-erasure-sla – internal DSL state graph
+
+[*] --> classifyRequest
+
+state classifyRequest
+state fetchProfile
+state checkEligibility
+state inventoryData
+state notifyPrivacyDesk
+state privacyDeskReview
+state ignoreDeskUpdate
+state markApprovedByDesk
+state markRejectedByDesk
+state escalateToSenior
+state notifySeniorEscalation
+state seniorReview
+state ignoreSeniorUpdate
+state markApprovedBySenior
+state markRejectedBySenior
+state launchErasure
+state evaluateErasureResult
+state buildErasureCompletedOutcome
+state buildErasureFailedOutcome
+state buildIneligibleOutcome
+state journeyCompleted
+
+classifyRequest --> fetchProfile
+fetchProfile --> checkEligibility
+
+checkEligibility --> inventoryData : eligible
+checkEligibility --> buildIneligibleOutcome : ineligible
+
+inventoryData --> notifyPrivacyDesk
+notifyPrivacyDesk --> privacyDeskReview
+
+privacyDeskReview --> markApprovedByDesk : decision == "APPROVE"
+privacyDeskReview --> markRejectedByDesk : decision == "REJECT"
+privacyDeskReview --> ignoreDeskUpdate : default (other updates)
+privacyDeskReview --> escalateToSenior : timeout (2 business days)
+
+ignoreDeskUpdate --> privacyDeskReview
+
+markApprovedByDesk --> launchErasure
+markRejectedByDesk --> journeyCompleted
+
+escalateToSenior --> notifySeniorEscalation
+notifySeniorEscalation --> seniorReview
+
+seniorReview --> markApprovedBySenior : decision == "APPROVE"
+seniorReview --> markRejectedBySenior : decision == "REJECT"
+seniorReview --> ignoreSeniorUpdate : default (other updates)
+
+ignoreSeniorUpdate --> seniorReview
+
+markApprovedBySenior --> launchErasure
+markRejectedBySenior --> journeyCompleted
+
+launchErasure --> evaluateErasureResult
+evaluateErasureResult --> buildErasureCompletedOutcome : erasureRun.status == COMPLETED
+evaluateErasureResult --> buildErasureFailedOutcome : otherwise
+
+buildErasureCompletedOutcome --> journeyCompleted
+buildErasureFailedOutcome --> journeyCompleted
+buildIneligibleOutcome --> journeyCompleted
+
+journeyCompleted --> [*]
+
+note right of privacyDeskReview
+  wait state that accepts PrivacyDeskDecisionInput
+  and enforces the 2-business-day SLA
+  via timeoutSec: 172800 and onTimeout: escalateToSenior
+end note
+
+note right of seniorReview
+  wait state that accepts SeniorPrivacyDecisionInput
+  and is entered only after escalation
+end note
+
+@enduml

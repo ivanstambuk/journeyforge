@@ -1,0 +1,23 @@
+@startuml
+!include journey-diagram-theme.puml
+title post-delivery-feedback – client activity flow
+
+start
+
+:Order system sends\nPOST /api/v1/journeys/post-delivery-feedback/start\nwith PostDeliveryFeedbackStartRequest;
+
+repeat
+  :Order system calls\nGET /api/v1/journeys/{journeyId}/result;
+  :Journeys API returns\nJourneyOutcome with phase/output;
+repeat while (phase == "Running") is (waiting for delivery)
+
+if (phase == "Succeeded" and finalStatus == "DELIVERED"?) then (delivered)
+  :Order system records delivery outcome;\nfeedback request will be handled by\ncompensation after the delay window;
+  stop
+else (cancelled)
+  :Order system records CANCELLED outcome;\nno feedback is sent;
+  stop
+endif
+
+@enduml
+

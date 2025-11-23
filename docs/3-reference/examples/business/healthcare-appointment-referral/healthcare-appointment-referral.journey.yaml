@@ -1,0 +1,434 @@
+apiVersion: v1
+kind: Journey
+metadata:
+  name: healthcare-appointment-referral
+  version: 0.1.0
+  description: Healthcare referral journey that proposes appointments, lets the patient confirm/reschedule/cancel via a generic step, waits for provider callbacks, and enforces a referral-level expiry window.
+spec:
+  input:
+    schema:
+      title: ReferralStartRequest
+      type: object
+      required:
+        - referralId
+        - patientId
+        - reason
+        - specialty
+      properties:
+        referralId:
+          type: string
+        patientId:
+          type: string
+        reason:
+          type: string
+        specialty:
+          type: string
+        preferredWindowStart:
+          type: string
+          format: date-time
+        preferredWindowEnd:
+          type: string
+          format: date-time
+        referralExpiryDays:
+          type: integer
+          minimum: 1
+      additionalProperties: true
+  output:
+    schema:
+      title: ReferralOutcome
+      type: object
+      required:
+        - referralId
+        - status
+      properties:
+        referralId:
+          type: string
+        patientId:
+          type: string
+        status:
+          type: string
+          enum:
+            - APPOINTMENT_CONFIRMED
+            - APPOINTMENT_COMPLETED
+            - PATIENT_CANCELLED
+            - NO_PROVIDER_AVAILABLE
+            - EXPIRED
+        primaryAppointmentId:
+          type: string
+        appointments:
+          type: array
+          items:
+            type: object
+            required:
+              - appointmentId
+              - providerId
+              - status
+            properties:
+              appointmentId:
+                type: string
+              providerId:
+                type: string
+              location:
+                type: string
+              startTime:
+                type: string
+                format: date-time
+              endTime:
+                type: string
+                format: date-time
+              status:
+                type: string
+                enum:
+                  - PROPOSED
+                  - PENDING_PATIENT
+                  - PENDING_PROVIDER
+                  - CONFIRMED
+                  - COMPLETED
+                  - CANCELLED
+                  - FAILED
+            additionalProperties: true
+        expiryAt:
+          type: string
+          format: date-time
+      additionalProperties: true
+  start: initialiseReferral
+  states:
+    initialiseReferral:
+      type: transform
+      transform:
+        mapper:
+          lang: dataweave
+          expr: |
+            context ++ {
+              referralExpiryDays:
+                if ((context.referralExpiryDays default 0) > 0)
+                then context.referralExpiryDays
+                else 30,
+              appointments: []
+            }
+        target:
+          kind: context
+          path: ""
+      next: referralOrExpiry
+
+    referralOrExpiry:
+      type: parallel
+      parallel:
+        branches:
+          - name: referralBranch
+            start: requestAppointments
+            states:
+              requestAppointments:
+                type: task
+                task:
+                  kind: httpCall
+                  method: POST
+                  url: https://scheduler.example.com/referrals/search-appointments
+                  params:
+                    headers:
+                      Accept: application/json
+                  body:
+                    mapper:
+                      lang: dataweave
+                      expr: |
+                        {
+                          referralId: context.referralId,
+                          patientId: context.patientId,
+                          specialty: context.specialty,
+                          preferredWindowStart: context.preferredWindowStart,
+                          preferredWindowEnd: context.preferredWindowEnd
+                        }
+                  timeoutMs: 3000
+                  resultVar: appointmentSearch
+                next: normaliseAppointments
+
+              normaliseAppointments:
+                type: transform
+                transform:
+                  mapper:
+                    lang: dataweave
+                    expr: |
+                      context ++ {
+                        appointments:
+                          (appointmentSearch.body.appointments default []) map (a) -> {
+                            appointmentId: a.appointmentId,
+                            providerId: a.providerId,
+                            location: a.location,
+                            startTime: a.startTime,
+                            endTime: a.endTime,
+                            status: "PENDING_PATIENT"
+                          }
+                      }
+                  target:
+                    kind: context
+                    path: ""
+                next: patientDecision
+
+              patientDecision:
+                type: wait
+                wait:
+                  channel: manual
+                  input:
+                    schema:
+                      title: PatientDecisionInput
+                      type: object
+                      required:
+                        - action
+                      properties:
+                        action:
+                          type: string
+                          enum:
+                            - CONFIRM
+                            - RESCHEDULE
+                            - CANCEL
+                        appointmentId:
+                          type: string
+                        comment:
+                          type: string
+                      additionalProperties: true
+                  apply:
+                    mapper:
+                      lang: dataweave
+                      expr: |
+                        do {
+                          var action = payload.action
+                          var chosenId = payload.appointmentId
+                          var updatedAppointments =
+                            (context.appointments default []) map (a) ->
+                              if (action == "CONFIRM" and a.appointmentId == chosenId) a ++ { status: "PENDING_PROVIDER" }
+                              else if (action == "CONFIRM" and a.appointmentId != chosenId and a.status == "PENDING_PATIENT") a ++ { status: "CANCELLED" }
+                              else if (action == "RESCHEDULE") a ++ { status: if (a.appointmentId == chosenId) "CANCELLED" else a.status }
+                              else if (action == "CANCEL") a ++ { status: if (a.status == "PENDING_PATIENT") "CANCELLED" else a.status }
+                              else a
+                          context ++ {
+                            lastPatientAction: action,
+                            lastChosenAppointmentId: chosenId,
+                            appointments: updatedAppointments
+                          }
+                        }
+                  on:
+                    - when:
+                        predicate:
+                          lang: dataweave
+                          expr: |
+                            payload.action == "CANCEL"
+                      next: completePatientCancelled
+                    - when:
+                        predicate:
+                          lang: dataweave
+                          expr: |
+                            payload.action == "RESCHEDULE"
+                      next: requestAppointments
+                    - when:
+                        predicate:
+                          lang: dataweave
+                          expr: |
+                            payload.action == "CONFIRM"
+                      next: bookConfirmedAppointment
+                  default: patientDecision
+
+              bookConfirmedAppointment:
+                type: task
+                task:
+                  kind: httpCall
+                  method: POST
+                  url: https://scheduler.example.com/appointments/book
+                  params:
+                    headers:
+                      Accept: application/json
+                  body:
+                    mapper:
+                      lang: dataweave
+                      expr: |
+                        {
+                          referralId: context.referralId,
+                          patientId: context.patientId,
+                          appointmentId: context.lastChosenAppointmentId
+                        }
+                  timeoutMs: 3000
+                  resultVar: bookingResult
+                next: waitForAppointmentStatus
+
+              waitForAppointmentStatus:
+                type: webhook
+                webhook:
+                  input:
+                    schema:
+                      title: AppointmentStatusCallback
+                      type: object
+                      required:
+                        - appointmentId
+                        - status
+                      properties:
+                        appointmentId:
+                          type: string
+                        status:
+                          type: string
+                          enum:
+                            - CONFIRMED
+                            - COMPLETED
+                            - CANCELLED
+                            - FAILED
+                      additionalProperties: true
+                  apply:
+                    mapper:
+                      lang: dataweave
+                      expr: |
+                        do {
+                          var updatedAppointments =
+                            (context.appointments default []) map (a) ->
+                              if (a.appointmentId == payload.appointmentId)
+                              then a ++ { status: payload.status }
+                              else a
+                          context ++ {
+                            appointments: updatedAppointments
+                          }
+                        }
+                  on:
+                    - when:
+                        predicate:
+                          lang: dataweave
+                          expr: |
+                            payload.status == "CONFIRMED"
+                      next: completeAppointmentConfirmed
+                    - when:
+                        predicate:
+                          lang: dataweave
+                          expr: |
+                            payload.status == "COMPLETED"
+                      next: completeAppointmentCompleted
+                    - when:
+                        predicate:
+                          lang: dataweave
+                          expr: |
+                            payload.status == "CANCELLED" or payload.status == "FAILED"
+                      next: noProviderAvailable
+                  default: waitForAppointmentStatus
+
+              completePatientCancelled:
+                type: transform
+                transform:
+                  mapper:
+                    lang: dataweave
+                    expr: |
+                      context ++ {
+                        outcome: {
+                          referralId: context.referralId,
+                          patientId: context.patientId,
+                          status: "PATIENT_CANCELLED",
+                          appointments: context.appointments
+                        }
+                      }
+                  target:
+                    kind: context
+                    path: ""
+                next: referralCompleted
+
+              completeAppointmentConfirmed:
+                type: transform
+                transform:
+                  mapper:
+                    lang: dataweave
+                    expr: |
+                      do {
+                        var confirmed =
+                          (context.appointments default []) filter ((a) -> a.status == "CONFIRMED")
+                        var primaryId =
+                          if (sizeOf(confirmed) > 0) then confirmed[0].appointmentId else context.lastChosenAppointmentId
+                        context ++ {
+                          outcome: {
+                            referralId: context.referralId,
+                            patientId: context.patientId,
+                            status: "APPOINTMENT_CONFIRMED",
+                            primaryAppointmentId: primaryId,
+                            appointments: context.appointments
+                          }
+                        }
+                      }
+                  target:
+                    kind: context
+                    path: ""
+                next: referralCompleted
+
+              completeAppointmentCompleted:
+                type: transform
+                transform:
+                  mapper:
+                    lang: dataweave
+                    expr: |
+                      do {
+                        var completed =
+                          (context.appointments default []) filter ((a) -> a.status == "COMPLETED")
+                        var primaryId =
+                          if (sizeOf(completed) > 0) then completed[0].appointmentId else context.lastChosenAppointmentId
+                        context ++ {
+                          outcome: {
+                            referralId: context.referralId,
+                            patientId: context.patientId,
+                            status: "APPOINTMENT_COMPLETED",
+                            primaryAppointmentId: primaryId,
+                            appointments: context.appointments
+                          }
+                        }
+                      }
+                  target:
+                    kind: context
+                    path: ""
+                next: referralCompleted
+
+              noProviderAvailable:
+                type: transform
+                transform:
+                  mapper:
+                    lang: dataweave
+                    expr: |
+                      context ++ {
+                        outcome: {
+                          referralId: context.referralId,
+                          patientId: context.patientId,
+                          status: "NO_PROVIDER_AVAILABLE",
+                          appointments: context.appointments
+                        }
+                      }
+                  target:
+                    kind: context
+                    path: ""
+                next: referralCompleted
+
+          - name: expiryBranch
+            start: referralExpiryTimer
+            states:
+              referralExpiryTimer:
+                type: timer
+                timer:
+                  duration:
+                    mapper:
+                      lang: dataweave
+                      expr: |
+                        // Convert days to an ISO-8601 duration (days -> hours)
+                        "PT" ++ ((context.referralExpiryDays default 30) * 24 as String) ++ "H"
+                next: markReferralExpired
+
+              markReferralExpired:
+                type: transform
+                transform:
+                  mapper:
+                    lang: dataweave
+                    expr: |
+                      context ++ {
+                        outcome: {
+                          referralId: context.referralId,
+                          patientId: context.patientId,
+                          status: "EXPIRED",
+                          expiryAt: now(),
+                          appointments: context.appointments
+                        }
+                      }
+                  target:
+                    kind: context
+                    path: ""
+                next: referralCompleted
+
+    referralCompleted:
+      type: succeed
+      outputVar: outcome

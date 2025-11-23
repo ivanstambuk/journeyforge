@@ -1,0 +1,163 @@
+arazzo: 1.0.1
+info:
+  title: JourneyForge – customer-onboarding-kyc-kyb workflows
+  version: 0.1.0
+  summary: Workflows for combined customer + business onboarding with KYC, KYB, and risk decisions.
+  description: >
+    Workflows for starting a customer-onboarding-kyc-kyb journey, running KYC/KYB/registry checks and risk decisions
+    in parallel, and retrieving final APPROVED, REFERRED, or REJECTED onboarding outcomes.
+sourceDescriptions:
+  - name: customerOnboardingKycKyb
+    type: openapi
+    url: customer-onboarding-kyc-kyb.openapi.yaml
+workflows:
+  - workflowId: onboarding-approved
+    summary: Start combined onboarding and retrieve an APPROVED outcome after all checks pass.
+    description: >
+      Start a customer-onboarding-kyc-kyb journey, let external systems post KYC and KYB+risk callbacks, and read the
+      final APPROVED outcome when individual and business checks and both credit and compliance decisions approve.
+    inputs:
+      type: object
+      properties:
+        startRequest:
+          description: Combined KYC + KYB onboarding request.
+          type: object
+          required:
+            - onboardingId
+            - customer
+            - business
+          properties:
+            onboardingId:
+              type: string
+            customer:
+              type: object
+              required:
+                - customerId
+                - fullName
+                - email
+              properties:
+                customerId:
+                  type: string
+                fullName:
+                  type: string
+                email:
+                  type: string
+              additionalProperties: true
+            business:
+              type: object
+              required:
+                - businessId
+                - legalName
+                - country
+              properties:
+                businessId:
+                  type: string
+                legalName:
+                  type: string
+                country:
+                  type: string
+              additionalProperties: true
+          additionalProperties: true
+        kycCallback:
+          description: KYC result callback.
+          type: object
+          required:
+            - customerId
+            - status
+          properties:
+            customerId:
+              type: string
+            status:
+              type: string
+              enum:
+                - APPROVED
+                - REFERRED
+            reasons:
+              type: array
+              items:
+                type: string
+          additionalProperties: true
+        kybRiskCallback:
+          description: KYB + risk callback input.
+          type: object
+          required:
+            - onboardingId
+          properties:
+            onboardingId:
+              type: string
+            kybStatus:
+              type: string
+              enum:
+                - APPROVED
+                - REFERRED
+            kybUboStatuses:
+              type: array
+              items:
+                type: object
+                required:
+                  - uboId
+                  - status
+                properties:
+                  uboId:
+                    type: string
+                  status:
+                    type: string
+                    enum:
+                      - APPROVED
+                      - REFERRED
+                additionalProperties: true
+            creditDecision:
+              type: object
+            complianceDecision:
+              type: object
+          additionalProperties: true
+    steps:
+      - stepId: startJourney
+        description: Start a new customer-onboarding-kyc-kyb journey instance.
+        operationId: customerOnboardingKycKyb_start
+        x-source: customerOnboardingKycKyb
+        requestBody:
+          contentType: application/json
+          payload: $inputs.startRequest
+        outputs:
+          journeyId: $response.body.journeyId
+      - stepId: getStatusRunning
+        description: Optional status check while external checks run.
+        operationId: customerOnboardingKycKyb_getStatus
+        x-source: customerOnboardingKycKyb
+        parameters:
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId
+        outputs:
+          phase: $response.body.phase
+          currentState: $response.body.currentState
+      - stepId: kycResult
+        description: External KYC system posts the KYC result.
+        operationId: customerOnboardingKycKyb_getStatus
+        x-source: customerOnboardingKycKyb
+        # Note: in a real system this would target a dedicated callback path; this workflow focuses on the outcome surface.
+        parameters:
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId
+        outputs:
+          phase: $response.body.phase
+      - stepId: kybRiskResult
+        description: External KYB and risk engines post aggregated KYB + risk results.
+        operationId: customerOnboardingKycKyb_getStatus
+        x-source: customerOnboardingKycKyb
+        parameters:
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId
+        outputs:
+          phase: $response.body.phase
+      - stepId: getResult
+        description: Retrieve the final APPROVED onboarding outcome.
+        operationId: customerOnboardingKycKyb_getResult
+        x-source: customerOnboardingKycKyb
+        parameters:
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId

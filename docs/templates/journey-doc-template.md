@@ -64,6 +64,8 @@ When adding or updating a business journey, the AI agent **must**:
 - Run PlantUML locally to generate `*.png` files using the shared theme, for example:
   - `java -jar tools/plantuml.jar docs/3-reference/examples/business/<journey-id>/diagrams/*.puml`
 - Ensure the generated PNG files are committed alongside the `.puml` sources so VS Code previews and static docs render correctly.
+- Treat any PlantUML warning or non-zero exit code as a hard failure to fix before committing; diagrams in `main` must compile without syntax errors.
+- When writing PlantUML `note` blocks, **do not embed literal `\n` sequences** in the note text; instead, break lines by writing them on separate lines in the note body so the rendered diagram shows clean line breaks.
 
 ### Sequence diagram
 
@@ -79,7 +81,7 @@ Authoring guidance for actors:
 - Every step in the Step overview table SHOULD appear as a labelled interaction in at least one diagram (sequence or activity) so integrators can see how to drive the journey over HTTP.
 - When you need to show important out-of-band interactions (for example a client talking to an agent before the agent calls a step), prefer PlantUML notes attached to the relevant actors instead of drawing extra messages that have no direct call into or out of the journey.
 
-<img src="diagrams/<journey-id>-sequence.png" alt="<Journey Name> – sequence" width="620" />
+<img src="diagrams/<journey-id>-sequence.png" alt="<Journey Name> – sequence" width="420" />
 
 ### State diagram (optional)
 

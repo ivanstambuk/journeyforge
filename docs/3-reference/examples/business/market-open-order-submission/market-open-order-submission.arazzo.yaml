@@ -1,0 +1,216 @@
+arazzo: 1.0.1
+info:
+  title: JourneyForge – market-open-order-submission workflows
+  version: 0.1.0
+  summary: Workflows for market-open order submission with pre-open deferral.
+  description: Workflows for submitting orders that are deferred until market open when placed pre-open, with an optional pre-open cancel window.
+sourceDescriptions:
+  - name: marketOpenOrder
+    type: openapi
+    url: market-open-order-submission.openapi.yaml
+workflows:
+  - workflowId: market-open-order-in-session
+    summary: Submit an order during market hours and observe immediate submission.
+    description: Start a market-open-order-submission journey when the current time is within the configured market hours, and observe that the order is submitted immediately without pre-open waiting.
+    inputs:
+      type: object
+      properties:
+        startRequest:
+          description: Order submitted during market hours.
+          type: object
+          required:
+            - orderId
+            - accountId
+            - instrumentId
+            - side
+            - quantity
+            - timeInForce
+            - marketOpenHour
+          properties:
+            orderId:
+              type: string
+            accountId:
+              type: string
+            instrumentId:
+              type: string
+            side:
+              type: string
+              enum: [BUY, SELL]
+            quantity:
+              type: number
+            timeInForce:
+              type: string
+              enum: [DAY, GTC]
+            marketOpenHour:
+              type: integer
+          additionalProperties: true
+    steps:
+      - stepId: startJourney
+        description: Start a new market-open-order-submission journey instance.
+        operationId: marketOpenOrderSubmission_start
+        x-source: marketOpenOrder
+        requestBody:
+          contentType: application/json
+          payload: $inputs.startRequest
+        outputs:
+          journeyId: $response.body.journeyId
+      - stepId: getStatus
+        description: Poll journey status shortly after start to inspect whether the order is being submitted.
+        operationId: marketOpenOrderSubmission_getStatus
+        x-source: marketOpenOrder
+        parameters:
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId
+        outputs:
+          phase: $response.body.phase
+      - stepId: getResult
+        description: Retrieve the final outcome once order submission has completed.
+        operationId: marketOpenOrderSubmission_getResult
+        x-source: marketOpenOrder
+        parameters:
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId
+
+  - workflowId: market-open-order-pre-open-submit
+    summary: Submit a pre-open order that is automatically submitted at market open.
+    description: Start a market-open-order-submission journey when current time is before the configured market open hour, do not send any pre-open action, and observe that the order is submitted automatically when market opens.
+    inputs:
+      type: object
+      properties:
+        startRequest:
+          description: Order submitted before market open.
+          type: object
+          required:
+            - orderId
+            - accountId
+            - instrumentId
+            - side
+            - quantity
+            - timeInForce
+            - marketOpenHour
+          properties:
+            orderId:
+              type: string
+            accountId:
+              type: string
+            instrumentId:
+              type: string
+            side:
+              type: string
+              enum: [BUY, SELL]
+            quantity:
+              type: number
+            timeInForce:
+              type: string
+              enum: [DAY, GTC]
+            marketOpenHour:
+              type: integer
+          additionalProperties: true
+    steps:
+      - stepId: startJourney
+        description: Start a new market-open-order-submission journey instance.
+        operationId: marketOpenOrderSubmission_start
+        x-source: marketOpenOrder
+        requestBody:
+          contentType: application/json
+          payload: $inputs.startRequest
+        outputs:
+          journeyId: $response.body.journeyId
+      - stepId: getStatusDuringDeferral
+        description: Poll journey status while the order is waiting for market open.
+        operationId: marketOpenOrderSubmission_getStatus
+        x-source: marketOpenOrder
+        parameters:
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId
+        outputs:
+          phase: $response.body.phase
+      - stepId: getResult
+        description: Retrieve the final outcome after market has opened and the order has been submitted.
+        operationId: marketOpenOrderSubmission_getResult
+        x-source: marketOpenOrder
+        parameters:
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId
+
+  - workflowId: market-open-order-pre-open-cancel
+    summary: Cancel a pre-open order before market opens so it is never submitted.
+    description: Start a market-open-order-submission journey before market open, submit a pre-open cancel action, and observe that the order is not submitted when market opens and the outcome reflects NOT_SUBMITTED.
+    inputs:
+      type: object
+      properties:
+        startRequest:
+          description: Order submitted before market open that will be cancelled pre-open.
+          type: object
+          required:
+            - orderId
+            - accountId
+            - instrumentId
+            - side
+            - quantity
+            - timeInForce
+            - marketOpenHour
+          properties:
+            orderId:
+              type: string
+            accountId:
+              type: string
+            instrumentId:
+              type: string
+            side:
+              type: string
+              enum: [BUY, SELL]
+            quantity:
+              type: number
+            timeInForce:
+              type: string
+              enum: [DAY, GTC]
+            marketOpenHour:
+              type: integer
+          additionalProperties: true
+        cancelAction:
+          description: Pre-open cancel action.
+          type: object
+          required:
+            - action
+          properties:
+            action:
+              type: string
+              enum:
+                - cancel
+          additionalProperties: false
+    steps:
+      - stepId: startJourney
+        description: Start a new market-open-order-submission journey instance.
+        operationId: marketOpenOrderSubmission_start
+        x-source: marketOpenOrder
+        requestBody:
+          contentType: application/json
+          payload: $inputs.startRequest
+        outputs:
+          journeyId: $response.body.journeyId
+      - stepId: submitPreOpenCancel
+        description: Submit a pre-open cancel action before market open.
+        operationId: marketOpenOrderSubmission_preOpenAction
+        x-source: marketOpenOrder
+        parameters:
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId
+        requestBody:
+          contentType: application/json
+          payload: $inputs.cancelAction
+        outputs:
+          phase: $response.body.phase
+      - stepId: getResult
+        description: Retrieve the final outcome once the journey has completed without submitting the order.
+        operationId: marketOpenOrderSubmission_getResult
+        x-source: marketOpenOrder
+        parameters:
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId

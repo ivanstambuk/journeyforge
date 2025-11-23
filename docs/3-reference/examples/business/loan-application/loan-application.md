@@ -58,7 +58,7 @@ For auto-approved applications, the workflow typically uses steps 1, 2, and 6; u
 
 ### Sequence diagram
 
-<img src="diagrams/loan-application-sequence.png" alt="loan-application – sequence" width="620" />
+<img src="diagrams/loan-application-sequence.png" alt="loan-application – sequence" width="420" />
 
 ### State diagram
 

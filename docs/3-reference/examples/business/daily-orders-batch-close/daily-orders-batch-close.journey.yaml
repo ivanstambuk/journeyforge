@@ -1,0 +1,287 @@
+apiVersion: v1
+kind: Journey
+metadata:
+  name: daily-orders-batch-close
+  version: 0.1.0
+  description: Daily orders batch-close journey that configures a scheduled end-of-day run with OAuth token exchange and refresh.
+spec:
+  apis:
+    orders: { openApiRef: apis/orders.openapi.yaml }
+    oauth: { openApiRef: apis/serviceA.openapi.yaml }
+  input:
+    schema:
+      title: DailyOrdersBatchCloseConfigRequest
+      type: object
+      required:
+        - tenantId
+        - batchId
+        - firstRunAt
+        - interval
+        - maxRuns
+      properties:
+        tenantId:
+          type: string
+        batchId:
+          type: string
+        firstRunAt:
+          type: string
+          format: date-time
+        interval:
+          type: string
+          description: ISO-8601 duration for batch cadence (for example P1D).
+        maxRuns:
+          type: integer
+        upstreamWaitDuration:
+          type: string
+          description: ISO-8601 duration to wait for upstream systems after cut-off (for example PT15M).
+        replicationDelayDuration:
+          type: string
+          description: ISO-8601 duration to wait for replication/consistency before final close (for example PT5M).
+      additionalProperties: true
+  output:
+    schema:
+      title: DailyOrdersBatchCloseConfigOutcome
+      type: object
+      required:
+        - status
+        - tenantId
+        - batchId
+        - firstRunAt
+        - interval
+        - maxRuns
+      properties:
+        status:
+          type: string
+          enum:
+            - SCHEDULED
+        tenantId:
+          type: string
+        batchId:
+          type: string
+        firstRunAt:
+          type: string
+          format: date-time
+        interval:
+          type: string
+        maxRuns:
+          type: integer
+      additionalProperties: true
+  start: exchangeInitialToken
+  states:
+    exchangeInitialToken:
+      type: task
+      task:
+        kind: httpCall
+        operationRef: oauth.tokenExchange
+        params:
+          headers:
+            Accept: application/json
+            # In practice, the engine or platform would bind the caller's Authorization header
+            # into context; this example assumes an initialAccessToken is available in context.
+            Authorization: "Bearer ${context.initialAccessToken}"
+        body:
+          mapper:
+            lang: dataweave
+            expr: |
+              {
+                grant_type: "urn:ietf:params:oauth:grant-type:token-exchange",
+                subject_token: context.initialAccessToken,
+                subject_token_type: "urn:ietf:params:oauth:token-type:access_token",
+                audience: "orders-batch"
+              }
+        timeoutMs: 3000
+        resultVar: tokenExchange
+      next: storeInitialTokens
+
+    storeInitialTokens:
+      type: transform
+      transform:
+        mapper:
+          lang: dataweave
+          expr: |
+            context ++ {
+              oauth: {
+                accessToken: tokenExchange.body.access_token,
+                refreshToken: tokenExchange.body.refresh_token
+              }
+            }
+        target:
+          kind: context
+          path: ""
+      next: configureSchedule
+
+    configureSchedule:
+      type: task
+      task:
+        kind: schedule
+        schedule:
+          start: runBatch
+          startAt:
+            mapper:
+              lang: dataweave
+              expr: context.firstRunAt
+          interval:
+            mapper:
+              lang: dataweave
+              expr: context.interval
+          maxRuns:
+            mapper:
+              lang: dataweave
+              expr: context.maxRuns
+          subjectId:
+            mapper:
+              lang: dataweave
+              expr: context.tenantId
+          context:
+            mapper:
+              lang: dataweave
+              expr: context - ["initialAccessToken"]
+          onExisting: upsert
+      next: prepareConfigOutcome
+
+    prepareConfigOutcome:
+      type: transform
+      transform:
+        mapper:
+          lang: dataweave
+          expr: |
+            context ++ {
+              configOutcome: {
+                status: "SCHEDULED",
+                tenantId: context.tenantId,
+                batchId: context.batchId,
+                firstRunAt: context.firstRunAt,
+                interval: context.interval,
+                maxRuns: context.maxRuns
+              }
+            }
+        target:
+          kind: context
+          path: ""
+      next: completeConfigured
+
+    completeConfigured:
+      type: succeed
+      outputVar: configOutcome
+
+    runBatch:
+      type: task
+      task:
+        kind: httpCall
+        operationRef: oauth.refreshToken
+        params:
+          headers:
+            Accept: application/json
+        body:
+          mapper:
+            lang: dataweave
+            expr: |
+              {
+                grant_type: "refresh_token",
+                refresh_token: context.oauth.refreshToken
+              }
+        timeoutMs: 3000
+        resultVar: tokenRefresh
+      next: updateTokensAndWaitForUpstream
+
+    updateTokensAndWaitForUpstream:
+      type: transform
+      transform:
+        mapper:
+          lang: dataweave
+          expr: |
+            context ++ {
+              oauth: {
+                accessToken: tokenRefresh.body.access_token,
+                refreshToken: tokenRefresh.body.refresh_token
+              }
+            }
+        target:
+          kind: context
+          path: ""
+      next: waitForUpstream
+
+    waitForUpstream:
+      type: timer
+      timer:
+        duration:
+          mapper:
+            lang: dataweave
+            expr: |
+              context.upstreamWaitDuration default "PT15M"
+      next: prepareBatchSnapshot
+
+    prepareBatchSnapshot:
+      type: task
+      task:
+        kind: httpCall
+        operationRef: orders.prepareDailyBatchSnapshot
+        params:
+          headers:
+            Accept: application/json
+            Authorization: "Bearer ${context.oauth.accessToken}"
+        body:
+          mapper:
+            lang: dataweave
+            expr: |
+              {
+                tenantId: context.tenantId,
+                batchId: context.batchId
+              }
+        timeoutMs: 5000
+        resultVar: batchSnapshot
+      next: replicationDelay
+
+    replicationDelay:
+      type: timer
+      timer:
+        duration:
+          mapper:
+            lang: dataweave
+            expr: |
+              context.replicationDelayDuration default "PT5M"
+      next: closeBatch
+
+    closeBatch:
+      type: task
+      task:
+        kind: httpCall
+        operationRef: orders.closeDailyBatch
+        params:
+          headers:
+            Accept: application/json
+            Authorization: "Bearer ${context.oauth.accessToken}"
+        body:
+          mapper:
+            lang: dataweave
+            expr: |
+              {
+                tenantId: context.tenantId,
+                batchId: context.batchId,
+                snapshotId: batchSnapshot.body.snapshotId
+              }
+        timeoutMs: 5000
+        resultVar: batchClose
+      next: recordBatchOutcome
+
+    recordBatchOutcome:
+      type: transform
+      transform:
+        mapper:
+          lang: dataweave
+          expr: |
+            context ++ {
+              lastBatch: {
+                batchId: context.batchId,
+                closedAt: now(),
+                ok: batchClose.ok,
+                status: if (batchClose.ok) "CLOSED" else "FAILED"
+              }
+            }
+        target:
+          kind: context
+          path: ""
+      next: scheduledDone
+
+    scheduledDone:
+      type: succeed

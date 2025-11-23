@@ -1,0 +1,25 @@
+@startuml
+!include journey-diagram-theme.puml
+title post-delivery-feedback – delivery and feedback sequence
+
+actor "Order System" as OrderSystem
+actor "Customer" as Customer
+participant "Journeys API" as Journeys
+participant "Notification Service" as Notifications
+
+OrderSystem -> Journeys: POST /api/v1/journeys/post-delivery-feedback/start\nPostDeliveryFeedbackStartRequest
+Journeys --> OrderSystem: 202 Accepted\nJourneyStartResponse (journeyId, ...)
+
+OrderSystem -> Journeys: POST /api/v1/journeys/{journeyId}/steps/confirmDelivery\nDeliveryConfirmationInput
+Journeys --> OrderSystem: 200 OK\nDeliveryConfirmationStepResponse
+
+OrderSystem -> Journeys: GET /api/v1/journeys/{journeyId}/result\n(getResult)
+Journeys --> OrderSystem: 200 OK\nJourneyOutcome (finalStatus, deliveryDate)
+
+... After N days (compensation journey) ...
+
+Journeys -> Notifications: POST /notifications/sendFeedbackRequest\n(with orderId, customerId, deliveryDate)
+Notifications --> Journeys: 200 OK\n(feedback request accepted)
+
+@enduml
+

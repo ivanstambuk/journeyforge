@@ -1,6 +1,6 @@
 # Journey – support-case-sla
 
-> Support case journey that tracks resolution against an SLA and escalates cases that are not resolved before the SLA timer fires.
+> Support case journey that tracks resolution against an SLA, escalates cases that miss their response window, and auto-closes unresolved cases after a longer give-up period.
 
 ## Quick links
 
@@ -13,19 +13,21 @@
 
 ## Summary
 
-This journey models a support case with a priority-based SLA:
+This journey models a support case with a priority-based response SLA and a longer give-up window:
 
 - It starts when a client submits a support case with `caseId`, `customerId`, `priority`, and `summary`.
-- The journey classifies the case priority into an SLA duration (for example P1 = 1h, P2 = 4h, P3 = 8h).
+- The journey classifies the case priority into an SLA duration (for example P1 = 1h, P2 = 4h, P3 = 8h) and configures a longer give-up window (for example 2 days).
 - It notifies a support assignment system that a new case needs attention.
-- It then enters a `parallel` state with two branches:
+- It then enters a `parallel` state with three branches:
   - An agent work branch that waits for agent updates and, when an update with `status: "RESOLVED"` arrives, records a RESOLVED outcome.
-  - An SLA branch that waits for the computed SLA duration and, when it fires, records an ESCALATED outcome and calls an escalation system.
+  - An SLA branch that waits for the computed response SLA duration and, when it fires, records an ESCALATED outcome and calls an escalation system.
+  - A give-up branch that waits for the longer give-up duration and, when it fires before resolution, auto-closes the case with an AUTO_CLOSED outcome.
 - Whichever branch completes first determines the final outcome:
-  - If the agent resolves the case within the SLA, the journey succeeds with `status: "RESOLVED"`.
+  - If the agent resolves the case within the SLA/give-up windows, the journey succeeds with `status: "RESOLVED"`.
   - If the SLA timer fires first, the journey succeeds with `status: "ESCALATED"`.
+  - If neither resolution nor escalation leads to a terminal outcome before the give-up window elapses (for example when escalation is not acted on), the give-up timer wins and the journey auto-closes the case with `status: "AUTO_CLOSED"`.
 
-The journey illustrates how to combine `timer`, `parallel`, and `wait` to express “agent action OR SLA escalation after N” while keeping the SLA logic inside the journey.
+The journey illustrates how to combine `timer`, `parallel`, and `wait` to express “agent action OR SLA escalation after N OR give-up after M” while keeping the SLA and auto-close logic inside the journey.
 
 ## Contracts at a glance
 
@@ -39,8 +41,8 @@ The journey illustrates how to combine `timer`, `parallel`, and `wait` to expres
   - `status: "RESOLVED"`
   - optional `resolutionSummary: string`.
 - **Output schema** – `SupportCaseOutcome` exposed via `JourneyOutcome.output` with:
-  - `status: "RESOLVED" | "ESCALATED"`.
-  - `caseId`, `customerId`, `priority`, optional `resolvedAt`, `escalatedAt`, `resolutionSummary`.
+  - `status: "RESOLVED" | "ESCALATED" | "AUTO_CLOSED"`.
+  - `caseId`, `customerId`, `priority`, optional `resolvedAt`, `escalatedAt`, `autoClosedAt`, `autoCloseReason`, `resolutionSummary`.
 
 ## Step overview (Arazzo + HTTP surface)
 
@@ -66,6 +68,10 @@ Clients that want to observe escalation without explicit agent updates can still
 - **Escalated – no resolution within SLA**:
   - Client starts the journey but no resolving agent update is submitted in time.
   - The `slaTimer` branch fires after the priority-based SLA duration and the journey completes with `status: "ESCALATED"`, `escalatedAt` set, and an escalation notification sent to the escalation system.
+- **Auto-closed – no resolution after give-up window**:
+  - Client starts the journey and logs the case.
+  - No resolving agent update is submitted, and any escalation does not result in a resolution before the give-up window ends.
+  - The give-up timer fires and the journey completes with `status: "AUTO_CLOSED"`, `autoClosedAt` and `autoCloseReason` set.
 - **Non-resolving updates**:
   - Agents may post non-resolving updates via `waitForAgentUpdate` with different `status` values in a real system; this example treats only `status: "RESOLVED"` as meaningful and loops on any other updates via `ignoreUpdate`.
 
@@ -73,7 +79,7 @@ Clients that want to observe escalation without explicit agent updates can still
 
 ### Sequence diagram
 
-<img src="diagrams/support-case-sla-sequence.png" alt="support-case-sla – sequence" width="620" />
+<img src="diagrams/support-case-sla-sequence.png" alt="support-case-sla – sequence" width="420" />
 
 ### State diagram
 
@@ -91,5 +97,6 @@ Clients that want to observe escalation without explicit agent updates can still
 
 - `notifyAssignment` calls a support assignment endpoint to inform the queue or case management system about the new case.
 - `waitForAgentUpdate` is a `wait` state that expects `SupportCaseAgentUpdateInput`; when `status == "RESOLVED"`, it routes to `markResolved`, otherwise it loops via `ignoreUpdate`.
-- `slaTimer` is a `timer` state (`duration: "PT4H"`) that represents the SLA window for this case.
-- `waitOrEscalate` is a `parallel` state with `join.strategy: anyOf`, which implements the “agent resolves OR SLA timer escalates” pattern.
+- `slaTimer` is a `timer` state (`duration: context.slaDuration`) that represents the response SLA window for this case; when it fires first, `markEscalated` records an ESCALATED outcome and `notifyEscalation` calls an escalation endpoint.
+- `giveUpTimer` is a `timer` state (`duration: context.giveUpDuration`, currently defaulting to `P2D`) that represents a longer give-up window; when it fires first, `markAutoClosed` records an AUTO_CLOSED outcome to indicate that the case was closed without resolution after the give-up window.
+- `waitOrEscalateOrGiveUp` is a `parallel` state with `join.strategy: anyOf`, which implements the “agent resolves OR SLA timer escalates OR give-up auto-closes” pattern.

@@ -1,0 +1,82 @@
+@startuml
+!include journey-diagram-theme.puml
+title kyc-async-timeout-fallback – internal DSL state graph
+
+[*] --> startPrimaryKyc
+
+state startPrimaryKyc
+state recordPrimaryJob
+state primaryKycRace
+
+state waitForPrimaryKyc
+state ignorePrimaryCallback
+state completeFromPrimaryApproved
+state completeFromPrimaryRejected
+state donePrimaryCallback
+
+state primarySlaTimer
+state markPrimaryTimedOut
+state recoveryLoop
+state waitBeforeRetry
+state retryPrimaryHealthCheck
+state evaluatePrimaryHealth
+state incrementRecoveryAttempt
+
+state startFallbackKyc
+state recordFallbackJob
+state waitForFallbackResult
+state completeFromFallbackApproved
+state completeFromFallbackRejected
+state doneSlaAndFallback
+
+startPrimaryKyc --> recordPrimaryJob
+recordPrimaryJob --> primaryKycRace
+
+primaryKycRace --> waitForPrimaryKyc : callbackBranch
+primaryKycRace --> primarySlaTimer : slaAndFallbackBranch
+
+waitForPrimaryKyc --> ignorePrimaryCallback : outcome already decided
+waitForPrimaryKyc --> completeFromPrimaryApproved : status == APPROVED
+waitForPrimaryKyc --> completeFromPrimaryRejected : status == REJECTED
+
+ignorePrimaryCallback --> donePrimaryCallback
+completeFromPrimaryApproved --> donePrimaryCallback
+completeFromPrimaryRejected --> donePrimaryCallback
+
+donePrimaryCallback --> [*]
+
+primarySlaTimer --> markPrimaryTimedOut
+markPrimaryTimedOut --> recoveryLoop
+
+recoveryLoop --> waitBeforeRetry : recoveryAttempt < 3
+recoveryLoop --> startFallbackKyc : recoveryAttempt >= 3
+
+waitBeforeRetry --> retryPrimaryHealthCheck
+retryPrimaryHealthCheck --> evaluatePrimaryHealth
+evaluatePrimaryHealth --> startFallbackKyc : primary healthy
+evaluatePrimaryHealth --> incrementRecoveryAttempt : primary still unhealthy
+
+incrementRecoveryAttempt --> recoveryLoop
+
+startFallbackKyc --> recordFallbackJob
+recordFallbackJob --> waitForFallbackResult
+
+waitForFallbackResult --> completeFromFallbackApproved : status == APPROVED
+waitForFallbackResult --> completeFromFallbackRejected : status == REJECTED
+
+completeFromFallbackApproved --> doneSlaAndFallback
+completeFromFallbackRejected --> doneSlaAndFallback
+
+doneSlaAndFallback --> [*]
+
+note right of waitForPrimaryKyc
+  webhook that accepts primary provider callbacks
+  and ignores late callbacks after the SLA path\nhas already decided an outcome
+end note
+
+note right of waitBeforeRetry
+  timer implementing backoff delays\nbetween primary health checks
+end note
+
+@enduml
+

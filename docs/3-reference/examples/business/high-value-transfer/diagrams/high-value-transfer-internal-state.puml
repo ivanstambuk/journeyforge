@@ -8,10 +8,9 @@ state runChecks
 state evaluateChecks
 state waitForApproval
 state initiateTransfer
-state waitForSettlement
-state settled
+state awaitSettlementOrTimeout
+state notifySettlementTimeout
 state rejected
-state failed
 
 runChecks --> evaluateChecks : fraud.checkTransfer &\nsanctions.screenTransfer\nresultVar: checks
 
@@ -21,14 +20,11 @@ evaluateChecks --> rejected : default (checks failed)
 waitForApproval --> initiateTransfer : payload.decision == "approve"
 waitForApproval --> rejected : decision == "reject"
 
-initiateTransfer --> waitForSettlement : transfers.initiateHighValueTransfer
+initiateTransfer --> awaitSettlementOrTimeout : transfers.initiateHighValueTransfer
 
-waitForSettlement --> settled : payload.status == "SETTLED"
-waitForSettlement --> failed : status == "FAILED"
+awaitSettlementOrTimeout --> [*] : settlement success,\nprovider failure, or timeout\n(with SLA breach notification on timeout)
 
-settled --> [*]
 rejected --> [*]
-failed --> [*]
 
 note right of runChecks
   type: parallel
@@ -43,11 +39,17 @@ note right of waitForApproval
   input: ApproveTransferInput
 end note
 
-note right of waitForSettlement
-  type: webhook (provider callback)
-  step id: waitForSettlement
-  security: X-Settlement-Secret
+note right of awaitSettlementOrTimeout
+  type: parallel (settlement vs timeout)
+  settlementBranch:
+    - state: waitForSettlement (webhook)
+    - status == "SETTLED" -> success
+    - status == "FAILED" -> HIGH_VALUE_TRANSFER_FAILED
+  timeoutBranch:
+    - state: settlementTimer (timer PT30M)
+    - on timer firing, call transfers.notifySettlementTimeout
+    - then fail with HIGH_VALUE_TRANSFER_SETTLEMENT_TIMEOUT
+  join.strategy: anyOf
 end note
 
 @enduml
-

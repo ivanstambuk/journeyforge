@@ -1,0 +1,29 @@
+@startuml
+!include journey-diagram-theme.puml
+title healthcare-appointment-referral – sequence
+
+actor "Patient app" as Patient
+actor "Scheduling service" as Scheduler
+actor "Provider / EMR" as Provider
+participant "Journeys API" as Journeys
+
+Patient -> Journeys: POST /api/v1/journeys/healthcare-appointment-referral/start\nReferralStartRequest
+Journeys -> Scheduler: POST https://scheduler.example.com/referrals/search-appointments\n(referral details)
+Scheduler --> Journeys: 200 OK\n(appointment options)
+Journeys --> Patient: 202 Accepted\nJourneyStartResponse (journeyId, ...)
+
+== Patient confirms ==
+
+Patient -> Journeys: POST /api/v1/journeys/{journeyId}/steps/patientDecision\nPatientDecisionInput (CONFIRM, appointmentId)
+Journeys -> Scheduler: POST https://scheduler.example.com/appointments/book\n(referralId, patientId, appointmentId)
+Scheduler --> Journeys: 200 OK\n(bookingResult)
+Journeys --> Patient: 200 OK\nPatientDecisionStepResponse
+
+Provider -> Journeys: POST /api/v1/journeys/{journeyId}/steps/waitForAppointmentStatus\nAppointmentStatusCallback (CONFIRMED / COMPLETED)
+Journeys --> Provider: 200 OK\nAppointmentStatusStepResponse
+
+Patient -> Journeys: GET /api/v1/journeys/{journeyId}/result\n(getResult)
+Journeys --> Patient: 200 OK\nJourneyOutcome (APPOINTMENT_CONFIRMED / APPOINTMENT_COMPLETED)
+
+@enduml
+

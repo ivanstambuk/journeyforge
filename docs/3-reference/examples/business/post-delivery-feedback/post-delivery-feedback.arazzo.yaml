@@ -1,0 +1,79 @@
+arazzo: 1.0.1
+info:
+  title: JourneyForge – post-delivery-feedback workflows
+  version: 0.1.0
+  summary: Workflows for confirming delivery and triggering post-delivery feedback via compensation-style follow-up.
+  description: Workflows for confirming order delivery, completing the main journey, and then sending feedback requests N days after delivery using a compensation-style follow-up path.
+sourceDescriptions:
+  - name: postDeliveryFeedback
+    type: openapi
+    url: post-delivery-feedback.openapi.yaml
+workflows:
+  - workflowId: post-delivery-feedback-delivered
+    summary: Confirm order delivery and observe that a feedback request will be sent after the configured delay.
+    description: Start a post-delivery-feedback journey, confirm that the order was delivered, and then retrieve the outcome; the compensation journey will send a feedback request N days after delivery.
+    inputs:
+      type: object
+      properties:
+        startRequest:
+          description: Post-delivery feedback configuration for the order.
+          type: object
+          required:
+            - orderId
+            - customerId
+            - expectedDeliveryDate
+          properties:
+            orderId:
+              type: string
+            customerId:
+              type: string
+            expectedDeliveryDate:
+              type: string
+              format: date
+          additionalProperties: true
+        deliveryConfirmation:
+          description: Delivery confirmation event.
+          type: object
+          required:
+            - status
+            - deliveryDate
+          properties:
+            status:
+              type: string
+              enum:
+                - delivered
+            deliveryDate:
+              type: string
+              format: date
+          additionalProperties: false
+    steps:
+      - stepId: startJourney
+        description: Start a new post-delivery-feedback journey instance.
+        operationId: postDeliveryFeedback_start
+        x-source: postDeliveryFeedback
+        requestBody:
+          contentType: application/json
+          payload: $inputs.startRequest
+        outputs:
+          journeyId: $response.body.journeyId
+      - stepId: confirmDelivery
+        description: Confirm that the order has been delivered.
+        operationId: postDeliveryFeedback_confirmDelivery
+        x-source: postDeliveryFeedback
+        parameters:
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId
+        requestBody:
+          contentType: application/json
+          payload: $inputs.deliveryConfirmation
+        outputs:
+          phase: $response.body.phase
+      - stepId: getResult
+        description: Retrieve the final outcome once the delivery step has completed.
+        operationId: postDeliveryFeedback_getResult
+        x-source: postDeliveryFeedback
+        parameters:
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId

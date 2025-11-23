@@ -39,6 +39,7 @@ spec:
           enum:
             - RESOLVED
             - ESCALATED
+            - AUTO_CLOSED
         caseId:
           type: string
         customerId:
@@ -53,6 +54,11 @@ spec:
           format: date-time
         resolutionSummary:
           type: string
+        autoClosedAt:
+          type: string
+          format: date-time
+        autoCloseReason:
+          type: string
       additionalProperties: true
   start: classifyPriority
   states:
@@ -66,7 +72,8 @@ spec:
               slaDuration:
                 if (context.priority == "P1") "PT1H"
                 else if (context.priority == "P2") "PT4H"
-                else "PT8H"
+                else "PT8H",
+              giveUpDuration: "P2D"
             }
         target:
           kind: context
@@ -94,9 +101,9 @@ spec:
               }
         timeoutMs: 2000
         resultVar: assignmentResult
-      next: waitOrEscalate
+      next: waitOrEscalateOrGiveUp
 
-    waitOrEscalate:
+    waitOrEscalateOrGiveUp:
       type: parallel
       parallel:
         branches:
@@ -224,6 +231,40 @@ spec:
                 next: caseEscalated
 
               caseEscalated:
+                type: succeed
+                outputVar: outcome
+
+          - name: giveUpBranch
+            start: giveUpTimer
+            states:
+              giveUpTimer:
+                type: timer
+                timer:
+                  duration: "${context.giveUpDuration}"
+                next: markAutoClosed
+
+              markAutoClosed:
+                type: transform
+                transform:
+                  mapper:
+                    lang: dataweave
+                    expr: |
+                      context ++ {
+                        outcome: {
+                          status: "AUTO_CLOSED",
+                          caseId: context.caseId,
+                          customerId: context.customerId,
+                          priority: context.priority,
+                          autoClosedAt: now(),
+                          autoCloseReason: "Unresolved after give-up window"
+                        }
+                      }
+                  target:
+                    kind: context
+                    path: ""
+                next: caseAutoClosed
+
+              caseAutoClosed:
                 type: succeed
                 outputVar: outcome
 

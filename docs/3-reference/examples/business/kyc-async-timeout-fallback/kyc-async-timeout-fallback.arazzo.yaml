@@ -1,0 +1,185 @@
+arazzo: 1.0.1
+info:
+  title: JourneyForge – kyc-async-timeout-fallback workflows
+  version: 0.1.0
+  summary: Workflows for KYC checks with async primary provider, SLA timeout, and fallback provider.
+  description: >
+    Workflows for starting a kyc-async-timeout-fallback journey, handling primary and fallback
+    provider callbacks, and observing outcomes when the primary provider times out or recovers.
+sourceDescriptions:
+  - name: kycAsyncTimeoutFallback
+    type: openapi
+    url: kyc-async-timeout-fallback.openapi.yaml
+workflows:
+  - workflowId: kyc-primary-completes-within-sla
+    summary: Start KYC and complete from the primary provider within the SLA window.
+    description: >
+      Start a kyc-async-timeout-fallback journey instance, receive a callback from the primary provider
+      within the SLA window, and read a KYC_COMPLETED_PRIMARY outcome.
+    inputs:
+      type: object
+      properties:
+        startRequest:
+          description: Initial KYC request payload.
+          type: object
+          required:
+            - customerId
+            - requestId
+          properties:
+            customerId:
+              type: string
+            requestId:
+              type: string
+            primaryProvider:
+              type: string
+            fallbackProvider:
+              type: string
+            channel:
+              type: string
+          additionalProperties: true
+        primaryCallback:
+          description: Primary provider callback payload.
+          type: object
+          required:
+            - jobId
+            - status
+          properties:
+            jobId:
+              type: string
+            status:
+              type: string
+              enum:
+                - APPROVED
+                - REJECTED
+            reasons:
+              type: array
+              items:
+                type: string
+          additionalProperties: true
+    steps:
+      - stepId: startJourney
+        description: Start a new kyc-async-timeout-fallback journey instance.
+        operationId: kycAsyncTimeoutFallback_start
+        x-source: kycAsyncTimeoutFallback
+        requestBody:
+          contentType: application/json
+          payload: $inputs.startRequest
+        outputs:
+          journeyId: $response.body.journeyId
+      - stepId: getStatusRunning
+        description: Optional status check while the KYC check is in progress.
+        operationId: kycAsyncTimeoutFallback_getStatus
+        x-source: kycAsyncTimeoutFallback
+        parameters:
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId
+        outputs:
+          phase: $response.body.phase
+          currentState: $response.body.currentState
+      - stepId: primaryCallback
+        description: Primary provider posts KYC result within the SLA window.
+        operationId: kycAsyncTimeoutFallback_waitForPrimaryKyc
+        x-source: kycAsyncTimeoutFallback
+        parameters:
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId
+        requestBody:
+          contentType: application/json
+          payload: $inputs.primaryCallback
+        outputs:
+          phase: $response.body.phase
+      - stepId: getResult
+        description: Retrieve the final KYC_COMPLETED_PRIMARY outcome.
+        operationId: kycAsyncTimeoutFallback_getResult
+        x-source: kycAsyncTimeoutFallback
+        parameters:
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId
+
+  - workflowId: kyc-timeout-then-fallback
+    summary: Start KYC, let the primary provider time out, then complete via fallback provider.
+    description: >
+      Start a kyc-async-timeout-fallback journey instance, allow the primary provider SLA timer to fire
+      (with any late callbacks ignored), wait for the recovery attempts and fallback provider start,
+      then handle the fallback provider callback and read the final outcome.
+    inputs:
+      type: object
+      properties:
+        startRequest:
+          description: Initial KYC request payload.
+          type: object
+          required:
+            - customerId
+            - requestId
+          properties:
+            customerId:
+              type: string
+            requestId:
+              type: string
+            primaryProvider:
+              type: string
+            fallbackProvider:
+              type: string
+            channel:
+              type: string
+          additionalProperties: true
+        fallbackCallback:
+          description: Fallback provider callback payload.
+          type: object
+          required:
+            - jobId
+            - status
+          properties:
+            jobId:
+              type: string
+            status:
+              type: string
+              enum:
+                - APPROVED
+                - REJECTED
+          additionalProperties: true
+    steps:
+      - stepId: startJourney
+        description: Start a new kyc-async-timeout-fallback journey instance.
+        operationId: kycAsyncTimeoutFallback_start
+        x-source: kycAsyncTimeoutFallback
+        requestBody:
+          contentType: application/json
+          payload: $inputs.startRequest
+        outputs:
+          journeyId: $response.body.journeyId
+      - stepId: getStatusAfterTimeout
+        description: Status check after the primary provider SLA has expired and the journey has transitioned to the recovery/fallback path.
+        operationId: kycAsyncTimeoutFallback_getStatus
+        x-source: kycAsyncTimeoutFallback
+        parameters:
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId
+        outputs:
+          phase: $response.body.phase
+          currentState: $response.body.currentState
+      - stepId: fallbackCallback
+        description: Fallback provider posts its KYC result.
+        operationId: kycAsyncTimeoutFallback_waitForFallbackResult
+        x-source: kycAsyncTimeoutFallback
+        parameters:
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId
+        requestBody:
+          contentType: application/json
+          payload: $inputs.fallbackCallback
+        outputs:
+          phase: $response.body.phase
+      - stepId: getResult
+        description: Retrieve the final outcome after fallback processing.
+        operationId: kycAsyncTimeoutFallback_getResult
+        x-source: kycAsyncTimeoutFallback
+        parameters:
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId

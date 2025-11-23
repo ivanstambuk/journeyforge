@@ -1,0 +1,347 @@
+openapi: 3.1.0
+info:
+  title: "JourneyForge – kyc-async-timeout-fallback"
+  version: 0.1.0
+  description: "JourneyForge – kyc-async-timeout-fallback"
+  contact:
+    name: JourneyForge
+servers:
+  - url: /api/v1
+tags:
+  - name: kyc-async-timeout-fallback
+paths:
+  /journeys/kyc-async-timeout-fallback/start:
+    post:
+      summary: Start kyc-async-timeout-fallback journey
+      operationId: kycAsyncTimeoutFallback_start
+      tags:
+        - kyc-async-timeout-fallback
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/KycAsyncTimeoutFallbackStartRequest"
+      responses:
+        "202":
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JourneyStartResponse"
+      description: Start kyc-async-timeout-fallback journey
+  /journeys/{journeyId}:
+    get:
+      summary: Get journey status
+      operationId: kycAsyncTimeoutFallback_getStatus
+      tags:
+        - kyc-async-timeout-fallback
+      parameters:
+        - in: path
+          name: journeyId
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JourneyStatus"
+      description: Get journey status
+  /journeys/{journeyId}/steps/waitForPrimaryKyc:
+    post:
+      summary: Primary provider KYC callback for waitForPrimaryKyc step
+      operationId: kycAsyncTimeoutFallback_waitForPrimaryKyc
+      tags:
+        - kyc-async-timeout-fallback
+      parameters:
+        - in: path
+          name: journeyId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PrimaryKycCallbackInput"
+      responses:
+        "200":
+          description: Updated status after processing primary provider callback
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PrimaryKycStepResponse"
+      description: Primary provider KYC callback for waitForPrimaryKyc step
+  /journeys/{journeyId}/steps/waitForFallbackResult:
+    post:
+      summary: Fallback provider KYC callback for waitForFallbackResult step
+      operationId: kycAsyncTimeoutFallback_waitForFallbackResult
+      tags:
+        - kyc-async-timeout-fallback
+      parameters:
+        - in: path
+          name: journeyId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FallbackKycCallbackInput"
+      responses:
+        "200":
+          description: Updated status after processing fallback provider callback
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FallbackKycStepResponse"
+      description: Fallback provider KYC callback for waitForFallbackResult step
+  /journeys/{journeyId}/result:
+    get:
+      summary: Retrieve final outcome
+      operationId: kycAsyncTimeoutFallback_getResult
+      tags:
+        - kyc-async-timeout-fallback
+      parameters:
+        - in: path
+          name: journeyId
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Final outcome
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JourneyOutcome"
+        "409":
+          description: Journey not terminal yet
+      description: Retrieve final outcome
+components:
+  schemas:
+    KycAsyncTimeoutFallbackStartRequest:
+      type: object
+      required:
+        - customerId
+        - requestId
+      properties:
+        customerId:
+          type: string
+        requestId:
+          type: string
+        primaryProvider:
+          type: string
+        fallbackProvider:
+          type: string
+        channel:
+          type: string
+      additionalProperties: true
+    KycAsyncTimeoutFallbackOutcome:
+      type: object
+      required:
+        - status
+        - customerId
+      properties:
+        status:
+          type: string
+          enum:
+            - KYC_COMPLETED_PRIMARY
+            - KYC_COMPLETED_FALLBACK
+            - KYC_TIMED_OUT
+            - KYC_FAILED
+        customerId:
+          type: string
+        primaryProvider:
+          type: string
+        fallbackProvider:
+          type: string
+        primaryJobId:
+          type: string
+        fallbackJobId:
+          type: string
+        completionSource:
+          type: string
+        failureReasonCode:
+          type: string
+        failureReason:
+          type: string
+        timeoutReasonCode:
+          type: string
+        timeoutReason:
+          type: string
+      additionalProperties: true
+    PrimaryKycCallbackInput:
+      type: object
+      required:
+        - jobId
+        - status
+      properties:
+        jobId:
+          type: string
+        status:
+          type: string
+          enum:
+            - APPROVED
+            - REJECTED
+        reasons:
+          type: array
+          items:
+            type: string
+      additionalProperties: true
+    FallbackKycCallbackInput:
+      type: object
+      required:
+        - jobId
+        - status
+      properties:
+        jobId:
+          type: string
+        status:
+          type: string
+          enum:
+            - APPROVED
+            - REJECTED
+      additionalProperties: true
+    JourneyStartResponse:
+      type: object
+      required:
+        - journeyId
+        - journeyName
+        - statusUrl
+      properties:
+        journeyId:
+          type: string
+        journeyName:
+          type: string
+        statusUrl:
+          type: string
+          format: uri
+        _links:
+          description: "Optional hypermedia links (HAL-style) describing related resources and next actions.\n\nPresence is controlled per-journey via spec.httpSurface.links.enabled; when enabled, the engine typically includes at least `self` and `result` links.\n"
+          type: object
+          additionalProperties:
+            $ref: "#/components/schemas/Link"
+    JourneyStatus:
+      type: object
+      required:
+        - journeyId
+        - journeyName
+        - phase
+        - currentState
+        - updatedAt
+      properties:
+        journeyId:
+          type: string
+        journeyName:
+          type: string
+        phase:
+          type: string
+          enum:
+            - Running
+            - Succeeded
+            - Failed
+        currentState:
+          type: string
+        updatedAt:
+          type: string
+          format: date-time
+        tags:
+          type: array
+          description: "Effective tags for this journey instance, derived from the journey's metadata.tags and any instance tag sourcing rules. Tags are non-sensitive, short identifiers intended for filtering and grouping.\n"
+          items:
+            type: string
+        attributes:
+          type: object
+          description: "Lightweight metadata for this journey instance, such as subjectId, tenantId, channel, and correlation ids (orderId, paymentIntentId, crmCaseId). Values are strings and MUST respect the limits configured via MetadataLimits.\n"
+          additionalProperties:
+            type: string
+        _links:
+          description: "Optional hypermedia links (HAL-style) describing related resources and next actions.\n\nWhen links are enabled for a journey, the engine SHOULD include at least `self` and `result`, and MAY include links for active step endpoints. For step links, the relation name MUST equal the external-input state id (for example `waitForApproval`, `confirm`). When the journey is Running and user-cancellable, the engine SHOULD also expose a `cancel` link pointing to the canonical cancellation step `/api/v1/journeys/{journeyId}/steps/cancel` with method POST.\n"
+          type: object
+          additionalProperties:
+            $ref: "#/components/schemas/Link"
+    JourneyOutcome:
+      allOf:
+        - type: object
+          required:
+            - journeyId
+            - journeyName
+            - phase
+          properties:
+            journeyId:
+              type: string
+            journeyName:
+              type: string
+            phase:
+              type: string
+              enum:
+                - Succeeded
+                - Failed
+            output: {}
+            error:
+              type: object
+              properties:
+                code:
+                  type: string
+                reason:
+                  type: string
+            tags:
+              type: array
+              description: "Effective tags for this journey instance, repeated here for convenience when reading final outcomes.\n"
+              items:
+                type: string
+            attributes:
+              type: object
+              description: "Instance attributes such as subjectId, tenantId, channel, and correlation ids, repeated here for convenience when reading final outcomes.\n"
+              additionalProperties:
+                type: string
+            _links:
+              description: "Optional hypermedia links (HAL-style) describing related resources (for example `self`) when a journey is terminal. Presence is controlled per-journey via spec.httpSurface.links.enabled.\n"
+              type: object
+              additionalProperties:
+                $ref: "#/components/schemas/Link"
+        - type: object
+          properties:
+            output:
+              $ref: "#/components/schemas/KycAsyncTimeoutFallbackOutcome"
+    PrimaryKycStepResponse:
+      allOf:
+        - $ref: "#/components/schemas/JourneyStatus"
+        - type: object
+          description: Additional top-level fields returned from the primary KYC callback step.
+          properties:
+            status:
+              type: string
+            reasons:
+              type: array
+              items:
+                type: string
+          additionalProperties: true
+    FallbackKycStepResponse:
+      allOf:
+        - $ref: "#/components/schemas/JourneyStatus"
+        - type: object
+          description: Additional top-level fields returned from the fallback KYC callback step.
+          properties:
+            status:
+              type: string
+          additionalProperties: true
+    Link:
+      type: object
+      required:
+        - href
+      properties:
+        href:
+          type: string
+          description: Target URI for this link
+        method:
+          type: string
+          description: HTTP method to use when following this link (for example GET, POST, DELETE)
+      additionalProperties: true

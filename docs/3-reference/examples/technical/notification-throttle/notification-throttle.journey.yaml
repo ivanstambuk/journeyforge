@@ -1,0 +1,247 @@
+apiVersion: v1
+kind: Journey
+metadata:
+  name: notification-throttle
+  version: 0.1.0
+  description: Combined notification and third-party integration throttling using timers and context-based pacing.
+spec:
+  apis:
+    notifications: { openApiRef: apis/serviceA.openapi.yaml }
+    integrations: { openApiRef: apis/serviceB.openapi.yaml }
+  input:
+    schema:
+      title: NotificationThrottleStartRequest
+      type: object
+      required:
+        - userId
+        - channel
+        - message
+      properties:
+        userId:
+          type: string
+        channel:
+          type: string
+        message:
+          type: string
+        integrationPayload:
+          type: object
+        minNotificationGapSec:
+          type: integer
+        minIntegrationGapSec:
+          type: integer
+      additionalProperties: true
+  output:
+    schema:
+      title: NotificationThrottleOutcome
+      type: object
+      required:
+        - userId
+        - channel
+        - notificationDecision
+        - integrationDecision
+      properties:
+        userId:
+          type: string
+        channel:
+          type: string
+        notificationDecision:
+          type: string
+          enum:
+            - SENT
+            - SUPPRESSED
+        integrationDecision:
+          type: string
+          enum:
+            - CALLED
+            - SKIPPED
+        nextNotificationAvailableAt:
+          type: string
+          format: date-time
+        nextIntegrationAvailableAt:
+          type: string
+          format: date-time
+      additionalProperties: true
+  start: classifyPacingWindows
+  states:
+    classifyPacingWindows:
+      type: transform
+      transform:
+        mapper:
+          lang: dataweave
+          expr: |
+            context ++ {
+              nowTs: now(),
+              minNotificationGapSec: (context.minNotificationGapSec default 300),
+              minIntegrationGapSec: (context.minIntegrationGapSec default 60),
+              lastNotificationAt: context.lastNotificationAt default null,
+              lastIntegrationCallAt: context.lastIntegrationCallAt default null
+            }
+        target:
+          kind: context
+          path: ""
+      next: notificationWindowSwitch
+
+    notificationWindowSwitch:
+      type: choice
+      choices:
+        - when:
+            predicate:
+              lang: dataweave
+              expr: |
+                context.lastNotificationAt == null
+                  or (durationBetween(context.lastNotificationAt, context.nowTs).seconds
+                       >= context.minNotificationGapSec)
+          next: sendNotification
+      default: suppressNotification
+
+    sendNotification:
+      type: task
+      task:
+        kind: httpCall
+        operationRef: notifications.sendNotification
+        params:
+          headers:
+            Accept: application/json
+        body:
+          mapper:
+            lang: dataweave
+            expr: |
+              {
+                userId: context.userId,
+                channel: context.channel,
+                message: context.message
+              }
+        timeoutMs: 2000
+        resultVar: notificationResult
+      next: recordNotificationSent
+
+    recordNotificationSent:
+      type: transform
+      transform:
+        mapper:
+          lang: dataweave
+          expr: |
+            context ++ {
+              lastNotificationAt: context.nowTs,
+              notificationDecision: "SENT",
+              nextNotificationAvailableAt:
+                (context.nowTs as DateTime)
+                  ++ "|" ++ "PT" ++ (context.minNotificationGapSec as String) ++ "S"
+            }
+        target:
+          kind: context
+          path: ""
+      next: integrationWindowSwitch
+
+    suppressNotification:
+      type: transform
+      transform:
+        mapper:
+          lang: dataweave
+          expr: |
+            context ++ {
+              notificationDecision: "SUPPRESSED",
+              nextNotificationAvailableAt:
+                if (context.lastNotificationAt != null)
+                  (context.lastNotificationAt as DateTime)
+                    ++ "|" ++ "PT" ++ (context.minNotificationGapSec as String) ++ "S"
+                else
+                  null
+            }
+        target:
+          kind: context
+          path: ""
+      next: integrationWindowSwitch
+
+    integrationWindowSwitch:
+      type: choice
+      choices:
+        - when:
+            predicate:
+              lang: dataweave
+              expr: |
+                context.integrationPayload != null
+                  and (
+                    context.lastIntegrationCallAt == null
+                    or (durationBetween(context.lastIntegrationCallAt, context.nowTs).seconds
+                         >= context.minIntegrationGapSec)
+                  )
+          next: callIntegration
+      default: skipIntegration
+
+    callIntegration:
+      type: task
+      task:
+        kind: httpCall
+        operationRef: integrations.callThrottledEndpoint
+        params:
+          headers:
+            Accept: application/json
+        body:
+          mapper:
+            lang: dataweave
+            expr: context.integrationPayload
+        timeoutMs: 3000
+        resultVar: integrationResult
+      next: recordIntegrationCalled
+
+    recordIntegrationCalled:
+      type: transform
+      transform:
+        mapper:
+          lang: dataweave
+          expr: |
+            context ++ {
+              lastIntegrationCallAt: context.nowTs,
+              integrationDecision: "CALLED",
+              nextIntegrationAvailableAt:
+                (context.nowTs as DateTime)
+                  ++ "|" ++ "PT" ++ (context.minIntegrationGapSec as String) ++ "S"
+            }
+        target:
+          kind: context
+          path: ""
+      next: completeOutcome
+
+    skipIntegration:
+      type: transform
+      transform:
+        mapper:
+          lang: dataweave
+          expr: |
+            context ++ {
+              integrationDecision: "SKIPPED",
+              nextIntegrationAvailableAt:
+                if (context.lastIntegrationCallAt != null)
+                  (context.lastIntegrationCallAt as DateTime)
+                    ++ "|" ++ "PT" ++ (context.minIntegrationGapSec as String) ++ "S"
+                else
+                  null
+            }
+        target:
+          kind: context
+          path: ""
+      next: completeOutcome
+
+    completeOutcome:
+      type: transform
+      transform:
+        mapper:
+          lang: dataweave
+          expr: |
+            {
+              userId: context.userId,
+              channel: context.channel,
+              notificationDecision: context.notificationDecision,
+              integrationDecision: context.integrationDecision,
+              nextNotificationAvailableAt: context.nextNotificationAvailableAt,
+              nextIntegrationAvailableAt: context.nextIntegrationAvailableAt
+            }
+        target:
+          kind: var
+      resultVar: outcome
+      next: done
+
+    done:
+      type: succeed
+      outputVar: outcome

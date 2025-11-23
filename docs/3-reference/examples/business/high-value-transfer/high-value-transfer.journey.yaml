@@ -316,12 +316,26 @@ spec:
                 type: timer
                 timer:
                   duration: "PT30M"
+                next: notifySettlementTimeout
+
+              notifySettlementTimeout:
+                type: task
+                task:
+                  kind: httpCall
+                  operationRef: transfers.notifySettlementTimeout
+                  params:
+                    path:
+                      transferId: "${context.transferId}"
+                    headers:
+                      Accept: application/json
+                  timeoutMs: 3000
+                  resultVar: timeoutNotification
                 next: settlementTimedOut
 
               settlementTimedOut:
                 type: fail
                 errorCode: HIGH_VALUE_TRANSFER_SETTLEMENT_TIMEOUT
-                reason: "High-value transfer settlement did not complete within 30 minutes"
+                reason: "High-value transfer settlement did not complete within 30 minutes and was treated as a hard SLA breach"
 
         join:
           strategy: anyOf

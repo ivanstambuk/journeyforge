@@ -57,7 +57,7 @@ The second workflow in the Arazzo file covers partial availability and cancellat
 
 ### Sequence diagram
 
-<img src="diagrams/ecommerce-order-split-shipment-sequence.png" alt="ecommerce-order-split-shipment – sequence" width="620" />
+<img src="diagrams/ecommerce-order-split-shipment-sequence.png" alt="ecommerce-order-split-shipment – sequence" width="420" />
 
 ### State diagram
 

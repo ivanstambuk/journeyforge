@@ -59,7 +59,7 @@ The second workflow in the Arazzo file shows a rejecting approval path that lead
 
 ### Sequence diagram
 
-<img src="diagrams/b2b-purchase-order-sequence.png" alt="b2b-purchase-order – sequence" width="620" />
+<img src="diagrams/b2b-purchase-order-sequence.png" alt="b2b-purchase-order – sequence" width="420" />
 
 ### State diagram
 

@@ -204,7 +204,61 @@ spec:
               }
         timeoutMs: 3000
         resultVar: activation
-      next: statusChangeOrTimeout
+      next: activationOutcomeInitial
+
+    activationOutcomeInitial:
+      type: choice
+      choices:
+        - when:
+            predicate:
+              lang: dataweave
+              expr: |
+                activation.ok == true
+          next: statusChangeOrTimeout
+      default: activationRetryDelay
+
+    activationRetryDelay:
+      type: timer
+      timer:
+        duration: "PT4H"
+      next: retryActivatePaid
+
+    retryActivatePaid:
+      type: task
+      task:
+        kind: httpCall
+        operationRef: subscriptions.activateSubscription
+        params:
+          path:
+            subscriptionId: "${context.subscriptionId}"
+          headers:
+            Accept: application/json
+        body:
+          mapper:
+            lang: dataweave
+            expr: |
+              {
+                planId: context.planId
+              }
+        timeoutMs: 3000
+        resultVar: activation
+      next: activationOutcomeRetry
+
+    activationOutcomeRetry:
+      type: choice
+      choices:
+        - when:
+            predicate:
+              lang: dataweave
+              expr: |
+                activation.ok == true
+          next: statusChangeOrTimeout
+      default: activationFailed
+
+    activationFailed:
+      type: fail
+      errorCode: ACTIVATION_FAILED
+      reason: "Initial subscription activation failed after retry"
 
     statusChangeOrTimeout:
       type: parallel

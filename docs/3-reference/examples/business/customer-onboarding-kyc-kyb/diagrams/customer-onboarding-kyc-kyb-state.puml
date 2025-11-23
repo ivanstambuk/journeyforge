@@ -1,0 +1,33 @@
+@startuml
+!include journey-diagram-theme.puml
+title customer-onboarding-kyc-kyb – state transitions
+
+[*] --> initialiseOnboarding
+
+state initialiseOnboarding
+state runChecksInParallel
+state waitForKycCallbacks
+state waitForKybAndRisk
+state completeApproved
+state completeReferred
+state onboardingRejected
+state onboardingCompleted
+
+initialiseOnboarding --> runChecksInParallel
+runChecksInParallel --> waitForKycCallbacks
+
+waitForKycCallbacks --> waitForKybAndRisk : KYC APPROVED / REFERRED
+waitForKycCallbacks --> onboardingRejected : KYC REJECTED
+
+waitForKybAndRisk --> completeApproved : KYB + credit + compliance APPROVED
+waitForKybAndRisk --> completeReferred : any REFERRED
+waitForKybAndRisk --> onboardingRejected : otherwise
+
+completeApproved --> onboardingCompleted
+completeReferred --> onboardingCompleted
+onboardingRejected --> onboardingCompleted
+
+onboardingCompleted --> [*]
+
+@enduml
+

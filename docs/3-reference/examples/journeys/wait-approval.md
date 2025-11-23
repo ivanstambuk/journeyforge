@@ -38,7 +38,7 @@ Here’s a breakdown of the steps you’ll call over the Journeys API for the pr
 
 ### Sequence diagram
 
-<img src="diagrams/wait-approval-sequence.png" alt="wait-approval – sequence" width="620" />
+<img src="diagrams/wait-approval-sequence.png" alt="wait-approval – sequence" width="420" />
 
 ### State diagram
 

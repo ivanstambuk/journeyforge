@@ -20,13 +20,18 @@ Aggregator -> Journeys: POST /api/v1/journeys/{journeyId}/steps/waitForTripUpdat
 Journeys --> Aggregator: 200 OK\nTripStatusStepResponse
 
 Client -> Journeys: GET /api/v1/journeys/{journeyId}\n(getStatusBeforeChangeOrComplete)
-Journeys --> Client: 200 OK\nJourneyStatus (post-booking action available)
+Journeys --> Client: 200 OK\nJourneyStatus (post-booking action available within window)
 
 Traveler -> Journeys: POST /api/v1/journeys/{journeyId}/steps/changeOrCancel\nChangeOrCancelInput
 Journeys --> Traveler: 200 OK\nChangeOrCancelStepResponse
+
+alt Post-trip feedback submitted before feedback window closes
+  Traveler -> Journeys: POST /api/v1/journeys/{journeyId}/steps/submitFeedback\nFeedbackInput
+  Journeys --> Traveler: 200 OK\nFeedbackStepResponse
+else No feedback submitted before feedback window closes
+end
 
 Client -> Journeys: GET /api/v1/journeys/{journeyId}/result\n(getResult)
 Journeys --> Client: 200 OK\nJourneyOutcome (CONFIRMED, PARTIALLY_CONFIRMED, or CANCELLED)
 
 @enduml
-

@@ -1,0 +1,15 @@
+@startuml
+!include journey-diagram-theme.puml
+title notification-throttle – sequence
+
+actor "App" as App
+participant "Journeys API" as Journeys
+
+App -> Journeys: POST /api/v1/journeys/notification-throttle/start\nNotificationThrottleStartRequest
+Journeys --> App: 202 Accepted\nJourneyStartResponse (journeyId, ...)
+
+App -> Journeys: GET /api/v1/journeys/{journeyId}/result\n(getResult)
+Journeys --> App: 200 OK\nJourneyOutcome\n(notificationDecision, integrationDecision,\nnextAvailableAt values)
+
+@enduml
+

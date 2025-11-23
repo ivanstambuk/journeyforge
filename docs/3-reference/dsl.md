@@ -1161,7 +1161,7 @@ Semantics
 <a id="dsl-6-example"></a>
 ## 6. Example
 	
-	The `spec.errors` block allows journeys to centralise, per journey, how they normalise and expose errors, building on the canonical RFC 9457 Problem Details model (see ADR‑0003 and Q-002 in `docs/4-architecture/open-questions.md`).
+The `spec.errors` block allows journeys to centralise, per journey, how they normalise and expose errors, building on the canonical RFC 9457 Problem Details model (see ADR‑0003 and Q-002 in `docs/4-architecture/open-questions.md`).
 	
 	```yaml
 	spec:

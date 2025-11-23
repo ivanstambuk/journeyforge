@@ -1,0 +1,45 @@
+@startuml
+!include journey-diagram-theme.puml
+title privacy-erasure-sla – sequence
+
+actor "Client" as Client
+actor "Privacy Desk UI" as Desk
+actor "Senior Privacy Officer UI" as Senior
+actor "Identity service" as Identity
+actor "Privacy / erasure platform" as Erasure
+participant "Journeys API" as Journeys
+
+Client -> Journeys: POST /api/v1/journeys/privacy-erasure-sla/start\nPrivacyErasureStartRequest
+Journeys -> Identity: GET https://identity.example.com/customers/{customerId}
+Identity --> Journeys: 200 OK\n(profile)
+Journeys -> Erasure: POST https://privacy.example.com/erasure/inventory\n(requestId, subjectId, region)
+Erasure --> Journeys: 200 OK\n(inventory)
+Journeys -> Desk: POST https://privacy.example.com/erasure/notify-privacy-desk\n(request details, review SLA)
+Desk --> Journeys: 202 Accepted
+Journeys --> Client: 202 Accepted\nJourneyStartResponse (journeyId, ...)
+
+Client -> Journeys: GET /api/v1/journeys/{journeyId}\n(getStatusDuringReview)
+Journeys --> Client: 200 OK\nJourneyStatus (waiting at privacyDeskReview)
+
+Desk -> Journeys: POST /api/v1/journeys/{journeyId}/steps/privacyDeskReview\nPrivacyDeskDecisionInput (APPROVE)
+Journeys --> Desk: 200 OK\nPrivacyDeskReviewStepResponse
+
+Journeys -> Erasure: POST https://privacy.example.com/erasure/run\n(requestId, subjectId, region)
+Erasure --> Journeys: 200 OK\n(erasureRun)
+
+Client -> Journeys: GET /api/v1/journeys/{journeyId}/result\n(getResult)
+Journeys --> Client: 200 OK\nJourneyOutcome (ERASURE_COMPLETED)
+
+== Escalation path (SLA breach) ==
+
+Client -> Journeys: GET /api/v1/journeys/{journeyId}\n(getStatusAfterSlaBreach)
+Journeys --> Client: 200 OK\nJourneyStatus (escalated to seniorReview)
+
+Senior -> Journeys: POST /api/v1/journeys/{journeyId}/steps/seniorReview\nSeniorPrivacyDecisionInput (APPROVE or REJECT)
+Journeys --> Senior: 200 OK\nSeniorReviewStepResponse
+
+Client -> Journeys: GET /api/v1/journeys/{journeyId}/result\n(getResultAfterSeniorReview)
+Journeys --> Client: 200 OK\nJourneyOutcome (ERASURE_COMPLETED / ERASURE_FAILED / REJECTED)
+
+@enduml
+

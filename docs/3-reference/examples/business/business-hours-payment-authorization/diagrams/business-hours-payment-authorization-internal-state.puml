@@ -1,0 +1,53 @@
+@startuml
+!include journey-diagram-theme.puml
+title business-hours-payment-authorization – internal DSL state graph
+
+[*] --> classifySubmissionTime
+
+state classifySubmissionTime
+state businessWindowSwitch
+state waitUntilBusinessOpen
+state authorizePayment
+state evaluateAuthorization
+state completeAuthorized
+state completeFailed
+state done
+
+classifySubmissionTime --> businessWindowSwitch : classify businessWindowCategory\nand businessDelayDuration
+
+businessWindowSwitch --> authorizePayment : within-business-hours
+businessWindowSwitch --> waitUntilBusinessOpen : after-hours
+
+waitUntilBusinessOpen --> authorizePayment : timer fires (next day at 09:00)
+
+authorizePayment --> evaluateAuthorization : payments.authorizePayment
+
+evaluateAuthorization --> completeAuthorized : paymentResult.ok == true
+evaluateAuthorization --> completeFailed : default (failure)
+
+completeAuthorized --> done
+completeFailed --> done
+
+done --> [*]
+
+note right of classifySubmissionTime
+  type: transform
+  computes:
+    - businessWindowCategory: within-business-hours or after-hours
+    - businessDelayDuration: ISO-8601 duration string
+end note
+
+note right of waitUntilBusinessOpen
+  type: timer
+  duration: businessDelayDuration
+  waits until next business day 09:00
+  before proceeding to authorizePayment
+end note
+
+note right of authorizePayment
+  type: task (HTTP)
+  operationRef: payments.authorizePayment
+end note
+
+@enduml
+

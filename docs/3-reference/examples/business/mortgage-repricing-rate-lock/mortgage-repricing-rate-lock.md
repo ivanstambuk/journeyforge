@@ -58,7 +58,7 @@ Customer decline flows typically use steps 1, 2, 4, and 6 and end in a rejected 
 
 ### Sequence diagram
 
-<img src="diagrams/mortgage-repricing-rate-lock-sequence.png" alt="mortgage-repricing-rate-lock – sequence" width="620" />
+<img src="diagrams/mortgage-repricing-rate-lock-sequence.png" alt="mortgage-repricing-rate-lock – sequence" width="420" />
 
 ### State diagram
 

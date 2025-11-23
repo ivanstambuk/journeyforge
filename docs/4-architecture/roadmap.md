@@ -1,6 +1,6 @@
 # Implementation Roadmap
 
-Last updated: 2025-11-19
+Last updated: 2025-11-23
 
 Guiding principles
 - Spec‑first. Update the spec before plans/tasks or code.
@@ -17,5 +17,8 @@ Guiding principles
 | 004 | UI bridge (designer) | Planned | Graph API for React Flow/Atlas over journey/admin APIs |
 | 005 | Admin plane | Planned | Versioned definitions, environments, RBAC, telemetry |
 | 006 | LDAP/JDBC/Kafka connectors | Planned | Additional connectors and fixtures |
+| 007 | External-input step responses & schemas | Planned | Project additional typed fields into `wait`/`webhook` step responses and describe them via per-step JSON Schemas and per-journey OpenAPI (`JourneyStatus` + step schema). |
+| 008 | Scheduled journeys (`task.kind: schedule`) | Planned | Allow journeys to schedule future non-interactive runs of themselves from a given state with evolving context, bounded cadence, and clear subject binding. |
+| 009 | Journey DSL linter | Planned | Provide schema-based and DSL-aware linting for `.journey.yaml` definitions, with editor integration and a Java CLI integrated into Gradle/CI. |
 
 Note: IDs and scope will be refined as specs mature.

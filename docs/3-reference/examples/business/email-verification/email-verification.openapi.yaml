@@ -132,6 +132,11 @@ components:
         verifiedAt:
           type: string
           format: date-time
+        expiredAt:
+          type: string
+          format: date-time
+        reminderCount:
+          type: integer
       additionalProperties: true
     EmailVerificationStepInput:
       type: object

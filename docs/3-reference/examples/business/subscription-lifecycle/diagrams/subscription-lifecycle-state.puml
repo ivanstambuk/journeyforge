@@ -13,10 +13,17 @@ state getResult
 
 startJourney --> getStatusDuringTrial : GET /journeys/{journeyId}\n(trial running – upgrade OR timer expiry)
 getStatusDuringTrial --> submitUpgrade : POST /steps/upgradeSubscription\n(optional; timer may expire trial without this)
-submitUpgrade --> getStatusAfterUpgrade : GET /journeys/{journeyId}\n(subscription active)
-getStatusAfterUpgrade --> submitCancel : POST /steps/changeSubscriptionStatus\n(action=cancel)
+submitUpgrade --> getStatusAfterUpgrade : GET /journeys/{journeyId}\n(subscription active – cancel/reactivate window)
+getStatusAfterUpgrade --> submitCancel : POST /steps/changeSubscriptionStatus\n(action=cancel within window)
 submitCancel --> getResult : GET /journeys/{journeyId}/result
 
 getResult --> [*]
+
+note right of getStatusAfterUpgrade
+  After upgrade, a timer branch runs alongside the
+  changeSubscriptionStatus step. If no cancel/reactivate
+  decision is submitted before the window closes, the
+  journey completes with finalStatus = ACTIVE.
+end note
 
 @enduml

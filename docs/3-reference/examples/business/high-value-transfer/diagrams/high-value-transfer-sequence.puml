@@ -26,10 +26,18 @@ Operator -> Journeys: POST /api/v1/journeys/{journeyId}/steps/approveTransfer\nA
 Journeys --> Operator: 200 OK\nApproveTransferStepResponse
 
 Client -> Journeys: GET /api/v1/journeys/{journeyId}\n(getStatusAwaitingSettlement)
-Journeys --> Client: 200 OK\nJourneyStatus (waiting for settlement)
+Journeys --> Client: 200 OK\nJourneyStatus (awaiting settlement or timeout)
 
-Settlement -> Journeys: POST /api/v1/journeys/{journeyId}/steps/waitForSettlement\n(secured with X-Settlement-Secret)
-Journeys --> Settlement: 200 OK\n(settlement callback accepted)
+alt Settlement callback arrives within 30 minutes
+  Settlement -> Journeys: POST /api/v1/journeys/{journeyId}/steps/waitForSettlement\n(secured with X-Settlement-Secret)
+  Journeys --> Settlement: 200 OK\n(settlement callback accepted)
+else No settlement callback within 30 minutes
+  note over Journeys
+    Internal settlement timer (PT30M) fires, the journey calls
+    transfers.notifySettlementTimeout to record the SLA breach,
+    and then completes as FAILED with a settlement-timeout error.
+  end note
+end
 
 Client -> Journeys: GET /api/v1/journeys/{journeyId}/result\n(getResult)
 Journeys --> Client: 200 OK\nJourneyOutcome (SETTLED, FAILED, or REJECTED)

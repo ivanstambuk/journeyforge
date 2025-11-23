@@ -1,0 +1,34 @@
+@startuml
+!include journey-diagram-theme.puml
+title document-signing-multi-signer – state transitions
+
+[*] --> initialiseDocument
+
+state initialiseDocument
+state signingOrExpiry
+state submitSignature
+state completeDeclined
+state completeFullySigned
+state documentExpiryTimer
+state markExpired
+state documentCompleted
+
+initialiseDocument --> signingOrExpiry
+
+signingOrExpiry --> submitSignature : signingBranch
+signingOrExpiry --> documentExpiryTimer : expiryBranch
+
+submitSignature --> completeDeclined : any signer DECLINED
+submitSignature --> completeFullySigned : all SIGNED
+submitSignature --> submitSignature : partial signing (still PENDING)
+
+documentExpiryTimer --> markExpired
+
+completeDeclined --> documentCompleted
+completeFullySigned --> documentCompleted
+markExpired --> documentCompleted
+
+documentCompleted --> [*]
+
+@enduml
+

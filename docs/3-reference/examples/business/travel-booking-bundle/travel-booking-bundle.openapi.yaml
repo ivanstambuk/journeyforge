@@ -102,6 +102,32 @@ paths:
               schema:
                 $ref: "#/components/schemas/ChangeOrCancelStepResponse"
       description: Submit a post-booking change or cancel request for the trip.
+  /journeys/{journeyId}/steps/submitFeedback:
+    post:
+      summary: Submit optional post-trip feedback for the bundle
+      operationId: travelBookingBundle_submitFeedback
+      tags:
+        - travel-booking-bundle
+      parameters:
+        - in: path
+          name: journeyId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FeedbackInput"
+      responses:
+        "200":
+          description: Updated status after processing feedback
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FeedbackStepResponse"
+      description: Submit optional post-trip feedback for the travel booking bundle.
   /journeys/{journeyId}/steps/waitForTripUpdates:
     post:
       summary: Webhook callback for trip status updates
@@ -356,6 +382,8 @@ components:
                   type: object
                 notes:
                   type: string
+                feedback:
+                  type: object
               additionalProperties: true
     TravelerConfirmationStepResponse:
       allOf:
@@ -400,6 +428,28 @@ components:
                 - CANCELLED
                 - FAILED
             notes:
+              type: string
+          additionalProperties: true
+    FeedbackInput:
+      type: object
+      description: Optional post-trip feedback from the traveler.
+      required:
+        - rating
+      properties:
+        rating:
+          type: integer
+        comments:
+          type: string
+      additionalProperties: false
+    FeedbackStepResponse:
+      allOf:
+        - $ref: "#/components/schemas/JourneyStatus"
+        - type: object
+          description: Additional top-level fields returned from the submitFeedback step.
+          properties:
+            rating:
+              type: integer
+            comments:
               type: string
           additionalProperties: true
     Link:

@@ -14,7 +14,7 @@ repeat while (phase == "Running" and\ncurrentState != "waitForApproval") is (che
 if (currentState == "waitForApproval"?) then (yes)
   :Operator submits approval/rejection\nPOST /api/v1/journeys/{journeyId}/steps/approveTransfer;
   :Client resumes polling\nGET /api/v1/journeys/{journeyId}/result;
-  :Journeys API returns\nJourneyOutcome once settlement completes;
+  :Journeys API returns\nJourneyOutcome once settlement completes or times out;
 endif
 
 if (phase == "Succeeded" and decision == "SETTLED"?) then (settled)
@@ -26,4 +26,3 @@ else (failed/rejected)
 endif
 
 @enduml
-

@@ -10,16 +10,23 @@ state waitOrExpire
 state waitForVerification
 state markVerified
 state invalidCode
+state firstReminderTimer
+state sendFirstReminder
+state recordFirstReminder
+state secondReminderTimer
+state sendSecondReminder
+state recordSecondReminder
 state verificationTimer
 state markExpired
 state journeyDoneVerified
 state journeyDoneExpired
+state notifyExpired
 
 generateVerificationCode --> sendVerificationEmail : uuid() -> context.verificationCode
 sendVerificationEmail --> waitOrExpire : notifications.email/verification\n(userId, email, verificationCode)
 
 waitOrExpire --> waitForVerification : branch waitBranch\n(wait step)
-waitOrExpire --> verificationTimer : branch expiryBranch\n(timer P7D)
+waitOrExpire --> firstReminderTimer : branch expiryBranch\n(reminders + expiry window)
 
 waitForVerification --> markVerified : payload.code == context.verificationCode
 waitForVerification --> invalidCode : default
@@ -27,8 +34,17 @@ waitForVerification --> invalidCode : default
 markVerified --> journeyDoneVerified
 journeyDoneVerified --> [*]
 
+firstReminderTimer --> sendFirstReminder
+sendFirstReminder --> recordFirstReminder
+recordFirstReminder --> secondReminderTimer
+
+secondReminderTimer --> sendSecondReminder
+sendSecondReminder --> recordSecondReminder
+recordSecondReminder --> verificationTimer
+
 verificationTimer --> markExpired
-markExpired --> journeyDoneExpired
+markExpired --> notifyExpired
+notifyExpired --> journeyDoneExpired
 journeyDoneExpired --> [*]
 
 invalidCode --> [*]
@@ -40,11 +56,22 @@ note right of waitForVerification
   compares code to context.verificationCode
 end note
 
+note right of firstReminderTimer
+  type: timer
+  duration: P1D
+  triggers first reminder email\nwhen no verification has occurred
+end note
+
+note right of secondReminderTimer
+  type: timer
+  duration: P2D
+  triggers second reminder email\nwhen still unverified
+end note
+
 note right of verificationTimer
   type: timer
-  duration: P7D
-  branch forms the EXPIRED outcome
+  duration: P4D
+  completes 7-day window\nbefore marking EXPIRED
 end note
 
 @enduml
-

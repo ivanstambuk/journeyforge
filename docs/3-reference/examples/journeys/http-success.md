@@ -42,7 +42,7 @@ Here’s a breakdown of the steps you’ll call over the Journeys API for the ha
 
 ### Sequence diagram
 
-<img src="diagrams/http-success-sequence.png" alt="http-success – sequence" width="620" />
+<img src="diagrams/http-success-sequence.png" alt="http-success – sequence" width="420" />
 
 ### State diagram
 

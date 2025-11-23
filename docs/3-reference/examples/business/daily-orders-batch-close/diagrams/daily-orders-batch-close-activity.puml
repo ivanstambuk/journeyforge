@@ -1,0 +1,23 @@
+@startuml
+!include journey-diagram-theme.puml
+title daily-orders-batch-close – client activity flow
+
+start
+
+:Ops client sends\nPOST /api/v1/journeys/daily-orders-batch-close/start\nwith DailyOrdersBatchCloseConfigRequest\nand Authorization: Bearer <access token>;
+
+repeat
+  :Ops client calls\nGET /api/v1/journeys/{journeyId}/result;
+  :Journeys API returns\nJourneyOutcome with phase/output;
+repeat while (phase == "Running") is (configuring schedule)
+
+if (phase == "Succeeded" and status == "SCHEDULED"?) then (scheduled)
+  :Ops client records batch schedule parameters\nand monitors future scheduled runs\nvia platform metrics/logs;
+  stop
+else (failed)
+  :Ops client inspects error.reason for\nconfiguration or scheduling failures;
+  stop
+endif
+
+@enduml
+

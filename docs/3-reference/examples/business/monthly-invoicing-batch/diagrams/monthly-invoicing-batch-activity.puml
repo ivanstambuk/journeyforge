@@ -1,0 +1,34 @@
+@startuml
+!include journey-diagram-theme.puml
+title monthly-invoicing-batch – activity flow
+
+start
+:Configure schedule\n(tenant, batch, cadence);
+:Create schedule\n(startAt, interval, maxRuns);
+:Return configuration outcome\n(status = SCHEDULED);
+
+repeat
+  :Scheduled run starts\nfor billing period;
+  :Draft invoices\n(draftInvoices);
+  :Validate draft batch\n(validateDrafts);
+  if (Validation ok?) then (yes)
+    :Wait for finance approval\n(waitForFinanceApproval);
+    if (Approved?) then (yes)
+      :Send invoices\n(sendInvoices);
+      :Wait grace period\n(waitBeforeFirstReminder);
+      :Send reminders\n(sendFirstReminder);
+      :Wait reminder gap\n(waitBeforeFinalNotice);
+      :Send final notices\n(sendFinalNotice);
+      :Record run outcome\n(status = CHASE_COMPLETED);
+    else (no)
+      :Record run outcome\n(status = REJECTED);
+    endif
+  else (no)
+    :Record run outcome\n(status = VALIDATION_FAILED);
+  endif
+  :Complete scheduled run\n(scheduledRunDone);
+repeat while (More runs scheduled?) is (yes)
+
+stop
+
+@enduml

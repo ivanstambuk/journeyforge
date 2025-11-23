@@ -13,13 +13,18 @@
 
 ## Summary
 
-This journey orchestrates a high-value funds transfer:
+This journey orchestrates a high-value funds transfer with explicit settlement SLAs:
 
 - It validates a transfer request and runs fraud and sanctions checks in parallel.
 - If checks pass, it pauses at a manual approval step so an operator can approve or reject the transfer.
-- On approval, it calls a Transfers API to initiate the transfer and then waits for either a settlement callback from the provider or a timeout.
+- On approval, it calls a Transfers API to initiate the transfer and then waits for either:
+  - a settlement callback from the provider, or
+  - a settlement SLA timer (30 minutes) that represents a hard “settle by T or treat as failed” deadline.
+- When the settlement SLA timer fires before a callback, the journey both:
+  - notifies the Transfers API that the settlement SLA was breached, and
+  - completes as a timeout failure using a dedicated error code.
 
-The journey is long-lived: clients start it once, track progress via status calls, submit approval via a dedicated step, and poll for the final settled or failed outcome (including timeout-treated-as-failure) while the provider processes the transfer.
+The journey is long-lived: clients start it once, track progress via status calls, submit approval via a dedicated step, and poll for the final settled or failed outcome (including settlement failure and hard-SLA timeouts) while the provider processes the transfer.
 
 Actors & systems:
 - Client application or back-office system that starts the transfer journey and polls status/result.
@@ -35,7 +40,7 @@ Actors & systems:
   - `decision: "approve" | "reject"`.
   - optional `comment`.
 - **Output schema** – `HighValueTransferOutcome` exposed via `JourneyOutcome.output` with:
-  - `decision: SETTLED | FAILED | REJECTED` (FAILED covers provider failures and settlement timeouts).
+  - `decision: SETTLED | FAILED | REJECTED` (FAILED covers provider failures and settlement timeouts that breach the SLA).
   - `transferId`, `amount`, `currency`, optional `settlementTime`, `failureReason`, `rejectionReason`, `riskSummary`.
 
 ## Step overview (Arazzo + HTTP surface)
@@ -57,7 +62,7 @@ Cases rejected by checks or manual decision typically use steps 1, 2, 3, 4, and 
 
 ### Sequence diagram
 
-<img src="diagrams/high-value-transfer-sequence.png" alt="high-value-transfer – sequence" width="620" />
+<img src="diagrams/high-value-transfer-sequence.png" alt="high-value-transfer – sequence" width="420" />
 
 ### State diagram
 
@@ -77,4 +82,6 @@ Cases rejected by checks or manual decision typically use steps 1, 2, 3, 4, and 
 - `evaluateChecks` determines whether the transfer is eligible; failures route directly to `HIGH_VALUE_TRANSFER_REJECTED`.
 - `waitForApproval` exposes the `approveTransfer` step for operator review and projects the decision into `approvalResponse`.
 - `initiateTransfer` calls `transfers.initiateHighValueTransfer` to trigger the transfer and then hands off to `awaitSettlementOrTimeout`.
-- `awaitSettlementOrTimeout` is a `parallel` state that races the `waitForSettlement` webhook (secured by `X-Settlement-Secret`) against a 30-minute timer; the settlement branch projects settlement details into `settlementResponse` and completes as success or failure, while the timer branch completes as a timeout failure with a dedicated error code.
+- `awaitSettlementOrTimeout` is a `parallel` state that races the `waitForSettlement` webhook (secured by `X-Settlement-Secret`) against a 30-minute timer:
+  - The settlement branch projects provider status into `settlementResponse` and completes as success or failure.
+  - The timeout branch fires the settlement SLA timer (`PT30M`), calls `transfers.notifySettlementTimeout` to record the SLA breach, and then fails the journey with a dedicated timeout error code, illustrating a hard SLA pattern (“settle by T or treat as failed and escalate”).

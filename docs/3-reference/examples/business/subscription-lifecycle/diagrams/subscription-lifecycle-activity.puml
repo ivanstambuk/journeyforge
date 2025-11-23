@@ -16,8 +16,8 @@ if (currentState == "waitForUpgrade"?) then (yes)
   :Client resumes polling\nGET /journeys/{journeyId}/result;
 endif
 
-if (phase == "Running" and currentState == "waitForStatusChange"?) then (active)
-  :Client submits cancel/reactivate decision\nPOST /steps/changeSubscriptionStatus;
+if (phase == "Running" and within cancel/reactivate window?) then (active)
+  :Client may submit cancel/reactivate decision\nPOST /steps/changeSubscriptionStatus;
   :Client resumes polling\nGET /journeys/{journeyId}/result;
 endif
 
@@ -30,4 +30,3 @@ else (failed)
 endif
 
 @enduml
-

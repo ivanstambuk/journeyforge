@@ -18,7 +18,7 @@ This journey orchestrates a travel bundle for a traveler:
 - It reserves a flight, hotel, and car using separate provider APIs.
 - It asks the traveler to confirm the initial bundle before payment is authorised.
 - It waits for aggregated trip status updates (confirmed, partially confirmed, cancelled, or failed) from a provider-facing webhook.
-- After confirmation, it allows a single post-booking change or cancel action before completing with a confirmed, partially confirmed, or cancelled outcome.
+- After confirmation, it allows a single post-booking change or cancel action within a bounded window before completing with a confirmed, partially confirmed, or cancelled outcome, and optionally collects post-trip feedback in a separate window.
 
 The journey is long-lived: clients start it once, track progress via status calls, submit confirmation and change/cancel decisions via dedicated steps, and finally read an outcome that summarises overall trip status and segment-level details. Design and scope for this example are captured under Q-017 in `docs/4-architecture/open-questions.md`.
 
@@ -35,7 +35,8 @@ Actors & systems:
 - **Input schema** – `TravelBookingStartRequest` with required `tripId`, `travelerId`; optional `flightOption`, `hotelOption`, `carOption`, `totalAmount`, `currency`, `channel`.
 - **Step inputs**:
   - `TravelerConfirmationInput` – traveler decision with `decision: "confirm" | "cancel"`, optional `notes`.
-  - `ChangeOrCancelInput` – post-booking action with `action: "complete" | "change" | "cancel"`, optional `notes`.
+  - `ChangeOrCancelInput` – post-booking action with `action: "complete" | "change" | "cancel"`, optional `notes`, subject to a bounded change window.
+  - `FeedbackInput` – optional post-trip feedback with `rating` and optional `comments`.
 - **Output schema** – `TravelBookingOutcome` exposed via `JourneyOutcome.output` with:
   - `tripId`, `overallStatus: CONFIRMED | PARTIALLY_CONFIRMED | CANCELLED | FAILED`, optional `flightBooking`, `hotelBooking`, `carBooking`, `change`, `notes`.
 
@@ -48,9 +49,10 @@ Here’s a breakdown of the steps you’ll call over the Journeys API for the ma
 | 1 | `startJourney` | Start a new `travel-booking-bundle` journey instance. | `travelBookingBundle_start` | Body: `startRequest` with trip id, traveler id, and optional segment options and pricing. | `$statusCode == 202` and a `journeyId` is returned. | `journeyId` for the trip instance. |
 | 2 | `getStatusAfterReservation` | Poll status until initial provider reservations have completed. | `travelBookingBundle_getStatus` | Path: `journeyId` from step 1. | `$statusCode == 200`; `currentState` progresses past `reserveBundle`. | `JourneyStatus` with `phase` and `currentState`. |
 | 3 | `confirmBundle` | Confirm the initial bundle reservation. | `travelBookingBundle_confirmBundle` | Path: `journeyId`; body: `confirmationInput`. | `$statusCode == 200`; `JourneyStatus.phase` and `currentState` progress toward payment/confirmation. | `TravelerConfirmationStepResponse` with projected decision and notes. |
-| 4 | `getStatusBeforeChangeOrComplete` | Poll status until provider trip status updates have been processed. | `travelBookingBundle_getStatus` | Path: `journeyId` from step 1. | `$statusCode == 200`; `currentState` indicates post-booking action is available. | `JourneyStatus` with updated `phase` and `currentState`. |
-| 5 | `changeOrCancel` | Perform a post-booking action (complete or change) for the trip. | `travelBookingBundle_changeOrCancel` | Path: `journeyId`; body: `changeOrCompleteInput`. | `$statusCode == 200`; `JourneyStatus.phase` and `currentState` reflect the post-booking decision. | `ChangeOrCancelStepResponse` with projected action and notes. |
-| 6 | `getResult` | Retrieve the final outcome once the journey has completed. | `travelBookingBundle_getResult` | Path: `journeyId` from step 1. | `$statusCode == 200`, `phase == "Succeeded"` or `phase == "Failed"`. | `JourneyOutcome` with `output.overallStatus` and segment-level booking details. |
+| 4 | `getStatusBeforeChangeOrComplete` | Poll status until provider trip status updates have been processed. | `travelBookingBundle_getStatus` | Path: `journeyId` from step 1. | `$statusCode == 200`; `currentState` indicates post-booking action is available within the change window. | `JourneyStatus` with updated `phase` and `currentState`. |
+| 5 | `changeOrCancel` | Perform a post-booking action (complete or change) for the trip within the allowed window. | `travelBookingBundle_changeOrCancel` | Path: `journeyId`; body: `changeOrCompleteInput`. | `$statusCode == 200`; `JourneyStatus.phase` and `currentState` reflect the post-booking decision. | `ChangeOrCancelStepResponse` with projected action and notes. |
+| 6 | `submitFeedback` | Submit optional post-trip feedback for the bundle. | `travelBookingBundle_submitFeedback` | Path: `journeyId`; body: `feedbackInput`. | `$statusCode == 200`; `JourneyStatus.phase` remains `Running` until the feedback window closes, then becomes terminal. | `FeedbackStepResponse` with projected rating and comments. |
+| 7 | `getResult` | Retrieve the final outcome once the journey has completed and the feedback window has closed (or feedback was submitted). | `travelBookingBundle_getResult` | Path: `journeyId` from step 1. | `$statusCode == 200`, `phase == "Succeeded"` or `phase == "Failed"`. | `JourneyOutcome` with `output.overallStatus`, segment-level booking details, and any recorded feedback. |
 
 The second workflow covers cancellation during traveler confirmation and ends with a CANCELLED outcome.
 
@@ -58,7 +60,7 @@ The second workflow covers cancellation during traveler confirmation and ends wi
 
 ### Sequence diagram
 
-<img src="diagrams/travel-booking-bundle-sequence.png" alt="travel-booking-bundle – sequence" width="620" />
+<img src="diagrams/travel-booking-bundle-sequence.png" alt="travel-booking-bundle – sequence" width="420" />
 
 ### State diagram
 
@@ -79,8 +81,9 @@ The second workflow covers cancellation during traveler confirmation and ends wi
 - `waitForTravelerConfirmation` exposes the `confirmBundle` step and records the traveler’s decision; cancellations here complete as `completeCancelled`.
 - `initiatePayment` calls `payments.authorizePayment` to authorise bundle payment before final provider confirmations.
 - `waitForTripUpdates` is a `webhook` state (secured by `X-Trip-Update-Secret`) that projects aggregated trip status and segment-level booking details into `tripStatusUpdate`.
-- `waitForChangeOrCancel` exposes the `changeOrCancel` step for a single post-booking action; it can mark the trip as CANCELLED via `overrideStatus` or just record change notes.
-- `prepareOutcome` projects the final `TravelBookingOutcome` based on provider status and any post-booking actions; `completeTrip` returns this outcome as the journey result.
+- `changeOrCancelOrTimeout` is a `parallel` state that races the `changeOrCancel` step (single post-booking action) against a fixed change window timer; the change branch records `changeRequest` and optional `overrideStatus`, while the timer branch marks `changeWindowExpired` and ends the window without forcing cancellation.
+- `prepareOutcome` projects the final `TravelBookingOutcome` based on provider status and any post-booking actions.
+- `feedbackOrTimeout` is a `parallel` state that races the `submitFeedback` step against a feedback window timer; feedback is recorded in `feedback`, and if no feedback is submitted before the timer fires the journey simply completes without feedback while still returning the main booking outcome via `completeTrip`.
 
 ### Compensation for partial success
 

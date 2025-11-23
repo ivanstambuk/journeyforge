@@ -3,7 +3,7 @@ kind: Journey
 metadata:
   name: email-verification
   version: 0.1.0
-  description: Email verification journey with a timer-based expiry window using parallel + timer.
+  description: Email verification journey with a timer-based expiry window, reminders, and post-expiry follow-up using parallel + timers.
 spec:
   input:
     schema:
@@ -41,6 +41,11 @@ spec:
         verifiedAt:
           type: string
           format: date-time
+        expiredAt:
+          type: string
+          format: date-time
+        reminderCount:
+          type: integer
       additionalProperties: true
   start: generateVerificationCode
   states:
@@ -130,7 +135,8 @@ spec:
                           status: "VERIFIED",
                           userId: context.userId,
                           email: context.email,
-                          verifiedAt: now()
+                          verifiedAt: now(),
+                          reminderCount: context.reminderCount default 0
                         }
                       }
                   target:
@@ -148,12 +154,98 @@ spec:
                 reason: "The verification link is invalid or has already been used"
 
           - name: expiryBranch
-            start: verificationTimer
+            start: firstReminderTimer
             states:
+              firstReminderTimer:
+                type: timer
+                timer:
+                  duration: "P1D"
+                next: sendFirstReminder
+
+              sendFirstReminder:
+                type: task
+                task:
+                  kind: httpCall
+                  method: POST
+                  url: https://notifications.example.com/email/verification/reminder
+                  params:
+                    headers:
+                      Accept: application/json
+                  body:
+                    mapper:
+                      lang: dataweave
+                      expr: |
+                        {
+                          userId: context.userId,
+                          email: context.email,
+                          verificationCode: context.verificationCode,
+                          attempt: 1
+                        }
+                  timeoutMs: 2000
+                  resultVar: firstReminderResult
+                next: recordFirstReminder
+
+              recordFirstReminder:
+                type: transform
+                transform:
+                  mapper:
+                    lang: dataweave
+                    expr: |
+                      context ++ {
+                        reminderCount: 1
+                      }
+                  target:
+                    kind: context
+                    path: ""
+                next: secondReminderTimer
+
+              secondReminderTimer:
+                type: timer
+                timer:
+                  duration: "P2D"
+                next: sendSecondReminder
+
+              sendSecondReminder:
+                type: task
+                task:
+                  kind: httpCall
+                  method: POST
+                  url: https://notifications.example.com/email/verification/reminder
+                  params:
+                    headers:
+                      Accept: application/json
+                  body:
+                    mapper:
+                      lang: dataweave
+                      expr: |
+                        {
+                          userId: context.userId,
+                          email: context.email,
+                          verificationCode: context.verificationCode,
+                          attempt: 2
+                        }
+                  timeoutMs: 2000
+                  resultVar: secondReminderResult
+                next: recordSecondReminder
+
+              recordSecondReminder:
+                type: transform
+                transform:
+                  mapper:
+                    lang: dataweave
+                    expr: |
+                      context ++ {
+                        reminderCount: 2
+                      }
+                  target:
+                    kind: context
+                    path: ""
+                next: verificationTimer
+
               verificationTimer:
                 type: timer
                 timer:
-                  duration: "P7D"
+                  duration: "P4D"
                 next: markExpired
 
               markExpired:
@@ -166,12 +258,35 @@ spec:
                         outcome: {
                           status: "EXPIRED",
                           userId: context.userId,
-                          email: context.email
+                          email: context.email,
+                          expiredAt: now(),
+                          reminderCount: context.reminderCount default 2
                         }
                       }
                   target:
                     kind: context
                     path: ""
+                next: notifyExpired
+
+              notifyExpired:
+                type: task
+                task:
+                  kind: httpCall
+                  method: POST
+                  url: https://notifications.example.com/email/verification/expired
+                  params:
+                    headers:
+                      Accept: application/json
+                  body:
+                    mapper:
+                      lang: dataweave
+                      expr: |
+                        {
+                          userId: context.userId,
+                          email: context.email
+                        }
+                  timeoutMs: 2000
+                  resultVar: expiredNotificationResult
                 next: journeyDoneExpired
 
               journeyDoneExpired:

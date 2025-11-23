@@ -1,0 +1,23 @@
+@startuml
+!include journey-diagram-theme.puml
+title notification-throttle – client activity flow
+
+start
+
+:App sends\nPOST /api/v1/journeys/notification-throttle/start\nwith NotificationThrottleStartRequest;
+
+repeat
+  :App calls\nGET /api/v1/journeys/{journeyId}/result;
+  :Journeys API returns\nJourneyOutcome with phase/output;
+repeat while (phase == "Running") is (pacing decision)
+
+if (phase == "Succeeded"?) then (completed)
+  :App inspects notificationDecision\nand integrationDecision to decide\nwhether to show or skip notifications\nand integration calls;
+  stop
+else (failed)
+  :App handles failure based on error.reason;
+  stop
+endif
+
+@enduml
+

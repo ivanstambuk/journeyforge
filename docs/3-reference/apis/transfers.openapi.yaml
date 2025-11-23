@@ -38,5 +38,31 @@ paths:
       description: Initiate a high-value transfer; final settlement is reported asynchronously.
       tags:
         - transfers
+  /transfers/{transferId}/settlement-timeout:
+    post:
+      operationId: notifySettlementTimeout
+      parameters:
+        - in: path
+          name: transferId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              description: Optional payload describing the settlement-timeout event.
+              properties:
+                reason:
+                  type: string
+              additionalProperties: true
+      responses:
+        "202":
+          description: Settlement-timeout notification accepted
+      description: Notify downstream systems that a high-value transfer breached its settlement SLA without completing.
+      tags:
+        - transfers
 tags:
   - name: transfers

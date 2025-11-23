@@ -1,6 +1,6 @@
 # Journey – email-verification
 
-> Email verification journey that sends a verification email, waits for the user to confirm, and uses a timer-based expiry window to mark unverified emails as expired.
+> Email verification journey that sends a verification email, waits for the user to confirm, and uses reminders and a timer-based expiry window (with follow-up) to mark unverified emails as expired.
 
 ## Quick links
 
@@ -13,18 +13,21 @@
 
 ## Summary
 
-This journey models a simple email verification flow with a bounded verification window:
+This journey models an email verification flow with a bounded verification window and built-in reminders:
 
 - It starts when a client submits an email verification request with `userId` and `email`.
 - The journey generates a one-time verification code inside the journey (for example using `uuid()` in DataWeave) and calls a Notifications-style HTTP endpoint to send a verification email that embeds this code in a magic link.
 - It then enters a `parallel` state with two branches:
   - A `wait` branch that exposes a `waitForVerification` step; calling this step marks the email as verified.
-  - A `timer` branch that waits 7 days and then marks the verification as expired if no confirmation arrives.
+  - A reminder/expiry branch that runs a 7-day window with internal timers:
+    - After 1 day without verification, it sends a first reminder email.
+    - After another 2 days without verification, it sends a second reminder email.
+    - After a further 4 days (7 days in total), it marks the verification as expired and sends a post-expiry notification.
 - Whichever branch completes first determines the final outcome:
-  - If the user verifies the email before the timer fires, the journey succeeds with `status: "VERIFIED"`.
-  - If the timer fires first, the journey succeeds with `status: "EXPIRED"`.
+  - If the user verifies the email before the window completes, the journey succeeds with `status: "VERIFIED"`.
+  - If the window completes first, the journey succeeds with `status: "EXPIRED"` and records how many reminders were sent.
 
-The journey illustrates how to combine `timer` with `parallel` and `wait` to express “user action OR timeout after N” in a business context.
+The journey illustrates how to combine `timer` with `parallel`, `wait`, and internal HTTP calls to express “user action OR timeout after N, with reminders and follow-up” in a business context.
 
 ## Contracts at a glance
 
@@ -36,7 +39,7 @@ The journey illustrates how to combine `timer` with `parallel` and `wait` to exp
   - `code: string` (the verification code extracted from the magic link by a thin HTTP adapter or frontend).
 - **Output schema** – `EmailVerificationOutcome` exposed via `JourneyOutcome.output` with:
   - `status: "VERIFIED" | "EXPIRED"`.
-  - `userId`, `email`, optional `verifiedAt`.
+  - `userId`, `email`, optional `verifiedAt`, `expiredAt`, and `reminderCount` (number of reminders sent before verification or expiry).
 
 ## Step overview (Arazzo + HTTP surface)
 
@@ -57,10 +60,10 @@ Clients that want to observe expiry without explicit verification would typicall
 - **Happy path – verified within window**:
   - Client starts the journey and sends the verification email.
   - User clicks the magic link; an adapter calls `waitForVerification` with the correct `code`.
-  - The journey completes with `status: "VERIFIED"` and `verifiedAt` set.
+  - The journey completes with `status: "VERIFIED"`, `verifiedAt` set, and `reminderCount` reflecting how many reminders were sent before verification (often 0).
 - **Expired – no verification**:
   - Client starts the journey but no verification call is made.
-  - The `timer` branch fires after 7 days and the journey completes with `status: "EXPIRED"`.
+  - The reminder/expiry branch completes after 7 days, sending up to two reminders in between; the journey completes with `status: "EXPIRED"`, `expiredAt` set, and `reminderCount` (typically 2).
 - **Invalid or reused link**:
   - Adapter calls `waitForVerification` with a wrong or stale `code`.
   - The journey fails with `errorCode: INVALID_VERIFICATION_CODE`, and clients can map this to “invalid link” UX or offer a resend.
@@ -69,7 +72,7 @@ Clients that want to observe expiry without explicit verification would typicall
 
 ### Sequence diagram
 
-<img src="diagrams/email-verification-sequence.png" alt="email-verification – sequence" width="620" />
+<img src="diagrams/email-verification-sequence.png" alt="email-verification – sequence" width="420" />
 
 ### State diagram
 

@@ -1,0 +1,376 @@
+openapi: 3.1.0
+info:
+  title: "JourneyForge – healthcare-appointment-referral"
+  version: 0.1.0
+  description: "JourneyForge – healthcare-appointment-referral"
+  contact:
+    name: JourneyForge
+servers:
+  - url: /api/v1
+tags:
+  - name: healthcare-appointment-referral
+paths:
+  /journeys/healthcare-appointment-referral/start:
+    post:
+      summary: Start healthcare-appointment-referral journey
+      operationId: healthcareAppointmentReferral_start
+      tags:
+        - healthcare-appointment-referral
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReferralStartRequest"
+      responses:
+        "202":
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JourneyStartResponse"
+      description: Start healthcare-appointment-referral journey
+  /journeys/{journeyId}:
+    get:
+      summary: Get journey status
+      operationId: healthcareAppointmentReferral_getStatus
+      tags:
+        - healthcare-appointment-referral
+      parameters:
+        - in: path
+          name: journeyId
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JourneyStatus"
+      description: Get journey status
+  /journeys/{journeyId}/steps/patientDecision:
+    post:
+      summary: Submit patient decision for patientDecision step
+      operationId: healthcareAppointmentReferral_patientDecision
+      tags:
+        - healthcare-appointment-referral
+      parameters:
+        - in: path
+          name: journeyId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PatientDecisionInput"
+      responses:
+        "200":
+          description: Updated status after processing the patient decision
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PatientDecisionStepResponse"
+      description: Submit patient decision for patientDecision step
+  /journeys/{journeyId}/steps/waitForAppointmentStatus:
+    post:
+      summary: Provider/EMR callback for appointment status
+      operationId: healthcareAppointmentReferral_waitForAppointmentStatus
+      tags:
+        - healthcare-appointment-referral
+      parameters:
+        - in: path
+          name: journeyId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AppointmentStatusCallback"
+      responses:
+        "200":
+          description: Updated status after processing appointment status callback
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AppointmentStatusStepResponse"
+      description: Provider/EMR callback for appointment status
+  /journeys/{journeyId}/result:
+    get:
+      summary: Retrieve final outcome
+      operationId: healthcareAppointmentReferral_getResult
+      tags:
+        - healthcare-appointment-referral
+      parameters:
+        - in: path
+          name: journeyId
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Final outcome
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JourneyOutcome"
+        "409":
+          description: Journey not terminal yet
+      description: Retrieve final outcome
+components:
+  schemas:
+    ReferralStartRequest:
+      type: object
+      required:
+        - referralId
+        - patientId
+        - reason
+        - specialty
+      properties:
+        referralId:
+          type: string
+        patientId:
+          type: string
+        reason:
+          type: string
+        specialty:
+          type: string
+        preferredWindowStart:
+          type: string
+          format: date-time
+        preferredWindowEnd:
+          type: string
+          format: date-time
+        referralExpiryDays:
+          type: integer
+          minimum: 1
+      additionalProperties: true
+    ReferralOutcome:
+      type: object
+      required:
+        - referralId
+        - status
+      properties:
+        referralId:
+          type: string
+        patientId:
+          type: string
+        status:
+          type: string
+          enum:
+            - APPOINTMENT_CONFIRMED
+            - APPOINTMENT_COMPLETED
+            - PATIENT_CANCELLED
+            - NO_PROVIDER_AVAILABLE
+            - EXPIRED
+        primaryAppointmentId:
+          type: string
+        appointments:
+          type: array
+          items:
+            type: object
+            required:
+              - appointmentId
+              - providerId
+              - status
+            properties:
+              appointmentId:
+                type: string
+              providerId:
+                type: string
+              location:
+                type: string
+              startTime:
+                type: string
+                format: date-time
+              endTime:
+                type: string
+                format: date-time
+              status:
+                type: string
+                enum:
+                  - PROPOSED
+                  - PENDING_PATIENT
+                  - PENDING_PROVIDER
+                  - CONFIRMED
+                  - COMPLETED
+                  - CANCELLED
+                  - FAILED
+            additionalProperties: true
+        expiryAt:
+          type: string
+          format: date-time
+      additionalProperties: true
+    PatientDecisionInput:
+      type: object
+      description: Patient decision for the referral appointment.
+      required:
+        - action
+      properties:
+        action:
+          type: string
+          enum:
+            - CONFIRM
+            - RESCHEDULE
+            - CANCEL
+        appointmentId:
+          type: string
+        comment:
+          type: string
+      additionalProperties: true
+    AppointmentStatusCallback:
+      type: object
+      description: Provider/EMR callback payload for appointment status.
+      required:
+        - appointmentId
+        - status
+      properties:
+        appointmentId:
+          type: string
+        status:
+          type: string
+          enum:
+            - CONFIRMED
+            - COMPLETED
+            - CANCELLED
+            - FAILED
+      additionalProperties: true
+    JourneyStartResponse:
+      type: object
+      required:
+        - journeyId
+        - journeyName
+        - statusUrl
+      properties:
+        journeyId:
+          type: string
+        journeyName:
+          type: string
+        statusUrl:
+          type: string
+          format: uri
+        _links:
+          description: "Optional hypermedia links (HAL-style) describing related resources and next actions.\n\nPresence is controlled per-journey via spec.httpSurface.links.enabled; when enabled, the engine typically includes at least `self` and `result` links.\n"
+          type: object
+          additionalProperties:
+            $ref: "#/components/schemas/Link"
+    JourneyStatus:
+      type: object
+      required:
+        - journeyId
+        - journeyName
+        - phase
+        - currentState
+        - updatedAt
+      properties:
+        journeyId:
+          type: string
+        journeyName:
+          type: string
+        phase:
+          type: string
+          enum:
+            - Running
+            - Succeeded
+            - Failed
+        currentState:
+          type: string
+        updatedAt:
+          type: string
+          format: date-time
+        tags:
+          type: array
+          description: "Effective tags for this journey instance, derived from the journey's metadata.tags and any instance tag sourcing rules. Tags are non-sensitive, short identifiers intended for filtering and grouping.\n"
+          items:
+            type: string
+        attributes:
+          type: object
+          description: "Lightweight metadata for this journey instance, such as subjectId, tenantId, channel, and correlation ids (orderId, paymentIntentId, crmCaseId). Values are strings and MUST respect the limits configured via MetadataLimits.\n"
+          additionalProperties:
+            type: string
+        _links:
+          description: "Optional hypermedia links (HAL-style) describing related resources and next actions.\n\nWhen links are enabled for a journey, the engine SHOULD include at least `self` and `result`, and MAY include links for active step endpoints. For step links, the relation name MUST equal the external-input state id (for example `waitForApproval`, `confirm`). When the journey is Running and user-cancellable, the engine SHOULD also expose a `cancel` link pointing to the canonical cancellation step `/api/v1/journeys/{journeyId}/steps/cancel` with method POST.\n"
+          type: object
+          additionalProperties:
+            $ref: "#/components/schemas/Link"
+    JourneyOutcome:
+      allOf:
+        - type: object
+          required:
+            - journeyId
+            - journeyName
+            - phase
+          properties:
+            journeyId:
+              type: string
+            journeyName:
+              type: string
+            phase:
+              type: string
+              enum:
+                - Succeeded
+                - Failed
+            output: {}
+            error:
+              type: object
+              properties:
+                code:
+                  type: string
+                reason:
+                  type: string
+            tags:
+              type: array
+              description: "Effective tags for this journey instance, repeated here for convenience when reading final outcomes.\n"
+              items:
+                type: string
+            attributes:
+              type: object
+              description: "Instance attributes such as subjectId, tenantId, channel, and correlation ids, repeated here for convenience when reading final outcomes.\n"
+              additionalProperties:
+                type: string
+            _links:
+              description: "Optional hypermedia links (HAL-style) describing related resources (for example `self`) when a journey is terminal. Presence is controlled per-journey via spec.httpSurface.links.enabled.\n"
+              type: object
+              additionalProperties:
+                $ref: "#/components/schemas/Link"
+        - type: object
+          properties:
+            output:
+              $ref: "#/components/schemas/ReferralOutcome"
+    PatientDecisionStepResponse:
+      allOf:
+        - $ref: "#/components/schemas/JourneyStatus"
+        - type: object
+          description: Additional top-level fields returned from the patient decision step.
+          properties:
+            referralId:
+              type: string
+          additionalProperties: true
+    AppointmentStatusStepResponse:
+      allOf:
+        - $ref: "#/components/schemas/JourneyStatus"
+        - type: object
+          description: Additional top-level fields returned from the appointment status callback step.
+          properties:
+            referralId:
+              type: string
+          additionalProperties: true
+    Link:
+      type: object
+      required:
+        - href
+      properties:
+        href:
+          type: string
+          description: Target URI for this link
+        method:
+          type: string
+          description: HTTP method to use when following this link (for example GET, POST, DELETE)
+      additionalProperties: true

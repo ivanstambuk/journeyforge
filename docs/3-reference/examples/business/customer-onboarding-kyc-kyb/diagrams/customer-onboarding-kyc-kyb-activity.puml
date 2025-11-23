@@ -1,0 +1,25 @@
+@startuml
+!include journey-diagram-theme.puml
+title customer-onboarding-kyc-kyb – activity flow
+
+start
+
+:Onboarding app sends\nPOST /journeys/customer-onboarding-kyc-kyb/start\nwith customer + business + UBOs;
+
+repeat
+  :Onboarding app polls\nGET /journeys/{journeyId}\nfor status;
+  :Journeys API returns\nJourneyStatus (Running) while\nKYC/KYB/risk checks are in flight;
+repeat while (phase == "Running")
+
+if (output.finalStatus == "APPROVED"?) then (approved)
+  :Onboarding app activates accounts\nand downstream products;
+elseif (output.finalStatus == "REFERRED"?) then (referred)
+  :Onboarding app routes the case to\nmanual review with full KYC/KYB,\nUBO, credit, and compliance details;
+else (rejected)
+  :Onboarding app notifies that onboarding\nwas rejected and logs rejectionReason;
+endif
+
+stop
+
+@enduml
+

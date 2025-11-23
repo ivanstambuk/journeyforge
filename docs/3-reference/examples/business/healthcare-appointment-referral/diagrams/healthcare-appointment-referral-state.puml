@@ -1,0 +1,52 @@
+@startuml
+!include journey-diagram-theme.puml
+title healthcare-appointment-referral – state transitions
+
+[*] --> initialiseReferral
+
+state initialiseReferral
+state referralOrExpiry
+state requestAppointments
+state normaliseAppointments
+state patientDecision
+state bookConfirmedAppointment
+state waitForAppointmentStatus
+state completePatientCancelled
+state completeAppointmentConfirmed
+state completeAppointmentCompleted
+state noProviderAvailable
+state referralExpiryTimer
+state markReferralExpired
+state referralCompleted
+
+initialiseReferral --> referralOrExpiry
+
+referralOrExpiry --> requestAppointments : referralBranch
+referralOrExpiry --> referralExpiryTimer : expiryBranch
+
+requestAppointments --> normaliseAppointments
+normaliseAppointments --> patientDecision
+
+patientDecision --> completePatientCancelled : action == CANCEL
+patientDecision --> requestAppointments : action == RESCHEDULE
+patientDecision --> bookConfirmedAppointment : action == CONFIRM
+patientDecision --> patientDecision : other / invalid
+
+bookConfirmedAppointment --> waitForAppointmentStatus
+
+waitForAppointmentStatus --> completeAppointmentConfirmed : status == CONFIRMED
+waitForAppointmentStatus --> completeAppointmentCompleted : status == COMPLETED
+waitForAppointmentStatus --> noProviderAvailable : status == CANCELLED or FAILED
+
+completePatientCancelled --> referralCompleted
+completeAppointmentConfirmed --> referralCompleted
+completeAppointmentCompleted --> referralCompleted
+noProviderAvailable --> referralCompleted
+
+referralExpiryTimer --> markReferralExpired
+markReferralExpired --> referralCompleted
+
+referralCompleted --> [*]
+
+@enduml
+

@@ -14,10 +14,9 @@ state getResult
 startJourney --> getStatusAfterChecks : GET /journeys/{journeyId}\n(checks running/completed)
 getStatusAfterChecks --> getStatusAwaitingApproval : GET /journeys/{journeyId}\n(waiting for approval)
 getStatusAwaitingApproval --> submitApproval : POST /steps/approveTransfer
-submitApproval --> getStatusAwaitingSettlement : GET /journeys/{journeyId}\n(waiting for settlement)
+submitApproval --> getStatusAwaitingSettlement : GET /journeys/{journeyId}\n(waiting for settlement or timeout)
 getStatusAwaitingSettlement --> getResult : GET /journeys/{journeyId}/result
 
 getResult --> [*]
 
 @enduml
-

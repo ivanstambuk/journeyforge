@@ -1,0 +1,295 @@
+openapi: 3.1.0
+info:
+  title: "JourneyForge – monthly-invoicing-batch"
+  version: 0.1.0
+  description: "JourneyForge – monthly-invoicing-batch"
+  contact:
+    name: JourneyForge
+servers:
+  - url: /api/v1
+tags:
+  - name: monthly-invoicing-batch
+paths:
+  /journeys/monthly-invoicing-batch/start:
+    post:
+      summary: Configure and schedule monthly invoicing batch
+      operationId: monthlyInvoicingBatch_start
+      tags:
+        - monthly-invoicing-batch
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MonthlyInvoicingConfigRequest"
+      responses:
+        "202":
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JourneyStartResponse"
+      description: Configure and schedule the monthly-invoicing-batch journey for a tenant and batch id.
+  /journeys/{journeyId}:
+    get:
+      summary: Get journey status
+      operationId: monthlyInvoicingBatch_getStatus
+      tags:
+        - monthly-invoicing-batch
+      parameters:
+        - in: path
+          name: journeyId
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JourneyStatus"
+      description: Get journey status.
+  /journeys/{journeyId}/steps/approveInvoiceBatch:
+    post:
+      summary: Approve or reject the drafted invoice batch
+      operationId: monthlyInvoicingBatch_approveInvoiceBatch
+      tags:
+        - monthly-invoicing-batch
+      parameters:
+        - in: path
+          name: journeyId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InvoiceBatchApprovalInput"
+      responses:
+        "200":
+          description: Updated status after processing the approval decision
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InvoiceBatchApprovalStepResponse"
+      description: Approve or reject the drafted invoice batch for a given scheduled run.
+  /journeys/{journeyId}/result:
+    get:
+      summary: Retrieve configuration outcome
+      operationId: monthlyInvoicingBatch_getResult
+      tags:
+        - monthly-invoicing-batch
+      parameters:
+        - in: path
+          name: journeyId
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Final configuration outcome
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JourneyOutcome"
+        "409":
+          description: Journey not terminal yet
+      description: Retrieve the configuration outcome for the initial, interactive run. Scheduled runs are non-interactive for configuration and use the schedule binding.
+components:
+  schemas:
+    MonthlyInvoicingConfigRequest:
+      type: object
+      required:
+        - tenantId
+        - batchId
+        - firstRunAt
+        - interval
+        - maxRuns
+      properties:
+        tenantId:
+          type: string
+        batchId:
+          type: string
+        firstRunAt:
+          type: string
+          format: date-time
+        interval:
+          type: string
+          description: ISO-8601 duration for batch cadence (for example P1M).
+        maxRuns:
+          type: integer
+        gracePeriodDuration:
+          type: string
+          description: ISO-8601 duration to wait after the due date before first reminders (for example P7D).
+        reminderGapDuration:
+          type: string
+          description: ISO-8601 duration between first reminder and final notice (for example P7D).
+      additionalProperties: true
+    InvoiceBatchApprovalInput:
+      type: object
+      description: Finance approval decision for the invoice batch.
+      required:
+        - decision
+      properties:
+        decision:
+          type: string
+          enum:
+            - APPROVED
+            - REJECTED
+        comment:
+          type: string
+      additionalProperties: false
+    JourneyStartResponse:
+      type: object
+      required:
+        - journeyId
+        - journeyName
+        - statusUrl
+      properties:
+        journeyId:
+          type: string
+        journeyName:
+          type: string
+        statusUrl:
+          type: string
+          format: uri
+        _links:
+          description: "Optional hypermedia links (HAL-style) describing related resources and next actions.\n\nPresence is controlled per-journey via spec.httpSurface.links.enabled; when enabled, the engine typically includes at least `self` and `result` links.\n"
+          type: object
+          additionalProperties:
+            $ref: "#/components/schemas/Link"
+    JourneyStatus:
+      type: object
+      required:
+        - journeyId
+        - journeyName
+        - phase
+        - currentState
+        - updatedAt
+      properties:
+        journeyId:
+          type: string
+        journeyName:
+          type: string
+        phase:
+          type: string
+          enum:
+            - Running
+            - Succeeded
+            - Failed
+        currentState:
+          type: string
+        updatedAt:
+          type: string
+          format: date-time
+        tags:
+          type: array
+          description: "Effective tags for this journey instance, derived from the journey's metadata.tags and any instance tag sourcing rules. Tags are non-sensitive, short identifiers intended for filtering and grouping.\n"
+          items:
+            type: string
+        attributes:
+          type: object
+          description: "Lightweight metadata for this journey instance, such as subjectId, tenantId, channel, and correlation ids (orderId, paymentIntentId, crmCaseId). Values are strings and MUST respect the limits configured via MetadataLimits.\n"
+          additionalProperties:
+            type: string
+        _links:
+          description: "Optional hypermedia links (HAL-style) describing related resources and next actions.\n\nWhen links are enabled for a journey, the engine SHOULD include at least `self` and `result`, and MAY include links for active step endpoints. For step links, the relation name MUST equal the external-input state id (for example `waitForApproval`, `confirm`). When the journey is Running and user-cancellable, the engine SHOULD also expose a `cancel` link pointing to the canonical cancellation step `/journeys/{journeyId}/steps/cancel` with method POST.\n"
+          type: object
+          additionalProperties:
+            $ref: "#/components/schemas/Link"
+    JourneyOutcome:
+      allOf:
+        - type: object
+          required:
+            - journeyId
+            - journeyName
+            - phase
+          properties:
+            journeyId:
+              type: string
+            journeyName:
+              type: string
+            phase:
+              type: string
+              enum:
+                - Succeeded
+                - Failed
+            output: {}
+            error:
+              type: object
+              properties:
+                code:
+                  type: string
+                reason:
+                  type: string
+            tags:
+              type: array
+              description: "Effective tags for this journey instance, repeated here for convenience when reading final outcomes.\n"
+              items:
+                type: string
+            attributes:
+              type: object
+              description: "Instance attributes such as subjectId, tenantId, channel, and correlation ids, repeated here for convenience when reading final outcomes.\n"
+              additionalProperties:
+                type: string
+            _links:
+              description: "Optional hypermedia links (HAL-style) describing related resources (for example `self`) when a journey is terminal. Presence is controlled per-journey via spec.httpSurface.links.enabled.\n"
+              type: object
+              additionalProperties:
+                $ref: "#/components/schemas/Link"
+        - type: object
+          properties:
+            output:
+              type: object
+              required:
+                - status
+                - tenantId
+                - batchId
+                - firstRunAt
+                - interval
+                - maxRuns
+              properties:
+                status:
+                  type: string
+                  enum:
+                    - SCHEDULED
+                tenantId:
+                  type: string
+                batchId:
+                  type: string
+                firstRunAt:
+                  type: string
+                  format: date-time
+                interval:
+                  type: string
+                maxRuns:
+                  type: integer
+              additionalProperties: true
+    InvoiceBatchApprovalStepResponse:
+      allOf:
+        - $ref: "#/components/schemas/JourneyStatus"
+        - type: object
+          description: Additional top-level fields returned from the approveInvoiceBatch step.
+          properties:
+            decision:
+              type: string
+              enum:
+                - APPROVED
+                - REJECTED
+            comment:
+              type: string
+          additionalProperties: true
+    Link:
+      type: object
+      required:
+        - href
+      properties:
+        href:
+          type: string
+          description: Target URI for this link
+        method:
+          type: string
+          description: HTTP method to use when following this link (for example GET, POST, DELETE)

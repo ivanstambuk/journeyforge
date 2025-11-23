@@ -34,7 +34,7 @@ Here’s a breakdown of the steps you’ll call over the Journeys API for the pr
 
 ### Sequence diagram
 
-<img src="diagrams/payment-callback-sequence.png" alt="payment-callback – sequence" width="620" />
+<img src="diagrams/payment-callback-sequence.png" alt="payment-callback – sequence" width="420" />
 
 ### State diagram
 

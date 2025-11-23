@@ -1,0 +1,11 @@
+# High-signal specs and references for JourneyForge.
+# Agents should start from this manifest when building context
+# for non-trivial design, DSL, or engine work.
+
+AGENTS.md
+docs/6-decisions/project-constitution.md
+docs/3-reference/dsl.md
+docs/4-architecture/spec-guidelines/dsl-style.md
+docs/4-architecture/spec-guidelines/spec-format.md
+docs/4-architecture/spec-guidelines/docs-style.md
+

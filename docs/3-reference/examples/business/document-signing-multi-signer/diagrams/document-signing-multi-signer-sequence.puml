@@ -1,0 +1,28 @@
+@startuml
+!include journey-diagram-theme.puml
+title document-signing-multi-signer – sequence
+
+actor "Client" as Client
+participant "Journeys API" as Journeys
+
+Client -> Journeys: POST /api/v1/journeys/document-signing-multi-signer/start\nDocumentSigningStartRequest
+Journeys --> Client: 202 Accepted\nJourneyStartResponse (journeyId, ...)
+
+Client -> Journeys: GET /api/v1/journeys/{journeyId}\n(getStatus)
+Journeys --> Client: 200 OK\nJourneyStatus (Running, submitSignature)
+
+== Submit signatures ==
+
+Client -> Journeys: POST /api/v1/journeys/{journeyId}/steps/submitSignature\nSubmitSignatureInput (signerId, decision)
+Journeys --> Client: 200 OK\nSubmitSignatureStepResponse
+
+Client -> Journeys: GET /api/v1/journeys/{journeyId}\n(getStatus)
+Journeys --> Client: 200 OK\nJourneyStatus (signer statuses updated)
+
+== Completion ==
+
+Client -> Journeys: GET /api/v1/journeys/{journeyId}/result\n(getResult)
+Journeys --> Client: 200 OK\nJourneyOutcome (FULLY_SIGNED / DECLINED / EXPIRED)
+
+@enduml
+

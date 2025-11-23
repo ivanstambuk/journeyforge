@@ -1,0 +1,471 @@
+apiVersion: v1
+kind: Journey
+metadata:
+  name: kyc-async-timeout-fallback
+  version: 0.1.0
+  description: KYC check journey that starts an async primary provider, races its callback against an SLA timer, and falls back to a secondary provider after a retry-with-backoff recovery window.
+spec:
+  input:
+    schema:
+      title: KycAsyncTimeoutFallbackStartRequest
+      type: object
+      required:
+        - customerId
+        - requestId
+      properties:
+        customerId:
+          type: string
+        requestId:
+          type: string
+        primaryProvider:
+          type: string
+        fallbackProvider:
+          type: string
+        channel:
+          type: string
+      additionalProperties: true
+  output:
+    schema:
+      title: KycAsyncTimeoutFallbackOutcome
+      type: object
+      required:
+        - status
+        - customerId
+      properties:
+        status:
+          type: string
+          enum:
+            - KYC_COMPLETED_PRIMARY
+            - KYC_COMPLETED_FALLBACK
+            - KYC_TIMED_OUT
+            - KYC_FAILED
+        customerId:
+          type: string
+        primaryProvider:
+          type: string
+        fallbackProvider:
+          type: string
+        primaryJobId:
+          type: string
+        fallbackJobId:
+          type: string
+        completionSource:
+          type: string
+        failureReasonCode:
+          type: string
+        failureReason:
+          type: string
+        timeoutReasonCode:
+          type: string
+        timeoutReason:
+          type: string
+      additionalProperties: true
+  start: startPrimaryKyc
+  states:
+    startPrimaryKyc:
+      type: task
+      task:
+        kind: httpCall
+        method: POST
+        url: https://kyc-primary.example.com/checks/start
+        params:
+          headers:
+            Accept: application/json
+        body:
+          mapper:
+            lang: dataweave
+            expr: |
+              {
+                customerId: context.customerId,
+                requestId: context.requestId,
+                channel: context.channel
+              }
+        timeoutMs: 3000
+        resultVar: primaryStart
+      next: recordPrimaryJob
+
+    recordPrimaryJob:
+      type: transform
+      transform:
+        mapper:
+          lang: dataweave
+          expr: |
+            context ++ {
+              primaryJobId: primaryStart.body.jobId,
+              recoveryAttempt: 0
+            }
+        target:
+          kind: context
+          path: ""
+      next: primaryKycRace
+
+    primaryKycRace:
+      type: parallel
+      parallel:
+        branches:
+          - name: callbackBranch
+            start: waitForPrimaryKyc
+            states:
+              waitForPrimaryKyc:
+                type: webhook
+                webhook:
+                  input:
+                    schema:
+                      title: PrimaryKycCallbackInput
+                      type: object
+                      required:
+                        - jobId
+                        - status
+                      properties:
+                        jobId:
+                          type: string
+                        status:
+                          type: string
+                          enum:
+                            - APPROVED
+                            - REJECTED
+                        reasons:
+                          type: array
+                          items:
+                            type: string
+                      additionalProperties: true
+                  response:
+                    outputVar: primaryKycStep
+                    schema:
+                      title: PrimaryKycStepResponse
+                      type: object
+                      properties:
+                        status:
+                          type: string
+                        reasons:
+                          type: array
+                          items:
+                            type: string
+                      additionalProperties: true
+                  apply:
+                    mapper:
+                      lang: dataweave
+                      expr: |
+                        context ++ {
+                          primaryKycCallback: payload,
+                          primaryKycStep: {
+                            status: payload.status,
+                            reasons: payload.reasons
+                          }
+                        }
+                  on:
+                    - when:
+                        predicate:
+                          lang: dataweave
+                          expr: |
+                            // Ignore late callbacks once outcome is decided
+                            context.outcome != null
+                          next: ignorePrimaryCallback
+                    - when:
+                        predicate:
+                          lang: dataweave
+                          expr: |
+                            payload.status == "APPROVED"
+                          next: completeFromPrimaryApproved
+                    - when:
+                        predicate:
+                          lang: dataweave
+                          expr: |
+                            payload.status == "REJECTED"
+                          next: completeFromPrimaryRejected
+                  default: ignorePrimaryCallback
+
+              ignorePrimaryCallback:
+                type: transform
+                transform:
+                  mapper:
+                    lang: dataweave
+                    expr: context
+                  target:
+                    kind: context
+                    path: ""
+                next: donePrimaryCallback
+
+              completeFromPrimaryApproved:
+                type: transform
+                transform:
+                  mapper:
+                    lang: dataweave
+                    expr: |
+                      context ++ {
+                        outcome: {
+                          status: "KYC_COMPLETED_PRIMARY",
+                          customerId: context.customerId,
+                          primaryProvider: context.primaryProvider,
+                          fallbackProvider: context.fallbackProvider,
+                          primaryJobId: context.primaryJobId,
+                          completionSource: "PRIMARY_CALLBACK"
+                        }
+                      }
+                  target:
+                    kind: context
+                    path: ""
+                next: donePrimaryCallback
+
+              completeFromPrimaryRejected:
+                type: transform
+                transform:
+                  mapper:
+                    lang: dataweave
+                    expr: |
+                      context ++ {
+                        outcome: {
+                          status: "KYC_FAILED",
+                          customerId: context.customerId,
+                          primaryProvider: context.primaryProvider,
+                          fallbackProvider: context.fallbackProvider,
+                          primaryJobId: context.primaryJobId,
+                          completionSource: "PRIMARY_CALLBACK",
+                          failureReasonCode: "PRIMARY_KYC_REJECTED",
+                          failureReason: "Primary provider rejected KYC check."
+                        }
+                      }
+                  target:
+                    kind: context
+                    path: ""
+                next: donePrimaryCallback
+
+              donePrimaryCallback:
+                type: succeed
+                outputVar: outcome
+
+          - name: slaAndFallbackBranch
+            start: primarySlaTimer
+            states:
+              primarySlaTimer:
+                type: timer
+                timer:
+                  duration: "PT5M"
+                next: markPrimaryTimedOut
+
+              markPrimaryTimedOut:
+                type: transform
+                transform:
+                  mapper:
+                    lang: dataweave
+                    expr: |
+                      context ++ {
+                        outcome: {
+                          status: "KYC_TIMED_OUT",
+                          customerId: context.customerId,
+                          primaryProvider: context.primaryProvider,
+                          fallbackProvider: context.fallbackProvider,
+                          primaryJobId: context.primaryJobId,
+                          completionSource: "PRIMARY_SLA_TIMER",
+                          timeoutReasonCode: "PRIMARY_KYC_SLA_EXPIRED",
+                          timeoutReason: "Primary provider did not return a KYC result within the SLA window."
+                        }
+                      }
+                  target:
+                    kind: context
+                    path: ""
+                next: recoveryLoop
+
+              recoveryLoop:
+                type: choice
+                choices:
+                  - when:
+                      predicate:
+                        lang: dataweave
+                        expr: |
+                          context.recoveryAttempt < 3
+                    next: waitBeforeRetry
+                default: startFallbackKyc
+
+              waitBeforeRetry:
+                type: timer
+                timer:
+                  duration:
+                    mapper:
+                      lang: dataweave
+                      expr: |
+                        if (context.recoveryAttempt == 0) "PT30S"
+                        else if (context.recoveryAttempt == 1) "PT2M"
+                        else "PT5M"
+                next: retryPrimaryHealthCheck
+
+              retryPrimaryHealthCheck:
+                type: task
+                task:
+                  kind: httpCall
+                  method: GET
+                  url: https://kyc-primary.example.com/health
+                  params:
+                    headers:
+                      Accept: application/json
+                  timeoutMs: 2000
+                  resultVar: primaryHealth
+                next: evaluatePrimaryHealth
+
+              evaluatePrimaryHealth:
+                type: choice
+                choices:
+                  - when:
+                      predicate:
+                        lang: dataweave
+                        expr: |
+                          primaryHealth.ok == true
+                    next: startFallbackKyc
+                default: incrementRecoveryAttempt
+
+              incrementRecoveryAttempt:
+                type: transform
+                transform:
+                  mapper:
+                    lang: dataweave
+                    expr: |
+                      context ++ {
+                        recoveryAttempt: context.recoveryAttempt + 1
+                      }
+                  target:
+                    kind: context
+                    path: ""
+                next: recoveryLoop
+
+              startFallbackKyc:
+                type: task
+                task:
+                  kind: httpCall
+                  method: POST
+                  url: https://kyc-fallback.example.com/checks/start
+                  params:
+                    headers:
+                      Accept: application/json
+                  body:
+                    mapper:
+                      lang: dataweave
+                      expr: |
+                        {
+                          customerId: context.customerId,
+                          requestId: context.requestId,
+                          channel: context.channel
+                        }
+                  timeoutMs: 3000
+                  resultVar: fallbackStart
+                next: recordFallbackJob
+
+              recordFallbackJob:
+                type: transform
+                transform:
+                  mapper:
+                    lang: dataweave
+                    expr: |
+                      context ++ {
+                        fallbackJobId: fallbackStart.body.jobId
+                      }
+                  target:
+                    kind: context
+                    path: ""
+                next: waitForFallbackResult
+
+              waitForFallbackResult:
+                type: webhook
+                webhook:
+                  input:
+                    schema:
+                      title: FallbackKycCallbackInput
+                      type: object
+                      required:
+                        - jobId
+                        - status
+                      properties:
+                        jobId:
+                          type: string
+                        status:
+                          type: string
+                          enum:
+                            - APPROVED
+                            - REJECTED
+                      additionalProperties: true
+                  response:
+                    outputVar: fallbackKycStep
+                    schema:
+                      title: FallbackKycStepResponse
+                      type: object
+                      properties:
+                        status:
+                          type: string
+                      additionalProperties: true
+                  apply:
+                    mapper:
+                      lang: dataweave
+                      expr: |
+                        context ++ {
+                          fallbackKycCallback: payload,
+                          fallbackKycStep: {
+                            status: payload.status
+                          }
+                        }
+                  on:
+                    - when:
+                        predicate:
+                          lang: dataweave
+                          expr: |
+                            payload.status == "APPROVED"
+                      next: completeFromFallbackApproved
+                    - when:
+                        predicate:
+                          lang: dataweave
+                          expr: |
+                            payload.status == "REJECTED"
+                      next: completeFromFallbackRejected
+                  default: completeFromFallbackRejected
+
+              completeFromFallbackApproved:
+                type: transform
+                transform:
+                  mapper:
+                    lang: dataweave
+                    expr: |
+                      context ++ {
+                        outcome: {
+                          status: "KYC_COMPLETED_FALLBACK",
+                          customerId: context.customerId,
+                          primaryProvider: context.primaryProvider,
+                          fallbackProvider: context.fallbackProvider,
+                          primaryJobId: context.primaryJobId,
+                          fallbackJobId: context.fallbackJobId,
+                          completionSource: "FALLBACK_CALLBACK"
+                        }
+                      }
+                  target:
+                    kind: context
+                    path: ""
+                next: doneSlaAndFallback
+
+              completeFromFallbackRejected:
+                type: transform
+                transform:
+                  mapper:
+                    lang: dataweave
+                    expr: |
+                      context ++ {
+                        outcome: {
+                          status: "KYC_FAILED",
+                          customerId: context.customerId,
+                          primaryProvider: context.primaryProvider,
+                          fallbackProvider: context.fallbackProvider,
+                          primaryJobId: context.primaryJobId,
+                          fallbackJobId: context.fallbackJobId,
+                          completionSource: "FALLBACK_CALLBACK",
+                          failureReasonCode: "FALLBACK_KYC_REJECTED",
+                          failureReason: "Fallback provider rejected KYC check."
+                        }
+                      }
+                  target:
+                    kind: context
+                    path: ""
+                next: doneSlaAndFallback
+
+              doneSlaAndFallback:
+                type: succeed
+                outputVar: outcome
+
+        join:
+          strategy: anyOf
+          errorPolicy: collectAll

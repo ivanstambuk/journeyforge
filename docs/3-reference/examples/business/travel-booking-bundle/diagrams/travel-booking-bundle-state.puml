@@ -9,15 +9,16 @@ state getStatusAfterReservation
 state confirmBundle
 state getStatusBeforeChangeOrComplete
 state changeOrCancel
+state submitFeedback
 state getResult
 
 startJourney --> getStatusAfterReservation : GET /journeys/{journeyId}\n(reservations running/completed)
 getStatusAfterReservation --> confirmBundle : POST /steps/confirmBundle
 confirmBundle --> getStatusBeforeChangeOrComplete : GET /journeys/{journeyId}\n(provider trip updates processed)
 getStatusBeforeChangeOrComplete --> changeOrCancel : POST /steps/changeOrCancel
-changeOrCancel --> getResult : GET /journeys/{journeyId}/result
+changeOrCancel --> submitFeedback : POST /steps/submitFeedback (optional)
+submitFeedback --> getResult : GET /journeys/{journeyId}/result
 
 getResult --> [*]
 
 @enduml
-

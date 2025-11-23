@@ -1,0 +1,40 @@
+@startuml
+!include journey-diagram-theme.puml
+title daily-orders-batch-close – configuration and scheduled runs sequence
+
+actor "Ops Client" as Client
+participant "Journeys API" as Journeys
+
+Client -> Journeys: POST /api/v1/journeys/daily-orders-batch-close/start\nDailyOrdersBatchCloseConfigRequest\n+ Authorization: Bearer <access token>
+Journeys --> Client: 202 Accepted\nJourneyStartResponse (journeyId, ...)
+
+Client -> Journeys: GET /api/v1/journeys/{journeyId}\n(getStatus)
+Journeys --> Client: 200 OK\nJourneyStatus (configuring schedule)
+
+... Interactive run completes, schedule binding created ...
+
+Client -> Journeys: GET /api/v1/journeys/{journeyId}/result\n(getResult)
+Journeys --> Client: 200 OK\nJourneyOutcome (status = SCHEDULED,\nfirstRunAt, interval, maxRuns)
+
+== Scheduled runs (non-interactive) ==
+
+loop Once per interval (for example daily at 23:00)
+  Journeys -> Journeys: Start scheduled run at state runBatch\nwith lastContext snapshot
+  Journeys -> OAuth: POST /oauth/token\n(grant_type=refresh_token)
+  OAuth --> Journeys: 200 OK\n(access_token, refresh_token)
+
+  Journeys -> Journeys: Wait upstreamWaitDuration\n(waitForUpstream timer)
+
+  Journeys -> Orders: POST /orders/batches/prepareSnapshot\n(prepareDailyBatchSnapshot)
+  Orders --> Journeys: 200 OK\n(snapshot id, counts, etc.)
+
+  Journeys -> Journeys: Wait replicationDelayDuration\n(replicationDelay timer)
+
+  Journeys -> Orders: POST /orders/batches/close\n(closeDailyBatch)
+  Orders --> Journeys: 200 OK\n(batch close status)
+
+  Journeys -> Journeys: Record lastBatch outcome and complete run
+end
+
+@enduml
+

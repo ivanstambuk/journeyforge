@@ -1,0 +1,28 @@
+@startuml
+!include journey-diagram-theme.puml
+title customer-onboarding-kyc-kyb – sequence
+
+actor "Onboarding app" as App
+actor "KYC provider" as KYC
+actor "KYB provider / registry" as KYB
+actor "Risk engine" as Risk
+participant "Journeys API" as Journeys
+
+App -> Journeys: POST /api/v1/journeys/customer-onboarding-kyc-kyb/start\nCustomerOnboardingKycKybStartRequest
+Journeys -> KYC: POST https://kyc.example.com/checks/start\n(customer details)
+Journeys -> KYB: POST https://kyb.example.com/checks/start\n(business details)
+Journeys -> KYB: GET https://registry.example.com/businesses/{registrationNumber}
+Journeys -> Risk: POST https://risk.example.com/onboarding/start\n(onboardingId, ids)
+Journeys --> App: 202 Accepted\nJourneyStartResponse (journeyId, ...)
+
+KYC -> Journeys: POST (KYC result callback)\n(customerId, status, reasons[])
+Journeys --> KYC: 200 OK
+
+Risk -> Journeys: POST (KYB + risk callback)\n(onboardingId, kybStatus, kybUboStatuses[], creditDecision, complianceDecision)
+Journeys --> Risk: 200 OK
+
+App -> Journeys: GET /api/v1/journeys/{journeyId}/result\n(getResult)
+Journeys --> App: 200 OK\nJourneyOutcome (APPROVED / REFERRED / REJECTED)
+
+@enduml
+

@@ -1,0 +1,60 @@
+@startuml
+!include journey-diagram-theme.puml
+title market-open-order-submission – internal DSL state graph
+
+[*] --> classifyOrderTiming
+
+state classifyOrderTiming
+state orderTimingSwitch
+state preOpenWindow
+state preOpenOutcomeSwitch
+state submitOrder
+state evaluateSubmission
+state completeSubmitted
+state completeNotSubmitted
+state completeFailed
+state done
+
+classifyOrderTiming --> orderTimingSwitch : classify orderTiming\nand preOpenDelayDuration
+
+orderTimingSwitch --> submitOrder : in-session
+orderTimingSwitch --> preOpenWindow : pre-open
+
+preOpenWindow --> preOpenOutcomeSwitch : pre-open window completes
+
+preOpenOutcomeSwitch --> completeNotSubmitted : preOpenAction == cancel
+preOpenOutcomeSwitch --> submitOrder : default (auto-submit at open)
+
+submitOrder --> evaluateSubmission : orders.createOrder
+
+evaluateSubmission --> completeSubmitted : orderResult.ok == true
+evaluateSubmission --> completeFailed : default (failure)
+
+completeSubmitted --> done
+completeNotSubmitted --> done
+completeFailed --> done
+
+done --> [*]
+
+note right of classifyOrderTiming
+  type: transform
+  computes:
+    - orderTiming: in-session or pre-open
+    - preOpenDelayDuration: ISO-8601 duration until marketOpenHour
+end note
+
+note right of preOpenWindow
+  type: parallel
+  branches:
+    - clientAction (wait step preOpenAction)
+    - marketOpen (timer until market open)
+  join.strategy: anyOf
+end note
+
+note right of submitOrder
+  type: task (HTTP)
+  operationRef: orders.createOrder
+end note
+
+@enduml
+

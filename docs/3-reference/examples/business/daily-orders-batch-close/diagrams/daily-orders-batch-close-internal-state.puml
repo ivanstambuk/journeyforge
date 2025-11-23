@@ -1,0 +1,60 @@
+@startuml
+!include journey-diagram-theme.puml
+title daily-orders-batch-close – internal DSL state graph
+
+[*] --> exchangeInitialToken
+
+state exchangeInitialToken
+state storeInitialTokens
+state configureSchedule
+state prepareConfigOutcome
+state completeConfigured
+
+state runBatch
+state updateTokensAndWaitForUpstream
+state waitForUpstream
+state prepareBatchSnapshot
+state replicationDelay
+state closeBatch
+state recordBatchOutcome
+state scheduledDone
+
+exchangeInitialToken --> storeInitialTokens : oauth.tokenExchange\n(access + refresh tokens)
+storeInitialTokens --> configureSchedule : persist oauth tokens in context
+configureSchedule --> prepareConfigOutcome : task.kind: schedule\nstart = runBatch
+prepareConfigOutcome --> completeConfigured
+completeConfigured --> [*]
+
+runBatch --> updateTokensAndWaitForUpstream : oauth.refreshToken
+updateTokensAndWaitForUpstream --> waitForUpstream : update oauth tokens
+waitForUpstream --> prepareBatchSnapshot : timer\nupstreamWaitDuration
+prepareBatchSnapshot --> replicationDelay : orders.prepareDailyBatchSnapshot
+replicationDelay --> closeBatch : timer\nreplicationDelayDuration
+closeBatch --> recordBatchOutcome : orders.closeDailyBatch
+recordBatchOutcome --> scheduledDone
+scheduledDone --> [*]
+
+note right of configureSchedule
+  type: task (schedule)
+  configures:
+    - startAt: firstRunAt (for example 23:00)
+    - interval: P1D
+    - maxRuns: configured bound
+  scheduled runs start at state runBatch
+end note
+
+note right of waitForUpstream
+  type: timer
+  waits for upstream systems to
+  finish their own end-of-day work
+  before closing the batch
+end note
+
+note right of replicationDelay
+  type: timer
+  adds a short delay to account
+  for replication/eventual consistency
+  before final batch close
+end note
+
+@enduml

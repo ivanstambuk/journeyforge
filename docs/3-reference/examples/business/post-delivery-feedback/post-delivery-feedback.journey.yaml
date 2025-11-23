@@ -1,0 +1,170 @@
+apiVersion: v1
+kind: Journey
+metadata:
+  name: post-delivery-feedback
+  version: 0.1.0
+  description: Order delivery journey that completes on delivery and uses post-delivery timers and compensation-style follow-up for feedback.
+spec:
+  apis:
+    orders: { openApiRef: apis/orders.openapi.yaml }
+    notifications: { openApiRef: apis/serviceA.openapi.yaml }
+  input:
+    schema:
+      title: PostDeliveryFeedbackStartRequest
+      type: object
+      required:
+        - orderId
+        - customerId
+        - expectedDeliveryDate
+      properties:
+        orderId:
+          type: string
+        customerId:
+          type: string
+        expectedDeliveryDate:
+          type: string
+          format: date
+        feedbackDelayDays:
+          type: integer
+        channel:
+          type: string
+      additionalProperties: true
+  output:
+    schema:
+      title: PostDeliveryFeedbackOutcome
+      type: object
+      required:
+        - orderId
+        - finalStatus
+      properties:
+        orderId:
+          type: string
+        finalStatus:
+          type: string
+          enum:
+            - DELIVERED
+            - CANCELLED
+        deliveryDate:
+          type: string
+          format: date
+      additionalProperties: true
+  compensation:
+    mode: async
+    start: waitBeforeFeedback
+    alsoFor:
+      - when:
+          predicate:
+            lang: dataweave
+            expr: |
+              output.finalStatus == "DELIVERED"
+    states:
+      waitBeforeFeedback:
+        type: timer
+        timer:
+          duration:
+            mapper:
+              lang: dataweave
+              expr: |
+                if (context.feedbackDelayDays != null)
+                  "P" ++ (context.feedbackDelayDays as String) ++ "D"
+                else
+                  "P7D"
+        next: sendFeedbackRequest
+
+      sendFeedbackRequest:
+        type: task
+        task:
+          kind: httpCall
+          operationRef: notifications.sendFeedbackRequest
+          params:
+            headers:
+              Accept: application/json
+          body:
+            mapper:
+              lang: dataweave
+              expr: |
+                {
+                  customerId: context.customerId,
+                  orderId: context.orderId,
+                  deliveryDate: context.deliveryDate,
+                  channel: context.channel
+                }
+          timeoutMs: 3000
+          resultVar: feedbackRequest
+        next: feedbackDone
+
+      feedbackDone:
+        type: succeed
+
+  start: waitForDelivery
+  states:
+    waitForDelivery:
+      type: wait
+      wait:
+        channel: manual
+        input:
+          schema:
+            description: Delivery confirmation or cancellation for the order.
+            type: object
+            required:
+              - status
+            properties:
+              status:
+                type: string
+                enum:
+                  - delivered
+                  - cancelled
+              deliveryDate:
+                type: string
+                format: date
+            additionalProperties: false
+        response:
+          outputVar: deliveryResponse
+          schema:
+            title: DeliveryProjection
+            type: object
+            description: Additional top-level fields returned from the confirmDelivery step.
+            properties:
+              status:
+                type: string
+                enum:
+                  - delivered
+                  - cancelled
+              deliveryDate:
+                type: string
+                format: date
+            additionalProperties: true
+        apply:
+          mapper:
+            lang: dataweave
+            expr: |
+              context ++ {
+                delivery: payload,
+                deliveryDate: payload.deliveryDate,
+                deliveryResponse: {
+                  status: payload.status,
+                  deliveryDate: payload.deliveryDate
+                }
+              }
+        on:
+          - when:
+              predicate:
+                lang: dataweave
+                expr: |
+                  payload.status == "delivered"
+            next: completeDelivered
+          - when:
+              predicate:
+                lang: dataweave
+                expr: |
+                  payload.status == "cancelled"
+            next: completeCancelled
+        default: completeCancelled
+
+    completeDelivered:
+      type: succeed
+      outputVar: delivery
+
+    completeCancelled:
+      type: succeed
+      outputVar: delivery

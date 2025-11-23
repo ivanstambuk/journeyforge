@@ -1,0 +1,42 @@
+@startuml
+!include journey-diagram-theme.puml
+title monthly-invoicing-batch – sequence
+
+actor ConfigUI as ConfigUI
+actor FinanceUI as FinanceUI
+participant "Journeys API" as Journeys
+participant "Billing API" as Billing
+
+== Configure and schedule ==
+
+ConfigUI -> Journeys : POST /journeys/monthly-invoicing-batch/start\n(startRequest)
+Journeys -> Journeys : configureSchedule\n(task.kind: schedule)
+Journeys --> ConfigUI : 202 Accepted (journeyId)
+
+ConfigUI -> Journeys : GET /journeys/{journeyId}
+Journeys --> ConfigUI : JourneyStatus (Running/Succeeded)
+
+ConfigUI -> Journeys : GET /journeys/{journeyId}/result
+Journeys --> ConfigUI : JourneyOutcome (status=SCHEDULED)
+
+== Scheduled run: draft, validate, approve, send, chase ==
+
+Journeys -> Billing : draftInvoicesForBatch
+Billing --> Journeys : draftResult
+
+Journeys -> Billing : validateInvoiceBatch
+Billing --> Journeys : validationResult
+
+FinanceUI -> Journeys : POST /journeys/{journeyId}/steps/approveInvoiceBatch\n(approvalDecision)
+Journeys --> FinanceUI : InvoiceBatchApprovalStepResponse
+
+Journeys -> Billing : sendInvoiceBatch
+Billing --> Journeys : sendResult
+
+Journeys -> Billing : sendInvoiceReminder
+Billing --> Journeys : reminderResult
+
+Journeys -> Billing : sendInvoiceFinalNotice
+Billing --> Journeys : finalNoticeResult
+
+@enduml

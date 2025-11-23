@@ -17,7 +17,7 @@ This journey models a simplified insurance claim from FNOL to settlement:
 
 - It creates a claim in a Claims API using core FNOL data (claim id, policy id, claimant, loss date, type, description).
 - It collects additional FNOL details from the claimant (documents, photos, notes).
-- It then runs parallel assessments from an adjuster and a repair/medical provider, each providing their own decision and recommended amounts.
+- It then runs parallel assessments from an adjuster and a repair/medical provider, each providing their own decision and recommended amounts, with soft SLAs so that overdue assessments are marked (and can be escalated) without automatically denying the claim.
 - If both assessments support approval, it moves to an internal settlement approval step; approved settlements are recorded in the Claims API and a payment is authorised via the Payments API.
 
 The journey is long-lived: clients start it once, track progress via status calls, submit FNOL details and assessment decisions via dedicated steps, and finally read an outcome that summarises whether the claim was settled or denied and what assessment data led to that decision. Design and scope for this example are captured under Q-015 in `docs/4-architecture/open-questions.md`.
@@ -61,7 +61,7 @@ The second workflow in the Arazzo file shows a denial path where one of the step
 
 ### Sequence diagram
 
-<img src="diagrams/insurance-claim-fnol-to-settlement-sequence.png" alt="insurance-claim-fnol-to-settlement – sequence" width="620" />
+<img src="diagrams/insurance-claim-fnol-to-settlement-sequence.png" alt="insurance-claim-fnol-to-settlement – sequence" width="420" />
 
 ### State diagram
 
@@ -79,7 +79,11 @@ The second workflow in the Arazzo file shows a denial path where one of the step
 
 - `createClaim` calls `claims.createClaim` to register the claim on FNOL.
 - `waitForFnolDetails` exposes the `submitFnolDetails` step for the claimant to provide additional documents and notes.
-- `assessmentParallel` runs adjuster and provider assessments in parallel via `waitForAdjusterReport` and `waitForProviderEstimate`, each using a separate external step.
+- `assessmentParallel` runs adjuster and provider assessments in parallel. Each branch uses a nested `parallel` to combine:
+  - a manual assessment step (`waitForAdjusterReport`, `waitForProviderEstimate`) that records decisions and recommendations in `assessment.adjuster` / `assessment.provider`, and
+  - an SLA timer (`adjusterSlaTimer`, `providerSlaTimer`) that, when it fires, both:
+    - sets `assessment.adjuster.slaBreached` / `assessment.provider.slaBreached`, and
+    - calls the corresponding Claims API notification (`claims.notifyAdjusterSlaBreach`, `claims.notifyProviderSlaBreach`) so operations can escalate SLA breaches, while still allowing assessment approvals/denials to complete normally.
 - `evaluateAssessment` ensures both adjuster and provider decisions are `approve` before proceeding; otherwise the journey fails as `CLAIM_DENIED`.
 - `waitForSettlementApproval` exposes the `confirmSettlement` step for internal settlement approval and records the chosen settlement amount.
 - `recordSettlement` calls `claims.recordSettlementDecision` to store the settlement decision; `initiatePayment` calls `payments.authorizePayment` to authorise payout; `completeSettled` completes the journey successfully with the settlement decision in `output`.

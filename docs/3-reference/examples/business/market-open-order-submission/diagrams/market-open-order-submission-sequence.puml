@@ -1,0 +1,32 @@
+@startuml
+!include journey-diagram-theme.puml
+title market-open-order-submission – market-open sequence
+
+actor "Client" as Client
+participant "Journeys API" as Journeys
+
+Client -> Journeys: POST /api/v1/journeys/market-open-order-submission/start\nMarketOpenOrderStartRequest
+Journeys --> Client: 202 Accepted\nJourneyStartResponse (journeyId, ...)
+
+alt Order submitted during market hours
+  note over Journeys
+    The journey classifies the order as
+    in-session and submits it immediately
+    via orders.createOrder.
+  end note
+else Order submitted pre-open
+  note over Journeys
+    The journey classifies the order as
+    pre-open and waits until market open,
+    unless a pre-open cancel is received.
+  end note
+
+  Client -> Journeys: POST /api/v1/journeys/{journeyId}/steps/preOpenAction\nPreOpenOrderActionInput (optional)
+  Journeys --> Client: 200 OK\nPreOpenOrderActionStepResponse
+end
+
+Client -> Journeys: GET /api/v1/journeys/{journeyId}/result\n(getResult)
+Journeys --> Client: 200 OK\nJourneyOutcome (SUBMITTED, NOT_SUBMITTED, or FAILED)
+
+@enduml
+

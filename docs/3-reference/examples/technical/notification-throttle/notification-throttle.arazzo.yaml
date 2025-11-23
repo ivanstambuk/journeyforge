@@ -1,0 +1,52 @@
+arazzo: 1.0.1
+info:
+  title: JourneyForge – notification-throttle workflows
+  version: 0.1.0
+  summary: Workflows for user notification pacing and integration throttling.
+  description: Workflows for sending user notifications and calling third-party integrations with simple per-user pacing rules so that no more than one notification or integration call is made within a configurable time window.
+sourceDescriptions:
+  - name: notificationThrottle
+    type: openapi
+    url: notification-throttle.openapi.yaml
+workflows:
+  - workflowId: notification-throttle-send-and-call
+    summary: Send a notification and call an integration when both are outside their pacing windows.
+    description: Start a notification-throttle journey where no recent notifications or integration calls exist, and observe that both the notification and integration are executed while next-available times are computed.
+    inputs:
+      type: object
+      properties:
+        startRequest:
+          description: Notification request with optional integration payload.
+          type: object
+          required:
+            - userId
+            - channel
+            - message
+          properties:
+            userId:
+              type: string
+            channel:
+              type: string
+            message:
+              type: string
+            integrationPayload:
+              type: object
+          additionalProperties: true
+    steps:
+      - stepId: startJourney
+        description: Start a new notification-throttle journey instance.
+        operationId: notificationThrottle_start
+        x-source: notificationThrottle
+        requestBody:
+          contentType: application/json
+          payload: $inputs.startRequest
+        outputs:
+          journeyId: $response.body.journeyId
+      - stepId: getResult
+        description: Retrieve the final outcome once the notification and integration decisions have been applied.
+        operationId: notificationThrottle_getResult
+        x-source: notificationThrottle
+        parameters:
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId

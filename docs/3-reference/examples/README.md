@@ -17,6 +17,18 @@ For human-friendly documentation:
 - Technical patterns are catalogued under `docs/2-how-to/use-cases/index.md`.
 - Business journeys are catalogued under `docs/2-how-to/business-journeys/index.md` and documented in `docs/3-reference/examples/journeys/` (to be migrated alongside specs).
 
+## Outcome reasons in example journeys
+
+Some business journeys expose domain-level “reason” information in their `spec.output.schema` (for example why a request was rejected or ineligible) in addition to the technical `JourneyOutcome.error` envelope.
+
+Authoring guidance:
+- Prefer **code + text pairs** for domain reasons:
+  - For failures: `failureReasonCode` (stable machine code) + `failureReason` (human-readable text).
+  - For rejections: `rejectionReasonCode` + `rejectionReason`.
+  - For other domain outcomes (for example ineligibility, settlement decisions), follow the same pattern (`<kind>ReasonCode` + `<kind>Reason`).
+- Keep codes stable and short (for example `ERASURE_ENGINE_ERROR`, `PRIVACY_DESK_REJECTED`, `SUBJECT_OR_REGION_INELIGIBLE`) and document them in journey-specific docs.
+- Use the Problem Details-oriented `JourneyOutcome.error.{code,reason}` for **technical/runtime errors**; domain reason fields belong in the journey’s `output` schema and should not duplicate the technical error envelope.
+
 ## API Catalog – downstream OpenAPI used by `operationRef`
 
 - apis/accounts.openapi.yaml

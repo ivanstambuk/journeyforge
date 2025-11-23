@@ -63,7 +63,7 @@ The second workflow in the Arazzo file shows a direct rejection path driven by t
 
 ### Sequence diagram
 
-<img src="diagrams/customer-onboarding-kyc-sequence.png" alt="customer-onboarding-kyc – sequence" width="620" />
+<img src="diagrams/customer-onboarding-kyc-sequence.png" alt="customer-onboarding-kyc – sequence" width="420" />
 
 ### State diagram
 

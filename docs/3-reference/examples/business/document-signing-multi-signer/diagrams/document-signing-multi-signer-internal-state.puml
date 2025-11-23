@@ -1,0 +1,50 @@
+@startuml
+!include journey-diagram-theme.puml
+title document-signing-multi-signer – internal DSL state graph
+
+[*] --> initialiseDocument
+
+state initialiseDocument
+state signingOrExpiry
+
+state submitSignature
+state completeDeclined
+state completeFullySigned
+
+state documentExpiryTimer
+state markExpired
+
+state documentCompleted
+
+initialiseDocument --> signingOrExpiry
+
+signingOrExpiry --> submitSignature : branch signingBranch
+signingOrExpiry --> documentExpiryTimer : branch expiryBranch
+
+submitSignature --> completeDeclined : any signer DECLINED
+submitSignature --> completeFullySigned : all SIGNED
+submitSignature --> submitSignature : partial progress
+
+completeDeclined --> documentCompleted
+completeFullySigned --> documentCompleted
+
+documentExpiryTimer --> markExpired
+markExpired --> documentCompleted
+
+documentCompleted --> [*]
+
+note right of submitSignature
+  Generic wait state that accepts
+  SubmitSignatureInput with signerId
+  and decision, updates per-signer status,
+  and enforces sequential ordering when
+  signingMode == SEQUENTIAL.
+end note
+
+note right of documentExpiryTimer
+  Timer that enforces document-level expiry
+  based on documentExpiryHours and marks
+  remaining PENDING signers as EXPIRED.
+end note
+
+@enduml

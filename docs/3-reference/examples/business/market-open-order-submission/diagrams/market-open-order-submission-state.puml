@@ -1,0 +1,20 @@
+@startuml
+!include journey-diagram-theme.puml
+title market-open-order-submission – HTTP-visible states
+
+[*] --> startJourney
+
+state startJourney
+state getStatus
+state preOpenAction
+state getResult
+
+startJourney --> getStatus : GET /journeys/{journeyId}\n(optional status polling)
+getStatus --> preOpenAction : POST /steps/preOpenAction\n(optional pre-open cancel/submit)
+preOpenAction --> getResult : GET /journeys/{journeyId}/result
+getStatus --> getResult : GET /journeys/{journeyId}/result
+
+getResult --> [*]
+
+@enduml
+

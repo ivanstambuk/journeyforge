@@ -1,0 +1,23 @@
+@startuml
+!include journey-diagram-theme.puml
+title business-hours-payment-authorization – client activity flow
+
+start
+
+:Client sends\nPOST /api/v1/journeys/business-hours-payment-authorization/start\nwith BusinessHoursPaymentStartRequest;
+
+repeat
+  :Client calls\nGET /api/v1/journeys/{journeyId}/result;
+  :Journeys API returns\nJourneyOutcome with phase/output;
+repeat while (phase == "Running") is (waiting or authorizing)
+
+if (phase == "Succeeded" and finalStatus == "AUTHORIZED"?) then (authorized)
+  :Client records successful authorization and\nprocessingMode (IMMEDIATE or DEFERRED);
+  stop
+else (failed)
+  :Client handles FAILED outcome based on\nfailureReason and processingMode;
+  stop
+endif
+
+@enduml
+

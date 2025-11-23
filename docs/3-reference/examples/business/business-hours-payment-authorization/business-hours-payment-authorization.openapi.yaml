@@ -1,0 +1,230 @@
+openapi: 3.1.0
+info:
+  title: "JourneyForge – business-hours-payment-authorization"
+  version: 0.1.0
+  description: "JourneyForge – business-hours-payment-authorization"
+  contact:
+    name: JourneyForge
+servers:
+  - url: /api/v1
+tags:
+  - name: business-hours-payment-authorization
+paths:
+  /journeys/business-hours-payment-authorization/start:
+    post:
+      summary: Start business-hours-payment-authorization journey
+      operationId: businessHoursPaymentAuthorization_start
+      tags:
+        - business-hours-payment-authorization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BusinessHoursPaymentStartRequest"
+      responses:
+        "202":
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JourneyStartResponse"
+      description: Start business-hours-payment-authorization journey
+  /journeys/{journeyId}:
+    get:
+      summary: Get journey status
+      operationId: businessHoursPaymentAuthorization_getStatus
+      tags:
+        - business-hours-payment-authorization
+      parameters:
+        - in: path
+          name: journeyId
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JourneyStatus"
+      description: Get journey status
+  /journeys/{journeyId}/result:
+    get:
+      summary: Retrieve final outcome
+      operationId: businessHoursPaymentAuthorization_getResult
+      tags:
+        - business-hours-payment-authorization
+      parameters:
+        - in: path
+          name: journeyId
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Final outcome
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JourneyOutcome"
+        "409":
+          description: Journey not terminal yet
+      description: Retrieve final outcome
+components:
+  schemas:
+    BusinessHoursPaymentStartRequest:
+      type: object
+      required:
+        - paymentId
+        - customerId
+        - amount
+        - currency
+      properties:
+        paymentId:
+          type: string
+        customerId:
+          type: string
+        amount:
+          type: number
+        currency:
+          type: string
+        channel:
+          type: string
+      additionalProperties: true
+    JourneyStartResponse:
+      type: object
+      required:
+        - journeyId
+        - journeyName
+        - statusUrl
+      properties:
+        journeyId:
+          type: string
+        journeyName:
+          type: string
+        statusUrl:
+          type: string
+          format: uri
+        _links:
+          description: "Optional hypermedia links (HAL-style) describing related resources and next actions.\n\nPresence is controlled per-journey via spec.httpSurface.links.enabled; when enabled, the engine typically includes at least `self` and `result` links.\n"
+          type: object
+          additionalProperties:
+            $ref: "#/components/schemas/Link"
+    JourneyStatus:
+      type: object
+      required:
+        - journeyId
+        - journeyName
+        - phase
+        - currentState
+        - updatedAt
+      properties:
+        journeyId:
+          type: string
+        journeyName:
+          type: string
+        phase:
+          type: string
+          enum:
+            - Running
+            - Succeeded
+            - Failed
+        currentState:
+          type: string
+        updatedAt:
+          type: string
+          format: date-time
+        tags:
+          type: array
+          description: "Effective tags for this journey instance, derived from the journey's metadata.tags and any instance tag sourcing rules. Tags are non-sensitive, short identifiers intended for filtering and grouping.\n"
+          items:
+            type: string
+        attributes:
+          type: object
+          description: "Lightweight metadata for this journey instance, such as subjectId, tenantId, channel, and correlation ids (orderId, paymentIntentId, crmCaseId). Values are strings and MUST respect the limits configured via MetadataLimits.\n"
+          additionalProperties:
+            type: string
+        _links:
+          description: "Optional hypermedia links (HAL-style) describing related resources and next actions.\n\nWhen links are enabled for a journey, the engine SHOULD include at least `self` and `result`, and MAY include links for active step endpoints. For step links, the relation name MUST equal the external-input state id (for example `waitForApproval`, `confirm`). When the journey is Running and user-cancellable, the engine SHOULD also expose a `cancel` link pointing to the canonical cancellation step `/journeys/{journeyId}/steps/cancel` with method POST.\n"
+          type: object
+          additionalProperties:
+            $ref: "#/components/schemas/Link"
+    JourneyOutcome:
+      allOf:
+        - type: object
+          required:
+            - journeyId
+            - journeyName
+            - phase
+          properties:
+            journeyId:
+              type: string
+            journeyName:
+              type: string
+            phase:
+              type: string
+              enum:
+                - Succeeded
+                - Failed
+            output: {}
+            error:
+              type: object
+              properties:
+                code:
+                  type: string
+                reason:
+                  type: string
+            tags:
+              type: array
+              description: "Effective tags for this journey instance, repeated here for convenience when reading final outcomes.\n"
+              items:
+                type: string
+            attributes:
+              type: object
+              description: "Instance attributes such as subjectId, tenantId, channel, and correlation ids, repeated here for convenience when reading final outcomes.\n"
+              additionalProperties:
+                type: string
+            _links:
+              description: "Optional hypermedia links (HAL-style) describing related resources (for example `self`) when a journey is terminal. Presence is controlled per-journey via spec.httpSurface.links.enabled.\n"
+              type: object
+              additionalProperties:
+                $ref: "#/components/schemas/Link"
+        - type: object
+          properties:
+            output:
+              type: object
+              required:
+                - paymentId
+                - finalStatus
+              properties:
+                paymentId:
+                  type: string
+                finalStatus:
+                  type: string
+                  enum:
+                    - AUTHORIZED
+                    - FAILED
+                processingMode:
+                  type: string
+                  enum:
+                    - IMMEDIATE
+                    - DEFERRED
+                authorizedAt:
+                  type: string
+                  format: date-time
+                failureReason:
+                  type: string
+              additionalProperties: true
+    Link:
+      type: object
+      required:
+        - href
+      properties:
+        href:
+          type: string
+          description: Target URI for this link
+        method:
+          type: string
+          description: HTTP method to use when following this link (for example GET, POST, DELETE)

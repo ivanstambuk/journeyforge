@@ -37,7 +37,7 @@ Here’s a breakdown of the steps you’ll call over the Journeys API for the pr
 
 ### Sequence diagram
 
-<img src="diagrams/http-chained-calls-sequence.png" alt="http-chained-calls – sequence" width="620" />
+<img src="diagrams/http-chained-calls-sequence.png" alt="http-chained-calls – sequence" width="420" />
 
 ### State diagram
 

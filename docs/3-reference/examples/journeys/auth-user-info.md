@@ -37,7 +37,7 @@ Here’s a breakdown of the steps you’ll call over the Journeys API for the pr
 
 ### Sequence diagram
 
-<img src="diagrams/auth-user-info-sequence.png" alt="auth-user-info – sequence" width="620" />
+<img src="diagrams/auth-user-info-sequence.png" alt="auth-user-info – sequence" width="420" />
 
 ### State diagram
 

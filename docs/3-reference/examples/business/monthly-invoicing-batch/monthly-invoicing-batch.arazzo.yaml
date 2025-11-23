@@ -1,0 +1,118 @@
+arazzo: 1.0.1
+info:
+  title: JourneyForge – monthly-invoicing-batch workflows
+  version: 0.1.0
+  summary: Workflows for configuring and running a monthly invoicing batch with finance approval and chasing.
+  description: Workflows for configuring a monthly-invoicing-batch journey that drafts, validates, and sends invoices for a tenant, waits for finance approval, and then triggers reminders and final notices via timers.
+sourceDescriptions:
+  - name: monthlyInvoicingBatch
+    type: openapi
+    url: monthly-invoicing-batch.openapi.yaml
+workflows:
+  - workflowId: monthly-invoicing-batch-configure
+    summary: Configure and schedule a monthly invoicing batch.
+    description: Start a monthly-invoicing-batch journey for a tenant and batch id, configure the first run time and cadence, and read the configuration outcome.
+    inputs:
+      type: object
+      properties:
+        startRequest:
+          description: Configuration request for the monthly invoicing batch.
+          type: object
+          required:
+            - tenantId
+            - batchId
+            - firstRunAt
+            - interval
+            - maxRuns
+          properties:
+            tenantId:
+              type: string
+            batchId:
+              type: string
+            firstRunAt:
+              type: string
+              format: date-time
+            interval:
+              type: string
+            maxRuns:
+              type: integer
+            gracePeriodDuration:
+              type: string
+            reminderGapDuration:
+              type: string
+          additionalProperties: true
+    steps:
+      - stepId: startJourney
+        description: Start a new monthly-invoicing-batch journey instance.
+        operationId: monthlyInvoicingBatch_start
+        x-source: monthlyInvoicingBatch
+        requestBody:
+          contentType: application/json
+          payload: $inputs.startRequest
+        outputs:
+          journeyId: $response.body.journeyId
+      - stepId: getStatus
+        description: Poll journey status while configuration and scheduling are in progress.
+        operationId: monthlyInvoicingBatch_getStatus
+        x-source: monthlyInvoicingBatch
+        parameters:
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId
+        outputs:
+          phase: $response.body.phase
+      - stepId: getResult
+        description: Retrieve the configuration outcome once the interactive run has completed.
+        operationId: monthlyInvoicingBatch_getResult
+        x-source: monthlyInvoicingBatch
+        parameters:
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId
+  - workflowId: monthly-invoicing-batch-approval-and-chase
+    summary: Approve a drafted invoice batch and observe chasing.
+    description: For a scheduled monthly-invoicing-batch run, approve or reject the drafted invoice batch and observe how the journey progresses through sending and chasing phases.
+    inputs:
+      type: object
+      properties:
+        journeyId:
+          description: Journey id for the scheduled monthly-invoicing-batch run.
+          type: string
+        approvalDecision:
+          description: Finance approval decision for this run.
+          type: object
+          required:
+            - decision
+          properties:
+            decision:
+              type: string
+              enum:
+                - APPROVED
+                - REJECTED
+            comment:
+              type: string
+          additionalProperties: false
+    steps:
+      - stepId: approveInvoiceBatch
+        description: Approve or reject the drafted invoice batch for this run.
+        operationId: monthlyInvoicingBatch_approveInvoiceBatch
+        x-source: monthlyInvoicingBatch
+        parameters:
+          - name: journeyId
+            in: path
+            value: $inputs.journeyId
+        requestBody:
+          contentType: application/json
+          payload: $inputs.approvalDecision
+        outputs:
+          phase: $response.body.phase
+      - stepId: getStatus
+        description: Poll journey status after approval while sending and chasing are in progress.
+        operationId: monthlyInvoicingBatch_getStatus
+        x-source: monthlyInvoicingBatch
+        parameters:
+          - name: journeyId
+            in: path
+            value: $inputs.journeyId
+        outputs:
+          phase: $response.body.phase

@@ -22,7 +22,13 @@ Client -> Journeys: POST /api/v1/journeys/{journeyId}/steps/upgradeSubscription\
 Journeys --> Client: 200 OK\nUpgradeSubscriptionStepResponse
 
 Client -> Journeys: GET /api/v1/journeys/{journeyId}\n(getStatusAfterUpgrade)
-Journeys --> Client: 200 OK\nJourneyStatus (state == waitForStatusChange)
+Journeys --> Client: 200 OK\nJourneyStatus (statusChangeOrTimeout active – window open)
+
+note over Client
+  After upgrade, the subscription is active and a post-upgrade
+  window is open for cancel/reactivate. If no status change is
+  submitted before the window closes, the journey completes as ACTIVE.
+end note
 
 Client -> Journeys: POST /api/v1/journeys/{journeyId}/steps/changeSubscriptionStatus\nChangeSubscriptionStatusInput (cancel)
 Journeys --> Client: 200 OK\nChangeSubscriptionStatusStepResponse

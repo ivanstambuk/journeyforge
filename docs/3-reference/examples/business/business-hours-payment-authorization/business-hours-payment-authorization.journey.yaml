@@ -1,0 +1,185 @@
+apiVersion: v1
+kind: Journey
+metadata:
+  name: business-hours-payment-authorization
+  version: 0.1.0
+  description: Payment authorization journey that defers after-hours submissions until the next business day at 09:00.
+spec:
+  apis:
+    payments: { openApiRef: apis/payments.openapi.yaml }
+  input:
+    schema:
+      title: BusinessHoursPaymentStartRequest
+      type: object
+      required:
+        - paymentId
+        - customerId
+        - amount
+        - currency
+      properties:
+        paymentId:
+          type: string
+        customerId:
+          type: string
+        amount:
+          type: number
+        currency:
+          type: string
+        channel:
+          type: string
+      additionalProperties: true
+  output:
+    schema:
+      title: BusinessHoursPaymentOutcome
+      type: object
+      required:
+        - paymentId
+        - finalStatus
+      properties:
+        paymentId:
+          type: string
+        finalStatus:
+          type: string
+          enum:
+            - AUTHORIZED
+            - FAILED
+        processingMode:
+          type: string
+          enum:
+            - IMMEDIATE
+            - DEFERRED
+        authorizedAt:
+          type: string
+          format: date-time
+        failureReason:
+          type: string
+      additionalProperties: true
+  start: classifySubmissionTime
+  states:
+    classifySubmissionTime:
+      type: transform
+      transform:
+        mapper:
+          lang: dataweave
+          expr: |
+            context ++ {
+              businessWindowCategory:
+                if (now().hour >= 9 and now().hour < 17)
+                  "within-business-hours"
+                else
+                  "after-hours",
+              businessDelayDuration:
+                if (now().hour >= 9 and now().hour < 17)
+                  null
+                else if (now().hour < 9)
+                  "PT" ++ ((9 - now().hour) as String) ++ "H"
+                else
+                  "P1D"
+            }
+        target:
+          kind: context
+          path: ""
+      next: businessWindowSwitch
+
+    businessWindowSwitch:
+      type: choice
+      choices:
+        - when:
+            predicate:
+              lang: dataweave
+              expr: |
+                context.businessWindowCategory == "within-business-hours"
+          next: authorizePayment
+      default: waitUntilBusinessOpen
+
+    waitUntilBusinessOpen:
+      type: timer
+      timer:
+        duration:
+          mapper:
+            lang: dataweave
+            expr: |
+              if (context.businessDelayDuration != null)
+                context.businessDelayDuration
+              else
+                "PT0S"
+      next: authorizePayment
+
+    authorizePayment:
+      type: task
+      task:
+        kind: httpCall
+        operationRef: payments.authorizePayment
+        params:
+          path:
+            paymentId: "${context.paymentId}"
+          headers:
+            Accept: application/json
+        body:
+          mapper:
+            lang: dataweave
+            expr: |
+              {
+                amount: context.amount,
+                currency: context.currency
+              }
+        timeoutMs: 3000
+        resultVar: paymentResult
+      next: evaluateAuthorization
+
+    evaluateAuthorization:
+      type: choice
+      choices:
+        - when:
+            predicate:
+              lang: dataweave
+              expr: |
+                paymentResult.ok == true
+          next: completeAuthorized
+      default: completeFailed
+
+    completeAuthorized:
+      type: transform
+      transform:
+        mapper:
+          lang: dataweave
+          expr: |
+            {
+              paymentId: context.paymentId,
+              finalStatus: "AUTHORIZED",
+              processingMode:
+                if (context.businessWindowCategory == "within-business-hours")
+                  "IMMEDIATE"
+                else
+                  "DEFERRED",
+              authorizedAt: now()
+            }
+        target:
+          kind: var
+      resultVar: paymentOutcome
+      next: done
+
+    completeFailed:
+      type: transform
+      transform:
+        mapper:
+          lang: dataweave
+          expr: |
+            {
+              paymentId: context.paymentId,
+              finalStatus: "FAILED",
+              processingMode:
+                if (context.businessWindowCategory == "within-business-hours")
+                  "IMMEDIATE"
+                else
+                  "DEFERRED",
+              failureReason: paymentResult.error.message
+            }
+        target:
+          kind: var
+      resultVar: paymentOutcome
+      next: done
+
+    done:
+      type: succeed
+      outputVar: paymentOutcome

@@ -37,7 +37,7 @@ Here’s a breakdown of the steps you’ll call over the Journeys API for the pr
 
 ### Sequence diagram
 
-<img src="diagrams/credit-decision-parallel-sequence.png" alt="credit-decision-parallel – sequence" width="620" />
+<img src="diagrams/credit-decision-parallel-sequence.png" alt="credit-decision-parallel – sequence" width="420" />
 
 ### State diagram
 

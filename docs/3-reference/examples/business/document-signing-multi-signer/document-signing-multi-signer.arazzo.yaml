@@ -1,0 +1,220 @@
+arazzo: 1.0.1
+info:
+  title: JourneyForge – document-signing-multi-signer workflows
+  version: 0.1.0
+  summary: Workflows for multi-signer document signing with sequential or parallel modes and document expiry.
+  description: >
+    Workflows for starting a document-signing-multi-signer journey, submitting signer decisions via a generic
+    submitSignature step, observing partial progress via status, and retrieving the final outcome when the
+    document is fully signed, declined, or expired.
+sourceDescriptions:
+  - name: documentSigningMultiSigner
+    type: openapi
+    url: document-signing-multi-signer.openapi.yaml
+workflows:
+  - workflowId: document-signing-sequential
+    summary: Start a sequential multi-signer document and collect signatures in order.
+    description: >
+      Start a document-signing-multi-signer journey instance in SEQUENTIAL mode, submit signatures from each signer
+      in order via the generic submitSignature step, and retrieve the final FULLY_SIGNED outcome.
+    inputs:
+      type: object
+      properties:
+        startRequest:
+          description: Initial document signing request.
+          type: object
+          required:
+            - documentId
+            - title
+            - signingMode
+            - signers
+          properties:
+            documentId:
+              type: string
+            title:
+              type: string
+            signingMode:
+              type: string
+              enum:
+                - SEQUENTIAL
+            documentExpiryHours:
+              type: integer
+            signers:
+              type: array
+              items:
+                type: object
+                required:
+                  - signerId
+                  - email
+                properties:
+                  signerId:
+                    type: string
+                  email:
+                    type: string
+                  displayName:
+                    type: string
+                  order:
+                    type: integer
+              minItems: 1
+          additionalProperties: true
+        signatures:
+          description: Sequential signer decisions.
+          type: array
+          items:
+            type: object
+            required:
+              - signerId
+              - decision
+            properties:
+              signerId:
+                type: string
+              decision:
+                type: string
+                enum:
+                  - SIGNED
+                  - DECLINED
+          minItems: 1
+    steps:
+      - stepId: startJourney
+        description: Start a new document-signing-multi-signer journey instance.
+        operationId: documentSigningMultiSigner_start
+        x-source: documentSigningMultiSigner
+        requestBody:
+          contentType: application/json
+          payload: $inputs.startRequest
+        outputs:
+          journeyId: $response.body.journeyId
+      - stepId: getStatusBeforeSigning
+        description: Optional status check before collecting signatures.
+        operationId: documentSigningMultiSigner_getStatus
+        x-source: documentSigningMultiSigner
+        parameters:
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId
+        outputs:
+          phase: $response.body.phase
+          currentState: $response.body.currentState
+      - stepId: submitSignatures
+        description: Submit each signer decision in order via the generic submitSignature step.
+        operationId: documentSigningMultiSigner_submitSignature
+        x-source: documentSigningMultiSigner
+        parameters:
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId
+        requestBody:
+          contentType: application/json
+          payload: $inputs.signatures[0]
+        outputs:
+          phase: $response.body.phase
+      - stepId: getResult
+        description: Retrieve the final FULLY_SIGNED outcome.
+        operationId: documentSigningMultiSigner_getResult
+        x-source: documentSigningMultiSigner
+        parameters:
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId
+
+  - workflowId: document-signing-parallel-with-expiry
+    summary: Start a parallel multi-signer document where any decline fails and a document-level timer can expire the document.
+    description: >
+      Start a document-signing-multi-signer journey instance in PARALLEL mode, submit signatures from multiple signers
+      in any order via the submitSignature step, and observe either a DECLINED outcome when a signer declines or an
+      EXPIRED outcome when the document-level timer fires first.
+    inputs:
+      type: object
+      properties:
+        startRequest:
+          description: Initial document signing request in PARALLEL mode.
+          type: object
+          required:
+            - documentId
+            - title
+            - signingMode
+            - signers
+          properties:
+            documentId:
+              type: string
+            title:
+              type: string
+            signingMode:
+              type: string
+              enum:
+                - PARALLEL
+            documentExpiryHours:
+              type: integer
+            signers:
+              type: array
+              items:
+                type: object
+                required:
+                  - signerId
+                  - email
+                properties:
+                  signerId:
+                    type: string
+                  email:
+                    type: string
+                  displayName:
+                    type: string
+              minItems: 1
+          additionalProperties: true
+        signerDecision:
+          description: A single signer decision (SIGNED or DECLINED).
+          type: object
+          required:
+            - signerId
+            - decision
+          properties:
+            signerId:
+              type: string
+            decision:
+              type: string
+              enum:
+                - SIGNED
+                - DECLINED
+          additionalProperties: true
+    steps:
+      - stepId: startJourney
+        description: Start a new document-signing-multi-signer journey instance.
+        operationId: documentSigningMultiSigner_start
+        x-source: documentSigningMultiSigner
+        requestBody:
+          contentType: application/json
+          payload: $inputs.startRequest
+        outputs:
+          journeyId: $response.body.journeyId
+      - stepId: getStatusInProgress
+        description: Poll status while signatures are still being collected.
+        operationId: documentSigningMultiSigner_getStatus
+        x-source: documentSigningMultiSigner
+        parameters:
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId
+        outputs:
+          phase: $response.body.phase
+          currentState: $response.body.currentState
+      - stepId: submitSignature
+        description: Submit a signer decision; if a signer declines, the journey will complete as DECLINED.
+        operationId: documentSigningMultiSigner_submitSignature
+        x-source: documentSigningMultiSigner
+        parameters:
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId
+        requestBody:
+          contentType: application/json
+          payload: $inputs.signerDecision
+        outputs:
+          phase: $response.body.phase
+      - stepId: getResult
+        description: Retrieve the final outcome once the document is fully signed, declined, or expired.
+        operationId: documentSigningMultiSigner_getResult
+        x-source: documentSigningMultiSigner
+        parameters:
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId

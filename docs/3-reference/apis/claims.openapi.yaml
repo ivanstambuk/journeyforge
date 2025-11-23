@@ -58,6 +58,64 @@ paths:
       tags:
         - claims
       description: Create a new insurance claim based on FNOL input.
+  /claims/{claimId}/sla/adjuster-breach:
+    post:
+      operationId: notifyAdjusterSlaBreach
+      summary: Notify that the adjuster assessment SLA for a claim has been breached
+      parameters:
+        - in: path
+          name: claimId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              description: Optional payload describing the adjuster SLA breach.
+              properties:
+                reason:
+                  type: string
+              additionalProperties: true
+      responses:
+        "202":
+          description: Adjuster SLA breach notification accepted
+        "404":
+          description: Claim not found
+      tags:
+        - claims
+      description: Notify downstream systems (for example claims operations) that the adjuster assessment SLA for this claim has been breached.
+  /claims/{claimId}/sla/provider-breach:
+    post:
+      operationId: notifyProviderSlaBreach
+      summary: Notify that the provider assessment SLA for a claim has been breached
+      parameters:
+        - in: path
+          name: claimId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              description: Optional payload describing the provider SLA breach.
+              properties:
+                reason:
+                  type: string
+              additionalProperties: true
+      responses:
+        "202":
+          description: Provider SLA breach notification accepted
+        "404":
+          description: Claim not found
+      tags:
+        - claims
+      description: Notify downstream systems that the provider assessment SLA for this claim has been breached.
   /claims/{claimId}/settlement:
     post:
       operationId: recordSettlementDecision

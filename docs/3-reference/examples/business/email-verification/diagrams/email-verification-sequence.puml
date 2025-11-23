@@ -25,6 +25,20 @@ end note
 Adapter -> Journeys: POST /api/v1/journeys/{journeyId}/steps/waitForVerification\nEmailVerificationStepInput (code)
 Journeys --> Adapter: 200 OK\nEmailVerificationStepResponse\n(phase, currentState, verified)
 
+== Reminders and expiry ==
+
+... After 1 day with no verification ...
+Journeys -> EmailService: POST /email/verification/reminder\n(first reminder)
+EmailService --> Journeys: 202 Accepted\n(reminder queued)
+
+... After another 2 days with no verification ...
+Journeys -> EmailService: POST /email/verification/reminder\n(second reminder)
+EmailService --> Journeys: 202 Accepted\n(reminder queued)
+
+... After a further 4 days with no verification ...
+Journeys -> EmailService: POST /email/verification/expired\n(post-expiry notification)
+EmailService --> Journeys: 202 Accepted\n(notification queued)
+
 Client -> Journeys: GET /api/v1/journeys/{journeyId}\n(getStatusAfterVerification)
 Journeys --> Client: 200 OK\nJourneyStatus (verification processed)
 

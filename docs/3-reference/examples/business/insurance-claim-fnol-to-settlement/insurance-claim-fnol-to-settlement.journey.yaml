@@ -162,128 +162,240 @@ spec:
       parallel:
         branches:
           - name: adjuster
-            start: waitForAdjusterReport
+            start: adjusterAssessmentWithSla
             states:
-              waitForAdjusterReport:
-                type: wait
-                wait:
-                  channel: manual
-                  input:
-                    schema:
-                      description: Adjuster report with liability assessment and recommended reserve.
-                      type: object
-                      required:
-                        - decision
-                      properties:
-                        decision:
-                          type: string
-                          enum:
-                            - approve
-                            - deny
-                        recommendedAmount:
-                          type: number
-                        notes:
-                          type: string
-                      additionalProperties: false
-                  response:
-                    outputVar: adjusterReportResponse
-                    schema:
-                      title: AdjusterReportProjection
-                      type: object
-                      description: Additional top-level fields returned from the submitAdjusterReport step.
-                      properties:
-                        decision:
-                          type: string
-                          enum:
-                            - approve
-                            - deny
-                        recommendedAmount:
-                          type: number
-                        notes:
-                          type: string
-                      additionalProperties: true
-                  apply:
-                    mapper:
-                      lang: dataweave
-                      expr: |
-                        context ++ {
-                          assessment: (context.assessment default {}) ++ {
-                            adjuster: {
-                              decision: payload.decision,
-                              recommendedAmount: payload.recommendedAmount,
-                              notes: payload.notes
-                            }
-                          },
-                          adjusterReportResponse: {
-                            decision: payload.decision,
-                            recommendedAmount: payload.recommendedAmount,
-                            notes: payload.notes
-                          }
-                        }
-                next: done
-              done:
+              adjusterAssessmentWithSla:
+                type: parallel
+                parallel:
+                  branches:
+                    - name: report
+                      start: waitForAdjusterReport
+                      states:
+                        waitForAdjusterReport:
+                          type: wait
+                          wait:
+                            channel: manual
+                            input:
+                              schema:
+                                description: Adjuster report with liability assessment and recommended reserve.
+                                type: object
+                                required:
+                                  - decision
+                                properties:
+                                  decision:
+                                    type: string
+                                    enum:
+                                      - approve
+                                      - deny
+                                  recommendedAmount:
+                                    type: number
+                                  notes:
+                                    type: string
+                                additionalProperties: false
+                          response:
+                            outputVar: adjusterReportResponse
+                            schema:
+                              title: AdjusterReportProjection
+                              type: object
+                              description: Additional top-level fields returned from the submitAdjusterReport step.
+                              properties:
+                                decision:
+                                  type: string
+                                  enum:
+                                    - approve
+                                    - deny
+                                recommendedAmount:
+                                  type: number
+                                notes:
+                                  type: string
+                              additionalProperties: true
+                          apply:
+                            mapper:
+                              lang: dataweave
+                              expr: |
+                                context ++ {
+                                  assessment: (context.assessment default {}) ++ {
+                                    adjuster: {
+                                      decision: payload.decision,
+                                      recommendedAmount: payload.recommendedAmount,
+                                      notes: payload.notes
+                                    }
+                                  },
+                                  adjusterReportResponse: {
+                                    decision: payload.decision,
+                                    recommendedAmount: payload.recommendedAmount,
+                                    notes: payload.notes
+                                  }
+                                }
+                        adjusterReportDone:
+                          type: succeed
+                    - name: adjusterSla
+                      start: adjusterSlaTimer
+                      states:
+                        adjusterSlaTimer:
+                          type: timer
+                          timer:
+                            duration: "P3D"
+                          next: markAdjusterSlaBreached
+
+                        markAdjusterSlaBreached:
+                          type: transform
+                          transform:
+                            mapper:
+                              lang: dataweave
+                              expr: |
+                                context ++ {
+                                  assessment: (context.assessment default {}) ++ {
+                                    adjuster: (context.assessment.adjuster default {}) ++ {
+                                      slaBreached: true
+                                    }
+                                  }
+                                }
+                            target:
+                              kind: context
+                              path: ""
+                          next: notifyAdjusterSlaBreach
+
+                        notifyAdjusterSlaBreach:
+                          type: task
+                          task:
+                            kind: httpCall
+                            operationRef: claims.notifyAdjusterSlaBreach
+                            params:
+                              path:
+                                claimId: "${context.claimId}"
+                              headers:
+                                Accept: application/json
+                            timeoutMs: 3000
+                            resultVar: adjusterSlaNotification
+                          next: adjusterSlaDone
+
+                        adjusterSlaDone:
+                          type: succeed
+                  join:
+                    strategy: allOf
+                    errorPolicy: collectAll
+                next: adjusterBranchDone
+
+              adjusterBranchDone:
                 type: succeed
           - name: provider
-            start: waitForProviderEstimate
+            start: providerAssessmentWithSla
             states:
-              waitForProviderEstimate:
-                type: wait
-                wait:
-                  channel: manual
-                  input:
-                    schema:
-                      description: Repair shop or medical provider estimate for the loss.
-                      type: object
-                      required:
-                        - decision
-                      properties:
-                        decision:
-                          type: string
-                          enum:
-                            - approve
-                            - deny
-                        estimatedCost:
-                          type: number
-                        notes:
-                          type: string
-                      additionalProperties: false
-                  response:
-                    outputVar: providerEstimateResponse
-                    schema:
-                      title: ProviderEstimateProjection
-                      type: object
-                      description: Additional top-level fields returned from the submitProviderEstimate step.
-                      properties:
-                        decision:
-                          type: string
-                          enum:
-                            - approve
-                            - deny
-                        estimatedCost:
-                          type: number
-                        notes:
-                          type: string
-                      additionalProperties: true
-                  apply:
-                    mapper:
-                      lang: dataweave
-                      expr: |
-                        context ++ {
-                          assessment: (context.assessment default {}) ++ {
-                            provider: {
-                              decision: payload.decision,
-                              estimatedCost: payload.estimatedCost,
-                              notes: payload.notes
-                            }
-                          },
-                          providerEstimateResponse: {
-                            decision: payload.decision,
-                            estimatedCost: payload.estimatedCost,
-                            notes: payload.notes
-                          }
-                        }
-                next: done
-              done:
+              providerAssessmentWithSla:
+                type: parallel
+                parallel:
+                  branches:
+                    - name: estimate
+                      start: waitForProviderEstimate
+                      states:
+                        waitForProviderEstimate:
+                          type: wait
+                          wait:
+                            channel: manual
+                            input:
+                              schema:
+                                description: Repair shop or medical provider estimate for the loss.
+                                type: object
+                                required:
+                                  - decision
+                                properties:
+                                  decision:
+                                    type: string
+                                    enum:
+                                      - approve
+                                      - deny
+                                  estimatedCost:
+                                    type: number
+                                  notes:
+                                    type: string
+                                additionalProperties: false
+                          response:
+                            outputVar: providerEstimateResponse
+                            schema:
+                              title: ProviderEstimateProjection
+                              type: object
+                              description: Additional top-level fields returned from the submitProviderEstimate step.
+                              properties:
+                                decision:
+                                  type: string
+                                  enum:
+                                    - approve
+                                    - deny
+                                estimatedCost:
+                                  type: number
+                                notes:
+                                  type: string
+                              additionalProperties: true
+                          apply:
+                            mapper:
+                              lang: dataweave
+                              expr: |
+                                context ++ {
+                                  assessment: (context.assessment default {}) ++ {
+                                    provider: {
+                                      decision: payload.decision,
+                                      estimatedCost: payload.estimatedCost,
+                                      notes: payload.notes
+                                    }
+                                  },
+                                  providerEstimateResponse: {
+                                    decision: payload.decision,
+                                    estimatedCost: payload.estimatedCost,
+                                    notes: payload.notes
+                                  }
+                                }
+                        providerEstimateDone:
+                          type: succeed
+                    - name: providerSla
+                      start: providerSlaTimer
+                      states:
+                        providerSlaTimer:
+                          type: timer
+                          timer:
+                            duration: "P5D"
+                          next: markProviderSlaBreached
+
+                        markProviderSlaBreached:
+                          type: transform
+                          transform:
+                            mapper:
+                              lang: dataweave
+                              expr: |
+                                context ++ {
+                                  assessment: (context.assessment default {}) ++ {
+                                    provider: (context.assessment.provider default {}) ++ {
+                                      slaBreached: true
+                                    }
+                                  }
+                                }
+                            target:
+                              kind: context
+                              path: ""
+                          next: notifyProviderSlaBreach
+
+                        notifyProviderSlaBreach:
+                          type: task
+                          task:
+                            kind: httpCall
+                            operationRef: claims.notifyProviderSlaBreach
+                            params:
+                              path:
+                                claimId: "${context.claimId}"
+                              headers:
+                                Accept: application/json
+                            timeoutMs: 3000
+                            resultVar: providerSlaNotification
+                          next: providerSlaDone
+
+                        providerSlaDone:
+                          type: succeed
+                  join:
+                    strategy: allOf
+                    errorPolicy: collectAll
+                next: providerBranchDone
+
+              providerBranchDone:
                 type: succeed
         join:
           strategy: allOf

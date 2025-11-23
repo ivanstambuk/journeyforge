@@ -1,0 +1,17 @@
+@startuml
+!include journey-diagram-theme.puml
+title business-hours-payment-authorization – HTTP-visible states
+
+[*] --> startJourney
+
+state startJourney
+state getStatus
+state getResult
+
+startJourney --> getStatus : GET /journeys/{journeyId}\n(optional status polling)
+getStatus --> getResult : GET /journeys/{journeyId}/result
+
+getResult --> [*]
+
+@enduml
+

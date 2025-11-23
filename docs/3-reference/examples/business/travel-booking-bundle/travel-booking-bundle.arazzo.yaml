@@ -3,7 +3,7 @@ info:
   title: JourneyForge – travel-booking-bundle workflows
   version: 0.1.0
   summary: Workflows for travel booking bundles with flight, hotel, and car.
-  description: Workflows for booking a travel bundle (flight, hotel, car), handling provider confirmations, and supporting post-booking change/cancel actions. See Q-017 in docs/4-architecture/open-questions.md for design context.
+  description: Workflows for booking a travel bundle (flight, hotel, car), handling provider confirmations, and supporting post-booking change/cancel and post-trip feedback actions. See Q-017 in docs/4-architecture/open-questions.md for design context.
 sourceDescriptions:
   - name: travelBooking
     type: openapi
@@ -51,7 +51,7 @@ workflows:
               type: string
           additionalProperties: false
         changeOrCompleteInput:
-          description: Post-booking action for the trip (complete or change).
+          description: Post-booking action for the trip (complete or change) within the allowed window.
           type: object
           required:
             - action
@@ -62,6 +62,17 @@ workflows:
                 - complete
                 - change
             notes:
+              type: string
+          additionalProperties: false
+        feedbackInput:
+          description: Optional post-trip feedback for the travel booking bundle.
+          type: object
+          required:
+            - rating
+          properties:
+            rating:
+              type: integer
+            comments:
               type: string
           additionalProperties: false
     steps:
@@ -120,8 +131,21 @@ workflows:
           payload: $inputs.changeOrCompleteInput
         outputs:
           phase: $response.body.phase
+      - stepId: submitFeedback
+        description: Submit optional post-trip feedback for the bundle (until the feedback window closes).
+        operationId: travelBookingBundle_submitFeedback
+        x-source: travelBooking
+        parameters:
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId
+        requestBody:
+          contentType: application/json
+          payload: $inputs.feedbackInput
+        outputs:
+          phase: $response.body.phase
       - stepId: getResult
-        description: Retrieve the final bundle outcome once the trip is confirmed.
+        description: Retrieve the final bundle outcome once the trip is confirmed and feedback window has closed (or feedback was submitted).
         operationId: travelBookingBundle_getResult
         x-source: travelBooking
         parameters:

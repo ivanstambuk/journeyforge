@@ -1,0 +1,40 @@
+@startuml
+!include journey-diagram-theme.puml
+title monthly-invoicing-batch – state transitions
+
+[*] --> configureSchedule
+
+state configureSchedule
+state completeConfigured
+state draftInvoices
+state validateDrafts
+state waitForFinanceApproval
+state sendInvoices
+state waitBeforeFirstReminder
+state sendFirstReminder
+state waitBeforeFinalNotice
+state sendFinalNotice
+state scheduledRunDone
+
+configureSchedule --> completeConfigured : schedule created\nconfigOutcome ready
+completeConfigured --> [*]
+
+' Scheduled runs
+
+[*] --> draftInvoices : scheduled run start
+draftInvoices --> validateDrafts
+validateDrafts --> waitForFinanceApproval : validation ok
+validateDrafts --> scheduledRunDone : validation failed
+
+waitForFinanceApproval --> sendInvoices : decision = APPROVED
+waitForFinanceApproval --> scheduledRunDone : decision = REJECTED
+
+sendInvoices --> waitBeforeFirstReminder
+waitBeforeFirstReminder --> sendFirstReminder
+sendFirstReminder --> waitBeforeFinalNotice
+waitBeforeFinalNotice --> sendFinalNotice
+sendFinalNotice --> scheduledRunDone
+
+scheduledRunDone --> [*]
+
+@enduml

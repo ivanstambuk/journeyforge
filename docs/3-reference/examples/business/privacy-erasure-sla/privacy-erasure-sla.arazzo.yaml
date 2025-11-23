@@ -1,0 +1,199 @@
+arazzo: 1.0.1
+info:
+  title: JourneyForge – privacy-erasure-sla workflows
+  version: 0.1.0
+  summary: Workflows for privacy erasure requests with a 2-business-day review SLA and escalation.
+  description: >
+    Workflows for starting a privacy-erasure-sla journey, collecting Privacy Desk decisions,
+    observing SLA-based escalation to a Senior Privacy Officer when the review window is missed,
+    and reading the final erasure outcome.
+sourceDescriptions:
+  - name: privacyErasureSla
+    type: openapi
+    url: privacy-erasure-sla.openapi.yaml
+workflows:
+  - workflowId: privacy-erasure-approved-within-sla
+    summary: Start a privacy-erasure-sla journey, approve within the SLA, and read an ERASURE_COMPLETED outcome.
+    description: >
+      Start a privacy-erasure-sla journey instance, let the Privacy Desk approve the request
+      within the 2-business-day SLA window, and then retrieve the ERASURE_COMPLETED outcome
+      once the erasure run has finished.
+    inputs:
+      type: object
+      properties:
+        startRequest:
+          description: Initial privacy erasure request payload.
+          type: object
+          required:
+            - requestId
+            - subjectId
+            - region
+          properties:
+            requestId:
+              type: string
+            subjectId:
+              type: string
+            customerId:
+              type: string
+            region:
+              type: string
+            channel:
+              type: string
+            requestedAt:
+              type: string
+              format: date-time
+          additionalProperties: true
+        privacyDeskDecision:
+          description: Privacy Desk decision approving the erasure request.
+          type: object
+          required:
+            - decision
+          properties:
+            decision:
+              type: string
+              enum:
+                - APPROVE
+            reason:
+              type: string
+          additionalProperties: true
+    steps:
+      - stepId: startJourney
+        description: Start a new privacy-erasure-sla journey instance.
+        operationId: privacyErasureSla_start
+        x-source: privacyErasureSla
+        requestBody:
+          contentType: application/json
+          payload: $inputs.startRequest
+        outputs:
+          journeyId: $response.body.journeyId
+      - stepId: getStatusDuringReview
+        description: Optional status check while the Privacy Desk review is pending.
+        operationId: privacyErasureSla_getStatus
+        x-source: privacyErasureSla
+        parameters:
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId
+        outputs:
+          phase: $response.body.phase
+          currentState: $response.body.currentState
+      - stepId: privacyDeskReview
+        description: Provide the Privacy Desk approval decision within the SLA window.
+        operationId: privacyErasureSla_privacyDeskReview
+        x-source: privacyErasureSla
+        parameters:
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId
+        requestBody:
+          contentType: application/json
+          payload: $inputs.privacyDeskDecision
+        outputs:
+          phase: $response.body.phase
+      - stepId: getResult
+        description: Retrieve the final ERASURE_COMPLETED outcome after the erasure run finishes.
+        operationId: privacyErasureSla_getResult
+        x-source: privacyErasureSla
+        parameters:
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId
+
+  - workflowId: privacy-erasure-escalated-to-senior
+    summary: Start a privacy-erasure-sla journey, let the SLA breach, then capture a Senior Privacy Officer decision.
+    description: >
+      Start a privacy-erasure-sla journey instance, allow the 2-business-day review SLA to elapse
+      without a Privacy Desk decision (triggering escalation), then collect a Senior Privacy Officer
+      approval or rejection and retrieve the final outcome.
+    inputs:
+      type: object
+      properties:
+        startRequest:
+          description: Initial privacy erasure request payload.
+          type: object
+          required:
+            - requestId
+            - subjectId
+            - region
+          properties:
+            requestId:
+              type: string
+            subjectId:
+              type: string
+            customerId:
+              type: string
+            region:
+              type: string
+            channel:
+              type: string
+            requestedAt:
+              type: string
+              format: date-time
+          additionalProperties: true
+        seniorDecision:
+          description: Senior Privacy Officer decision after escalation.
+          type: object
+          required:
+            - decision
+          properties:
+            decision:
+              type: string
+              enum:
+                - APPROVE
+                - REJECT
+            reason:
+              type: string
+          additionalProperties: true
+    steps:
+      - stepId: startJourney
+        description: Start a new privacy-erasure-sla journey instance.
+        operationId: privacyErasureSla_start
+        x-source: privacyErasureSla
+        requestBody:
+          contentType: application/json
+          payload: $inputs.startRequest
+        outputs:
+          journeyId: $response.body.journeyId
+      - stepId: getStatusDuringDeskReview
+        description: Optional status check while the Privacy Desk review is pending within the SLA window.
+        operationId: privacyErasureSla_getStatus
+        x-source: privacyErasureSla
+        parameters:
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId
+        outputs:
+          phase: $response.body.phase
+          currentState: $response.body.currentState
+      - stepId: getStatusAfterSlaBreach
+        description: Status check after the SLA window has elapsed and the request has been escalated.
+        operationId: privacyErasureSla_getStatus
+        x-source: privacyErasureSla
+        parameters:
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId
+        outputs:
+          phase: $response.body.phase
+          currentState: $response.body.currentState
+      - stepId: seniorReview
+        description: Provide the Senior Privacy Officer decision after escalation.
+        operationId: privacyErasureSla_seniorReview
+        x-source: privacyErasureSla
+        parameters:
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId
+        requestBody:
+          contentType: application/json
+          payload: $inputs.seniorDecision
+        outputs:
+          phase: $response.body.phase
+      - stepId: getResult
+        description: Retrieve the final outcome after Senior review and erasure execution.
+        operationId: privacyErasureSla_getResult
+        x-source: privacyErasureSla
+        parameters:
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId

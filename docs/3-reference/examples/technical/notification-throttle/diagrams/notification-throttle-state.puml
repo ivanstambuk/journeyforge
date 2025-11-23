@@ -1,0 +1,15 @@
+@startuml
+!include journey-diagram-theme.puml
+title notification-throttle – HTTP-visible states
+
+[*] --> startJourney
+
+state startJourney
+state getResult
+
+startJourney --> getResult : GET /journeys/{journeyId}/result
+
+getResult --> [*]
+
+@enduml
+

@@ -1,0 +1,116 @@
+arazzo: 1.0.1
+info:
+  title: JourneyForge – business-hours-payment-authorization workflows
+  version: 0.1.0
+  summary: Workflows for payment authorization with business-hours deferral.
+  description: Workflows for authorizing payments immediately during business hours or deferring after-hours submissions until the next business day at 09:00.
+sourceDescriptions:
+  - name: businessHoursPayment
+    type: openapi
+    url: business-hours-payment-authorization.openapi.yaml
+workflows:
+  - workflowId: business-hours-payment-immediate
+    summary: Authorize a payment submitted during business hours immediately.
+    description: Start a business-hours-payment-authorization journey during business hours and observe that the payment is authorized without deferral.
+    inputs:
+      type: object
+      properties:
+        startRequest:
+          description: Payment authorization request submitted during business hours.
+          type: object
+          required:
+            - paymentId
+            - customerId
+            - amount
+            - currency
+          properties:
+            paymentId:
+              type: string
+            customerId:
+              type: string
+            amount:
+              type: number
+            currency:
+              type: string
+          additionalProperties: true
+    steps:
+      - stepId: startJourney
+        description: Start a new business-hours-payment-authorization journey instance.
+        operationId: businessHoursPaymentAuthorization_start
+        x-source: businessHoursPayment
+        requestBody:
+          contentType: application/json
+          payload: $inputs.startRequest
+        outputs:
+          journeyId: $response.body.journeyId
+      - stepId: getStatusBeforeAuthorization
+        description: Poll journey status shortly after start to inspect whether the journey is waiting or ready to authorize.
+        operationId: businessHoursPaymentAuthorization_getStatus
+        x-source: businessHoursPayment
+        parameters:
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId
+        outputs:
+          phase: $response.body.phase
+      - stepId: getResult
+        description: Retrieve the final outcome after authorization has completed.
+        operationId: businessHoursPaymentAuthorization_getResult
+        x-source: businessHoursPayment
+        parameters:
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId
+
+  - workflowId: business-hours-payment-after-hours
+    summary: Defer a payment submitted after business hours until the next business day at 09:00.
+    description: Start a business-hours-payment-authorization journey after business hours and observe that the payment is deferred until the next business day at 09:00 before authorization.
+    inputs:
+      type: object
+      properties:
+        startRequest:
+          description: Payment authorization request submitted after business hours.
+          type: object
+          required:
+            - paymentId
+            - customerId
+            - amount
+            - currency
+          properties:
+            paymentId:
+              type: string
+            customerId:
+              type: string
+            amount:
+              type: number
+            currency:
+              type: string
+          additionalProperties: true
+    steps:
+      - stepId: startJourney
+        description: Start a new business-hours-payment-authorization journey instance.
+        operationId: businessHoursPaymentAuthorization_start
+        x-source: businessHoursPayment
+        requestBody:
+          contentType: application/json
+          payload: $inputs.startRequest
+        outputs:
+          journeyId: $response.body.journeyId
+      - stepId: getStatusDuringDeferral
+        description: Poll journey status while the payment is waiting for the next business day at 09:00.
+        operationId: businessHoursPaymentAuthorization_getStatus
+        x-source: businessHoursPayment
+        parameters:
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId
+        outputs:
+          phase: $response.body.phase
+      - stepId: getResult
+        description: Retrieve the final outcome after the deferral window has passed and authorization has completed.
+        operationId: businessHoursPaymentAuthorization_getResult
+        x-source: businessHoursPayment
+        parameters:
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId

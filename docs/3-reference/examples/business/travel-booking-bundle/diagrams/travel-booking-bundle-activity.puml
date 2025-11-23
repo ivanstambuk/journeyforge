@@ -19,6 +19,10 @@ if (currentState == "waitForChangeOrCancel"?) then (yes)
   :Traveler or agent performs post-booking action\nPOST /api/v1/journeys/{journeyId}/steps/changeOrCancel;
 endif
 
+if (currentState == "waitForFeedback"?) then (yes)
+  :Traveler submits optional post-trip feedback\nPOST /api/v1/journeys/{journeyId}/steps/submitFeedback;
+endif
+
 if (phase == "Succeeded" and overallStatus == "CONFIRMED"?) then (confirmed)
   :Client confirms confirmed trip and\nupdates itinerary storage;
   stop
@@ -28,4 +32,3 @@ else (partial/cancelled/failed)
 endif
 
 @enduml
-

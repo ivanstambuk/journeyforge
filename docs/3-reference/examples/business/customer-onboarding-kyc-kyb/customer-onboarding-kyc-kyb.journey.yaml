@@ -1,0 +1,501 @@
+apiVersion: v1
+kind: Journey
+metadata:
+  name: customer-onboarding-kyc-kyb
+  version: 0.1.0
+  description: Combined individual KYC + business KYB onboarding journey with parallel checks and separate credit vs compliance decisions.
+spec:
+  input:
+    schema:
+      title: CustomerOnboardingKycKybStartRequest
+      type: object
+      required:
+        - onboardingId
+        - customer
+        - business
+      properties:
+        onboardingId:
+          type: string
+        customer:
+          type: object
+          required:
+            - customerId
+            - fullName
+            - email
+          properties:
+            customerId:
+              type: string
+            fullName:
+              type: string
+            email:
+              type: string
+            dateOfBirth:
+              type: string
+              format: date
+            nationality:
+              type: string
+          additionalProperties: true
+        business:
+          type: object
+          required:
+            - businessId
+            - legalName
+            - country
+          properties:
+            businessId:
+              type: string
+            legalName:
+              type: string
+            registrationNumber:
+              type: string
+            country:
+              type: string
+            ubos:
+              type: array
+              items:
+                type: object
+                required:
+                  - uboId
+                  - fullName
+                properties:
+                  uboId:
+                    type: string
+                  fullName:
+                    type: string
+                  ownershipPercent:
+                    type: number
+                  country:
+                    type: string
+                additionalProperties: true
+          additionalProperties: true
+        channel:
+          type: string
+      additionalProperties: true
+  output:
+    schema:
+      title: CustomerOnboardingKycKybOutcome
+      type: object
+      required:
+        - onboardingId
+        - finalStatus
+      properties:
+        onboardingId:
+          type: string
+        finalStatus:
+          type: string
+          enum:
+            - APPROVED
+            - REFERRED
+            - REJECTED
+        customerId:
+          type: string
+        businessId:
+          type: string
+        kycResult:
+          type: object
+        kybResult:
+          type: object
+        ubos:
+          type: array
+          items:
+            type: object
+            required:
+              - uboId
+              - fullName
+              - status
+            properties:
+              uboId:
+                type: string
+              fullName:
+                type: string
+              status:
+                type: string
+                enum:
+                  - APPROVED
+                  - REFERRED
+                  - REJECTED
+              reasons:
+                type: array
+                items:
+                  type: string
+            additionalProperties: true
+        creditDecision:
+          type: object
+        complianceDecision:
+          type: object
+        rejectionReason:
+          type: string
+      additionalProperties: true
+  start: initialiseOnboarding
+  states:
+    initialiseOnboarding:
+      type: transform
+      transform:
+        mapper:
+          lang: dataweave
+          expr: |
+            context ++ {
+              onboardingId: context.onboardingId,
+              customerId: context.customer.customerId,
+              businessId: context.business.businessId,
+              ubos:
+                (context.business.ubos default []) map (u) -> u ++ {
+                  status: "REFERRED", // default until KYB checks return
+                  reasons: []
+                }
+            }
+        target:
+          kind: context
+          path: ""
+      next: runChecksInParallel
+
+    runChecksInParallel:
+      type: parallel
+      parallel:
+        branches:
+          - name: kyc
+            start: startKyc
+            states:
+              startKyc:
+                type: task
+                task:
+                  kind: httpCall
+                  method: POST
+                  url: https://kyc.example.com/checks/start
+                  params:
+                    headers:
+                      Accept: application/json
+                  body:
+                    mapper:
+                      lang: dataweave
+                      expr: |
+                        {
+                          customerId: context.customer.customerId,
+                          fullName: context.customer.fullName,
+                          dateOfBirth: context.customer.dateOfBirth,
+                          nationality: context.customer.nationality
+                        }
+                  timeoutMs: 3000
+                  resultVar: kycStart
+                next: kycStarted
+              kycStarted:
+                type: succeed
+          - name: kybAndRegistry
+            start: startKyb
+            states:
+              startKyb:
+                type: task
+                task:
+                  kind: httpCall
+                  method: POST
+                  url: https://kyb.example.com/checks/start
+                  params:
+                    headers:
+                      Accept: application/json
+                  body:
+                    mapper:
+                      lang: dataweave
+                      expr: |
+                        {
+                          businessId: context.business.businessId,
+                          legalName: context.business.legalName,
+                          registrationNumber: context.business.registrationNumber,
+                          country: context.business.country
+                        }
+                  timeoutMs: 3000
+                  resultVar: kybStart
+                next: registryLookup
+              registryLookup:
+                type: task
+                task:
+                  kind: httpCall
+                  method: GET
+                  url: "https://registry.example.com/businesses/${context.business.registrationNumber}"
+                  params:
+                    headers:
+                      Accept: application/json
+                  timeoutMs: 3000
+                  resultVar: registryResult
+                next: kybRegistryDone
+              kybRegistryDone:
+                type: succeed
+          - name: creditAndCompliance
+            start: startCreditAndCompliance
+            states:
+              startCreditAndCompliance:
+                type: task
+                task:
+                  kind: httpCall
+                  method: POST
+                  url: https://risk.example.com/onboarding/start
+                  params:
+                    headers:
+                      Accept: application/json
+                  body:
+                    mapper:
+                      lang: dataweave
+                      expr: |
+                        {
+                          onboardingId: context.onboardingId,
+                          customerId: context.customer.customerId,
+                          businessId: context.business.businessId
+                        }
+                  timeoutMs: 3000
+                  resultVar: riskStart
+                next: riskStarted
+              riskStarted:
+                type: succeed
+        join:
+          strategy: allOf
+          errorPolicy: collectAll
+      next: waitForKycCallbacks
+
+    waitForKycCallbacks:
+      type: webhook
+      webhook:
+        input:
+          schema:
+            title: KYC result callback input
+            type: object
+            required:
+              - customerId
+              - status
+            properties:
+              customerId:
+                type: string
+              status:
+                type: string
+                enum:
+                  - APPROVED
+                  - REFERRED
+                  - REJECTED
+              reasons:
+                type: array
+                items:
+                  type: string
+            additionalProperties: true
+        response:
+          outputVar: kycResultResponse
+          schema:
+            title: KycResultProjection
+            type: object
+            properties:
+              status:
+                type: string
+              reasons:
+                type: array
+                items:
+                  type: string
+            additionalProperties: true
+        security:
+          kind: sharedSecretHeader
+          header: X-Kyc-Result-Secret
+          secretRef: secret://webhook/customer-onboarding-kyc-kyb-kyc
+        apply:
+          mapper:
+            lang: dataweave
+            expr: |
+              context ++ {
+                kycResult: payload,
+                kycResultResponse: {
+                  status: payload.status,
+                  reasons: payload.reasons
+                }
+              }
+        on:
+          - when:
+              predicate:
+                lang: dataweave
+                expr: |
+                  payload.status == "APPROVED"
+                    or payload.status == "REFERRED"
+            next: waitForKybAndRisk
+        default: onboardingRejected
+
+    waitForKybAndRisk:
+      type: webhook
+      webhook:
+        input:
+          schema:
+            title: KYB and risk callback input
+            type: object
+            required:
+              - onboardingId
+            properties:
+              onboardingId:
+                type: string
+              kybStatus:
+                type: string
+                enum:
+                  - APPROVED
+                  - REFERRED
+                  - REJECTED
+              kybUboStatuses:
+                type: array
+                items:
+                  type: object
+                  required:
+                    - uboId
+                    - status
+                  properties:
+                    uboId:
+                      type: string
+                    status:
+                      type: string
+                      enum:
+                        - APPROVED
+                        - REFERRED
+                        - REJECTED
+                    reasons:
+                      type: array
+                      items:
+                        type: string
+                  additionalProperties: true
+              creditDecision:
+                type: object
+              complianceDecision:
+                type: object
+            additionalProperties: true
+        response:
+          outputVar: kybRiskResponse
+          schema:
+            title: KybRiskProjection
+            type: object
+            properties:
+              kybStatus:
+                type: string
+              creditDecision:
+                type: object
+              complianceDecision:
+                type: object
+            additionalProperties: true
+        security:
+          kind: sharedSecretHeader
+          header: X-Kyb-Risk-Secret
+          secretRef: secret://webhook/customer-onboarding-kyc-kyb-kyb-risk
+        apply:
+          mapper:
+            lang: dataweave
+            expr: |
+              do {
+                var incomingUboStatuses = payload.kybUboStatuses default []
+                var mergedUbos =
+                  (context.ubos default []) map (u) ->
+                    do {
+                      var match =
+                        (incomingUboStatuses filter ((iu) -> iu.uboId == u.uboId))
+                      if (sizeOf(match) > 0)
+                      then
+                        u ++ {
+                          status: match[0].status,
+                          reasons: match[0].reasons default []
+                        }
+                      else u
+                    }
+                context ++ {
+                  kybResult: {
+                    status: payload.kybStatus
+                  },
+                  ubos: mergedUbos,
+                  creditDecision: payload.creditDecision,
+                  complianceDecision: payload.complianceDecision,
+                  kybRiskResponse: {
+                    kybStatus: payload.kybStatus
+                  }
+                }
+              }
+        on:
+          - when:
+              predicate:
+                lang: dataweave
+                expr: |
+                  (payload.kybStatus default "REFERRED") == "APPROVED"
+                    and (payload.creditDecision.overallStatus default "APPROVED") == "APPROVED"
+                    and (payload.complianceDecision.overallStatus default "APPROVED") == "APPROVED"
+            next: completeApproved
+          - when:
+              predicate:
+                lang: dataweave
+                expr: |
+                  (payload.kybStatus default "REFERRED") == "REFERRED"
+                    or (payload.creditDecision.overallStatus default "REFERRED") == "REFERRED"
+                    or (payload.complianceDecision.overallStatus default "REFERRED") == "REFERRED"
+            next: completeReferred
+        default: onboardingRejected
+
+    completeApproved:
+      type: transform
+      transform:
+        mapper:
+          lang: dataweave
+          expr: |
+            context ++ {
+              outcome: {
+                onboardingId: context.onboardingId,
+                finalStatus: "APPROVED",
+                customerId: context.customer.customerId,
+                businessId: context.business.businessId,
+                kycResult: context.kycResult,
+                kybResult: context.kybResult,
+                ubos: context.ubos,
+                creditDecision: context.creditDecision,
+                complianceDecision: context.complianceDecision
+              }
+            }
+        target:
+          kind: context
+          path: ""
+      next: onboardingCompleted
+
+    completeReferred:
+      type: transform
+      transform:
+        mapper:
+          lang: dataweave
+          expr: |
+            context ++ {
+              outcome: {
+                onboardingId: context.onboardingId,
+                finalStatus: "REFERRED",
+                customerId: context.customer.customerId,
+                businessId: context.business.businessId,
+                kycResult: context.kycResult,
+                kybResult: context.kybResult,
+                ubos: context.ubos,
+                creditDecision: context.creditDecision,
+                complianceDecision: context.complianceDecision
+              }
+            }
+        target:
+          kind: context
+          path: ""
+      next: onboardingCompleted
+
+    onboardingRejected:
+      type: transform
+      transform:
+        mapper:
+          lang: dataweave
+          expr: |
+            context ++ {
+              outcome: {
+                onboardingId: context.onboardingId,
+                finalStatus: "REJECTED",
+                customerId: context.customer.customerId,
+                businessId: context.business.businessId,
+                kycResult: context.kycResult,
+                kybResult: context.kybResult,
+                ubos: context.ubos,
+                creditDecision: context.creditDecision,
+                complianceDecision: context.complianceDecision,
+                rejectionReason: "Onboarding rejected based on KYC/KYB checks or risk decisions."
+              }
+            }
+        target:
+          kind: context
+          path: ""
+      next: onboardingCompleted
+
+    onboardingCompleted:
+      type: succeed
+      outputVar: outcome

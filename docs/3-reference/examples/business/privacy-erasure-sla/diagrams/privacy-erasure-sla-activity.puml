@@ -1,0 +1,36 @@
+@startuml
+!include journey-diagram-theme.puml
+title privacy-erasure-sla – client activity flow
+
+start
+
+:Client sends\nPOST /api/v1/journeys/privacy-erasure-sla/start\nwith PrivacyErasureStartRequest;
+
+repeat
+  :Client polls\nGET /journeys/{journeyId}\nfor status;
+  :Journeys API returns\nJourneyStatus with phase/currentState;
+repeat while (phase == "Running" and\ncurrentState != "privacyDeskReview" and\ncurrentState != "seniorReview") is (pre-checks and inventory)
+
+if (currentState == "privacyDeskReview"?) then (desk review)
+  :Privacy Desk operator reviews request\nand, when ready, submits\nPOST /steps/privacyDeskReview\nwith decision;
+elseif (currentState == "seniorReview"?) then (escalated)
+  :Senior Privacy Officer reviews request\nand submits\nPOST /steps/seniorReview\nwith decision;
+endif
+
+repeat
+  :Client polls\nGET /journeys/{journeyId}/result;
+  :Journeys API returns\nJourneyOutcome with phase/output;
+repeat while (phase == "Running") is (erasure still in progress)
+
+if (output.status == "ERASURE_COMPLETED"?) then (completed)
+  :Client records that erasure completed\nand updates internal systems;
+elseif (output.status == "REJECTED"?) then (rejected)
+  :Client notifies the subject about the\nrejection and logs rejectionReason;
+else (other)
+  :Client routes the outcome to an\noperator queue for follow-up\non failed or ineligible cases;
+endif
+
+stop
+
+@enduml
+

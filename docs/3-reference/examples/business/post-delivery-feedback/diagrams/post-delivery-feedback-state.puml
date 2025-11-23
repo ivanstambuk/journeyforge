@@ -1,0 +1,17 @@
+@startuml
+!include journey-diagram-theme.puml
+title post-delivery-feedback – HTTP-visible states
+
+[*] --> startJourney
+
+state startJourney
+state confirmDelivery
+state getResult
+
+startJourney --> confirmDelivery : POST /steps/confirmDelivery\n(delivery confirmation)
+confirmDelivery --> getResult : GET /journeys/{journeyId}/result
+
+getResult --> [*]
+
+@enduml
+

@@ -8,10 +8,10 @@ start
 
 :Client (or adapter) stores journeyId\nand constructs a magic link that\ncontains journeyId + verification code;
 
-if (User clicks magic link?) then (yes)
+if (User clicks magic link\nwithin 7 days?) then (yes)
   :Adapter extracts\njourneyId + code\nand calls\nPOST /journeys/{journeyId}/steps/waitForVerification;
 else (no)
-  :No verification call is made;\nengine waits until timer expiry;
+  :No verification call is made yet;\nengine continues waiting;
 endif
 
 repeat
@@ -23,9 +23,8 @@ if (output.status == "VERIFIED"?) then (verified)
   :Client marks email as verified\nand updates local profile;
   stop
 else (expired)
-  :Client shows an "expired link"\nmessage and may offer to resend\nverification;
+  :Client shows an "expired link"\nmessage and may offer to resend\nverification;\nengine may also have sent\none or more reminders and a\npost-expiry notification;
   stop
 endif
 
 @enduml
-
