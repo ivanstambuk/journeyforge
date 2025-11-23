@@ -112,4 +112,3 @@ paths:
       description: Cancel an existing e-commerce order.
 tags:
   - name: orders
-

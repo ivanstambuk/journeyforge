@@ -45,4 +45,3 @@ paths:
       description: Create a new customer record in the core system after successful onboarding.
 tags:
   - name: customers
-

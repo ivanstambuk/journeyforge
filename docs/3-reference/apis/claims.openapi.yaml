@@ -104,4 +104,3 @@ paths:
       description: Record the settlement decision for an existing claim, including amount and any later phases (reopen/subrogation markers).
 tags:
   - name: claims
-

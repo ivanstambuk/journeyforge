@@ -76,4 +76,3 @@ paths:
       description: Create a new B2B purchase order with line items and commercial details.
 tags:
   - name: purchase-orders
-

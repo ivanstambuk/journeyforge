@@ -322,4 +322,3 @@ spec:
       type: fail
       errorCode: ORDER_FULFILLMENT_FAILED
       reason: "Order fulfillment failed or did not complete as expected"
-

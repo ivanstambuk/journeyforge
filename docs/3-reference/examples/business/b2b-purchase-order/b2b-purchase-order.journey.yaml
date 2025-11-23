@@ -380,4 +380,3 @@ spec:
       type: fail
       errorCode: PO_REJECTED_LEVEL3
       reason: "Purchase order rejected at procurement board approval (level 3)"
-

@@ -42,4 +42,3 @@ paths:
       description: Create shipments for an order; shipment progress is reported asynchronously via callbacks.
 tags:
   - name: shipping
-

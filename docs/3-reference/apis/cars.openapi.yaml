@@ -71,4 +71,3 @@ paths:
       description: Cancel an existing car booking.
 tags:
   - name: cars
-

@@ -415,4 +415,3 @@ spec:
       type: fail
       errorCode: CLAIM_DENIED
       reason: "Insurance claim denied during FNOL or assessment/settlement review"
-

@@ -70,4 +70,3 @@ paths:
       description: Reserve inventory for the order and propose split shipments or mark items as unavailable.
 tags:
   - name: inventory
-

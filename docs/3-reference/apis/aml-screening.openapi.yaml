@@ -40,4 +40,3 @@ paths:
       description: Start an asynchronous AML screening; results are delivered via webhook.
 tags:
   - name: aml
-

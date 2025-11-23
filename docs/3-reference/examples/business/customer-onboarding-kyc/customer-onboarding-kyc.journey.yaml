@@ -421,4 +421,3 @@ spec:
       type: fail
       errorCode: ONBOARDING_REJECTED
       reason: "Customer onboarding rejected based on KYC/AML checks, missing documents, or risk decision"
-

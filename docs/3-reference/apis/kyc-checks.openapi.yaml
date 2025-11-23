@@ -45,4 +45,3 @@ paths:
       description: Start an asynchronous KYC check for an individual; results are delivered via webhook.
 tags:
   - name: kyc
-

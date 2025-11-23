@@ -284,4 +284,3 @@ components:
         method:
           type: string
           description: HTTP method to use when following this link (for example GET, POST, DELETE)
-
