@@ -1,0 +1,28 @@
+@startuml
+!include journey-diagram-theme.puml
+title b2b-purchase-order – HTTP-visible states
+
+[*] --> startJourney
+
+state startJourney
+state getStatusAfterCreation
+state approveLevel1
+state approveLevel2Department
+state approveLevel2Finance
+state getStatusBeforeLevel3
+state approveLevel3
+state getResult
+
+startJourney --> getStatusAfterCreation : GET /journeys/{journeyId}\n(waiting for level 1)
+getStatusAfterCreation --> approveLevel1 : POST /steps/approveLevel1
+approveLevel1 --> approveLevel2Department : POST /steps/approveLevel2Department
+approveLevel1 --> approveLevel2Finance : POST /steps/approveLevel2Finance
+approveLevel2Department --> getStatusBeforeLevel3 : GET /journeys/{journeyId}\n(both level 2 approvals done)
+approveLevel2Finance --> getStatusBeforeLevel3 : GET /journeys/{journeyId}\n(both level 2 approvals done)
+getStatusBeforeLevel3 --> approveLevel3 : POST /steps/approveLevel3
+approveLevel3 --> getResult : GET /journeys/{journeyId}/result
+
+getResult --> [*]
+
+@enduml
+

@@ -1,0 +1,24 @@
+@startuml
+!include journey-diagram-theme.puml
+title http-success – client activity flow
+
+start
+
+:Client sends\nPOST /api/v1/journeys/http-success/start\nwith { inputId };
+:Journeys API starts\nhttp-success journey and returns\nJourneyStartResponse (journeyId);
+
+repeat
+  :Client calls\nGET /api/v1/journeys/{journeyId}/result;
+  :Journeys API returns\nJourneyOutcome with phase\nand output;
+repeat while (phase == "Running") is (still running)
+
+if (phase == "Succeeded" and output.ok == true?) then (yes)
+  :Client uses normalised\nHTTP result payload;
+  stop
+else (no)
+  :Client handles failure path\n(for example HTTP_NOT_OK\nor engine error);
+  stop
+endif
+
+@enduml
+

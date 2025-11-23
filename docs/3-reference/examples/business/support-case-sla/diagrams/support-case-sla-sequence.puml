@@ -1,0 +1,48 @@
+@startuml
+!include journey-diagram-theme.puml
+title support-case-sla – sequence
+
+actor "Client" as Client
+actor "Agent UI" as Agent
+actor "Support assignment system" as Assignment
+actor "Escalation system" as Escalation
+participant "Journeys API" as Journeys
+
+Client -> Journeys: POST /api/v1/journeys/support-case-sla/start\nSupportCaseStartRequest
+Journeys -> Assignment: POST https://support.example.com/cases/assign\n(case details)
+Assignment --> Journeys: 200 OK
+Journeys --> Client: 202 Accepted\nJourneyStartResponse (journeyId, ...)
+
+Client -> Journeys: GET /api/v1/journeys/{journeyId}\n(getStatusAssigned)
+Journeys --> Client: 200 OK\nJourneyStatus (case assigned)
+
+Client -> Journeys: GET /api/v1/journeys/{journeyId}\n(getStatusInProgress)
+Journeys --> Client: 200 OK\nJourneyStatus (waiting for agent update)
+
+note over Client, Agent
+  Client and agent communicate about the case
+  outside of the journey; agent then records
+  the resolving update via the Agent UI.
+end note
+
+Agent -> Journeys: POST /api/v1/journeys/{journeyId}/steps/waitForAgentUpdate\nSupportCaseAgentUpdateInput (RESOLVED)
+Journeys --> Agent: 200 OK\nSupportCaseAgentUpdateStepResponse
+
+Client -> Journeys: GET /api/v1/journeys/{journeyId}\n(getStatusAfterResolution)
+Journeys --> Client: 200 OK\nJourneyStatus (resolving)
+
+Client -> Journeys: GET /api/v1/journeys/{journeyId}/result\n(getResult)
+Journeys --> Client: 200 OK\nJourneyOutcome (RESOLVED)
+
+== Escalation path (if SLA fires first) ==
+
+Client -> Journeys: GET /api/v1/journeys/{journeyId}\n(getStatusBeforeSla)
+Journeys --> Client: 200 OK\nJourneyStatus (still Running)
+
+Journeys -> Escalation: POST https://escalation.example.com/cases/escalate\n(caseId, priority, escalatedAt)
+Escalation --> Journeys: 200 OK
+
+Client -> Journeys: GET /api/v1/journeys/{journeyId}/result\n(getResultEscalated)
+Journeys --> Client: 200 OK\nJourneyOutcome (ESCALATED)
+
+@enduml

@@ -1,0 +1,157 @@
+arazzo: 1.0.1
+info:
+  title: JourneyForge – loan-application workflows
+  version: 0.1.0
+  summary: Workflows for loan-application with multi-bureau checks and optional manual underwriting.
+  description: Workflows for loan-application with multi-bureau checks and optional manual underwriting.
+sourceDescriptions:
+  - name: loanApplication
+    type: openapi
+    url: loan-application.openapi.yaml
+workflows:
+  - workflowId: loan-application-auto-approve
+    summary: Start a loan-application journey that auto-approves and retrieve the final result.
+    description: Start a loan-application journey that auto-approves (no manual underwriting required) and retrieve the final result.
+    inputs:
+      type: object
+      properties:
+        startRequest:
+          description: Initial loan application payload.
+          type: object
+          required:
+            - applicantId
+            - requestedAmount
+            - currency
+            - termMonths
+          properties:
+            applicantId:
+              type: string
+            requestedAmount:
+              type: number
+            currency:
+              type: string
+            termMonths:
+              type: integer
+          additionalProperties: true
+    steps:
+      - stepId: startJourney
+        description: Start a new loan-application journey instance.
+        operationId: loanApplication_start
+        x-source: loanApplication
+        requestBody:
+          contentType: application/json
+          payload: $inputs.startRequest
+        outputs:
+          journeyId: $response.body.journeyId
+      - stepId: getResult
+        description: Retrieve the final outcome once the application is terminal.
+        operationId: loanApplication_getResult
+        x-source: loanApplication
+        parameters:
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId
+
+  - workflowId: loan-application-underwriter-review
+    summary: Start a loan-application journey, obtain a manual underwriter decision, and read the final outcome.
+    description: Start a loan-application journey, let the system perform multi-bureau checks, obtain a manual underwriter decision for borderline cases, and then read the final outcome.
+    inputs:
+      type: object
+      properties:
+        startRequest:
+          description: Initial loan application payload.
+          type: object
+          required:
+            - applicantId
+            - requestedAmount
+            - currency
+            - termMonths
+          properties:
+            applicantId:
+              type: string
+            requestedAmount:
+              type: number
+            currency:
+              type: string
+            termMonths:
+              type: integer
+          additionalProperties: true
+        underwriterInput:
+          description: Manual underwriting decision and adjusted terms.
+          type: object
+          required:
+            - decision
+          properties:
+            decision:
+              type: string
+              enum:
+                - approved
+                - rejected
+            approvedAmount:
+              type: number
+            interestRate:
+              type: number
+            comment:
+              type: string
+          additionalProperties: false
+    steps:
+      - stepId: startJourney
+        description: Start a new loan-application journey instance.
+        operationId: loanApplication_start
+        x-source: loanApplication
+        requestBody:
+          contentType: application/json
+          payload: $inputs.startRequest
+        outputs:
+          journeyId: $response.body.journeyId
+      - stepId: getStatusAfterChecks
+        description: Poll journey status until multi-bureau and KYC checks have completed.
+        operationId: loanApplication_getStatus
+        x-source: loanApplication
+        parameters:
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId
+        outputs:
+          phase: $response.body.phase
+      - stepId: getStatusAwaitingUnderwriter
+        description: Poll journey status until the application is waiting for manual underwriter review.
+        operationId: loanApplication_getStatus
+        x-source: loanApplication
+        parameters:
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId
+        outputs:
+          phase: $response.body.phase
+      - stepId: submitUnderwriterDecision
+        description: Provide manual underwriting decision for the underwriterApproval step.
+        operationId: loanApplication_underwriterApproval
+        x-source: loanApplication
+        parameters:
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId
+        requestBody:
+          contentType: application/json
+          payload: $inputs.underwriterInput
+        outputs:
+          phase: $response.body.phase
+      - stepId: getStatusAfterUnderwriter
+        description: Poll journey status after the underwriter decision has been applied.
+        operationId: loanApplication_getStatus
+        x-source: loanApplication
+        parameters:
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId
+        outputs:
+          phase: $response.body.phase
+      - stepId: getResult
+        description: Retrieve the final outcome after the underwriter decision and any resulting account creation.
+        operationId: loanApplication_getResult
+        x-source: loanApplication
+        parameters:
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId

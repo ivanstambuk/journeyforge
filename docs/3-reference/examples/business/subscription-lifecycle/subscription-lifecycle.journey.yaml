@@ -1,0 +1,337 @@
+apiVersion: v1
+kind: Journey
+metadata:
+  name: subscription-lifecycle
+  version: 0.1.0
+  description: Subscription lifecycle with trial, upgrade to paid, and cancel/reactivate.
+spec:
+  apis:
+    subscriptions: { openApiRef: apis/subscriptions.openapi.yaml }
+  input:
+    schema:
+      title: SubscriptionLifecycleStartRequest
+      type: object
+      required:
+        - customerId
+        - planId
+      properties:
+        customerId:
+          type: string
+        planId:
+          type: string
+        trialDays:
+          type: integer
+        channel:
+          type: string
+      additionalProperties: true
+  output:
+    schema:
+      title: SubscriptionLifecycleOutcome
+      type: object
+      required:
+        - finalStatus
+      properties:
+        subscriptionId:
+          type: string
+        finalStatus:
+          type: string
+          enum:
+            - TRIAL_EXPIRED
+            - ACTIVE
+            - CANCELLED
+            - REACTIVATED
+        activePlanId:
+          type: string
+        events:
+          type: array
+          items:
+            type: object
+      additionalProperties: true
+  start: createTrial
+  states:
+    createTrial:
+      type: task
+      task:
+        kind: httpCall
+        operationRef: subscriptions.createTrialSubscription
+        params:
+          headers:
+            Accept: application/json
+        body:
+          mapper:
+            lang: dataweave
+            expr: |
+              {
+                customerId: context.customerId,
+                planId: context.planId,
+                trialDays: context.trialDays,
+                channel: context.channel
+              }
+        timeoutMs: 3000
+        resultVar: trial
+      next: trialWaitOrExpire
+
+    trialWaitOrExpire:
+      type: parallel
+      parallel:
+        branches:
+          - name: upgradeBranch
+            start: waitForUpgrade
+            states:
+              waitForUpgrade:
+                type: wait
+                wait:
+                  channel: manual
+                  input:
+                    schema:
+                      description: Customer decision to upgrade the trial subscription.
+                      type: object
+                      required:
+                        - decision
+                      properties:
+                        decision:
+                          type: string
+                          enum:
+                            - upgrade
+                      additionalProperties: false
+                  response:
+                    outputVar: upgradeResponse
+                    schema:
+                      title: UpgradeDecisionProjection
+                      type: object
+                      description: Additional top-level fields returned from the upgradeSubscription step.
+                      properties:
+                        decision:
+                          type: string
+                          enum:
+                            - upgrade
+                      additionalProperties: true
+                  apply:
+                    mapper:
+                      lang: dataweave
+                      expr: |
+                        context ++ {
+                          subscriptionId: trial.body.subscriptionId,
+                          upgradeDecision: payload,
+                          upgradeResponse: {
+                            decision: payload.decision
+                          },
+                          trialOutcome: "UPGRADED"
+                        }
+                  on:
+                    - when:
+                        predicate:
+                          lang: dataweave
+                          expr: |
+                            payload.decision == "upgrade"
+                      next: upgradeBranchDone
+                  default: upgradeBranchDone
+
+              upgradeBranchDone:
+                type: succeed
+
+          - name: expiryBranch
+            start: trialTimer
+            states:
+              trialTimer:
+                type: timer
+                timer:
+                  duration:
+                    mapper:
+                      lang: dataweave
+                      expr: |
+                        if (context.trialDays != null)
+                          "P" ++ (context.trialDays as String) ++ "D"
+                        else
+                          "P14D"
+                next: markTrialExpired
+
+              markTrialExpired:
+                type: transform
+                transform:
+                  mapper:
+                    lang: dataweave
+                    expr: |
+                      context ++ {
+                        trialOutcome: "EXPIRED"
+                      }
+                  target:
+                    kind: context
+                    path: ""
+                next: expiryBranchDone
+
+              expiryBranchDone:
+                type: succeed
+
+        join:
+          strategy: anyOf
+          errorPolicy: collectAll
+      next: trialOutcomeSwitch
+
+    trialOutcomeSwitch:
+      type: choice
+      choices:
+        - when:
+            predicate:
+              lang: dataweave
+              expr: |
+                context.trialOutcome == "UPGRADED"
+          next: activatePaid
+        - when:
+            predicate:
+              lang: dataweave
+              expr: |
+                context.trialOutcome == "EXPIRED"
+          next: trialExpired
+      default: trialExpired
+
+    activatePaid:
+      type: task
+      task:
+        kind: httpCall
+        operationRef: subscriptions.activateSubscription
+        params:
+          path:
+            subscriptionId: "${context.subscriptionId}"
+          headers:
+            Accept: application/json
+        body:
+          mapper:
+            lang: dataweave
+            expr: |
+              {
+                planId: context.planId
+              }
+        timeoutMs: 3000
+        resultVar: activation
+      next: statusChangeOrTimeout
+
+    statusChangeOrTimeout:
+      type: parallel
+      parallel:
+        branches:
+          - name: statusChangeBranch
+            start: waitForStatusChange
+            states:
+              waitForStatusChange:
+                type: wait
+                wait:
+                  channel: manual
+                  input:
+                    schema:
+                      description: Customer decision to cancel or reactivate the subscription.
+                      type: object
+                      required:
+                        - action
+                      properties:
+                        action:
+                          type: string
+                          enum:
+                            - cancel
+                            - reactivate
+                      additionalProperties: false
+                  response:
+                    outputVar: statusChangeResponse
+                    schema:
+                      title: SubscriptionStatusChangeProjection
+                      type: object
+                      description: Additional top-level fields returned from the changeSubscriptionStatus step.
+                      properties:
+                        action:
+                          type: string
+                          enum:
+                            - cancel
+                            - reactivate
+                      additionalProperties: true
+                  apply:
+                    mapper:
+                      lang: dataweave
+                      expr: |
+                        context ++ {
+                          statusChange: payload,
+                          statusChangeResponse: {
+                            action: payload.action
+                          }
+                        }
+                  on:
+                    - when:
+                        predicate:
+                          lang: dataweave
+                          expr: |
+                            payload.action == "cancel"
+                      next: cancelSubscription
+                    - when:
+                        predicate:
+                          lang: dataweave
+                          expr: |
+                            payload.action == "reactivate"
+                      next: reactivateSubscription
+                  default: completeActive
+
+              cancelSubscription:
+                type: task
+                task:
+                  kind: httpCall
+                  operationRef: subscriptions.cancelSubscription
+                  params:
+                    path:
+                      subscriptionId: "${context.subscriptionId}"
+                    headers:
+                      Accept: application/json
+                  timeoutMs: 3000
+                  resultVar: cancelResult
+                next: completeCancelled
+
+              reactivateSubscription:
+                type: task
+                task:
+                  kind: httpCall
+                  operationRef: subscriptions.reactivateSubscription
+                  params:
+                    path:
+                      subscriptionId: "${context.subscriptionId}"
+                    headers:
+                      Accept: application/json
+                  body:
+                    mapper:
+                      lang: dataweave
+                      expr: |
+                        {
+                          planId: context.planId
+                        }
+                  timeoutMs: 3000
+                  resultVar: reactivateResult
+                next: completeReactivated
+
+              completeActive:
+                type: succeed
+                outputVar: activation
+
+              completeCancelled:
+                type: succeed
+                outputVar: cancelResult
+
+              completeReactivated:
+                type: succeed
+                outputVar: reactivateResult
+
+          - name: statusChangeTimeoutBranch
+            start: statusChangeTimer
+            states:
+              statusChangeTimer:
+                type: timer
+                timer:
+                  duration: "P30D"
+                next: autoCompleteActive
+
+              autoCompleteActive:
+                type: succeed
+                outputVar: activation
+
+        join:
+          strategy: anyOf
+          errorPolicy: collectAll
+
+    trialExpired:
+      type: succeed
+      outputVar: trial

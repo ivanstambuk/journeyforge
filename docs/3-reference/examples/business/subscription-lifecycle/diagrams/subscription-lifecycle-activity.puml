@@ -1,0 +1,33 @@
+@startuml
+!include journey-diagram-theme.puml
+title subscription-lifecycle – client activity flow
+
+start
+
+:Client sends\nPOST /api/v1/journeys/subscription-lifecycle/start\nwith SubscriptionLifecycleStartRequest;
+
+repeat
+  :Client calls\nGET /api/v1/journeys/{journeyId}/result;
+  :Journeys API returns\nJourneyOutcome with phase/output;
+repeat while (phase == "Running" and\ncurrentState == "waitForUpgrade") is (trial)
+
+if (currentState == "waitForUpgrade"?) then (yes)
+  :Client submits upgrade/expire decision\nPOST /steps/upgradeSubscription;
+  :Client resumes polling\nGET /journeys/{journeyId}/result;
+endif
+
+if (phase == "Running" and currentState == "waitForStatusChange"?) then (active)
+  :Client submits cancel/reactivate decision\nPOST /steps/changeSubscriptionStatus;
+  :Client resumes polling\nGET /journeys/{journeyId}/result;
+endif
+
+if (phase == "Succeeded"?) then (completed)
+  :Client records finalStatus\n(TRIAL_EXPIRED, ACTIVE, CANCELLED, REACTIVATED);
+  stop
+else (failed)
+  :Client handles failure based on error.reason;
+  stop
+endif
+
+@enduml
+

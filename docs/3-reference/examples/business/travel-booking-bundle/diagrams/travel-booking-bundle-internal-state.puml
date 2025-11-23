@@ -1,0 +1,61 @@
+@startuml
+!include journey-diagram-theme.puml
+title travel-booking-bundle – internal DSL state graph
+
+[*] --> reserveBundle
+
+state reserveBundle
+state evaluateReservations
+state waitForTravelerConfirmation
+state initiatePayment
+state waitForTripUpdates
+state waitForChangeOrCancel
+state prepareOutcome
+state completeTrip
+state completeCancelled
+state bookingFailed
+state failed
+
+reserveBundle --> evaluateReservations : flights.createFlightBooking,\nhotels.createHotelBooking,\ncars.createCarBooking\nresultVar: reservations
+
+evaluateReservations --> waitForTravelerConfirmation : at least one segment reserved
+evaluateReservations --> bookingFailed : default (no segments reserved)
+
+waitForTravelerConfirmation --> initiatePayment : payload.decision == "confirm"
+waitForTravelerConfirmation --> completeCancelled : decision == "cancel"
+
+initiatePayment --> waitForTripUpdates : payments.authorizePayment
+
+waitForTripUpdates --> waitForChangeOrCancel : status == CONFIRMED\nor PARTIALLY_CONFIRMED
+waitForTripUpdates --> prepareOutcome : status == CANCELLED
+waitForTripUpdates --> failed : default (FAILED or unexpected)
+
+waitForChangeOrCancel --> prepareOutcome : any action (complete/change/cancel)
+
+prepareOutcome --> completeTrip
+completeTrip --> [*]
+
+completeCancelled --> [*]
+bookingFailed --> [*]
+failed --> [*]
+
+note right of waitForTravelerConfirmation
+  type: wait (manual channel)
+  step id: confirmBundle
+  input: TravelerConfirmationInput
+end note
+
+note right of waitForTripUpdates
+  type: webhook (aggregated provider callback)
+  step id: waitForTripUpdates
+  security: X-Trip-Update-Secret
+end note
+
+note right of waitForChangeOrCancel
+  type: wait (manual channel)
+  step id: changeOrCancel
+  input: ChangeOrCancelInput
+end note
+
+@enduml
+

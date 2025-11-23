@@ -19,6 +19,8 @@ This has drawbacks:
 
 Separately, we already plan subjourney support and SAGA-like patterns (see `docs/ideas`), but those are more fine-grained. We need a **coarse-grained, optional global compensation path** that can be attached to any journey definition or API.
 
+While implementing business journeys such as `travel-booking-bundle`, we also identified a need to run compensation-style cleanup for **partial-success** outcomes (for example, when some segments are confirmed and others are not) without changing the final `JourneyOutcome.phase` from `Succeeded`. This follow-up requirement is reflected in the updated semantics below.
+
 ## Decision
 We introduce an optional `spec.compensation` block that defines a **global compensation journey** for a journey definition or API:
 
@@ -33,6 +35,12 @@ spec:
   compensation:
     mode: async                  # async (default) | sync
     start: rollback
+    alsoFor:                     # optional; success-only triggers (for example partial success)
+      - when:
+          predicate:
+            lang: dataweave
+            expr: |
+              output.overallStatus == "PARTIALLY_CONFIRMED"
     states:
       rollback:
         type: task
@@ -79,15 +87,21 @@ Core semantics:
   - Executes it with:
     - `context`: a deep copy of the main journey’s context at termination.
     - `outcome`: structured metadata about how and why the main run ended.
-- Successful runs MUST NOT trigger compensation.
+- Successful runs:
+  - By default (when `alsoFor` is absent), successful runs behave as in the original version of this ADR and do **not** trigger compensation.
+  - When `alsoFor` is present, the engine:
+    - Evaluates each `alsoFor` rule after a successful termination (`JourneyOutcome.phase = Succeeded`), in a deterministic order (for example insertion order).
+    - Treats a rule as matching when its predicate (when present) evaluates to `true` using the final journey context and bindings such as `output` (for example when `output.overallStatus == "PARTIALLY_CONFIRMED"`).
+    - Triggers compensation once if at least one rule matches, using the same `mode` semantics as for non-successful outcomes.
+    - Does nothing when no rule matches.
 
 Bindings for compensation:
 - `context` – same shape as the main journey `context`, copied at termination.
 - `outcome` – a read-only object available to predicates and mappers in the compensation states, conceptually:
   ```json
   {
-    "phase": "Failed",
-    "terminationKind": "Fail | Timeout | Cancel | RuntimeError",
+    "phase": "Succeeded or Failed",
+    "terminationKind": "Success | Fail | Timeout | Cancel | RuntimeError",
     "error": {
       "code": "string or null",
       "reason": "string or null"
@@ -105,10 +119,10 @@ Sync vs async:
   - Compensation success/failure does not change the original outcome but SHOULD be logged/traced.
 - `mode: sync`:
   - Main run does not complete until the compensation journey finishes.
-  - For APIs, the HTTP response still reflects the main failure (error code/reason, possibly mapped to HTTP status via `spec.errors` / `spec.outcomes`), not the result of compensation.
-- For journeys, `JourneyOutcome.phase` and `JourneyOutcome.error` continue to describe the original failure; compensation errors may be attached as extensions but MUST NOT change `phase`.
+  - For APIs, the HTTP response still reflects the main outcome (for failures, the error code/reason, possibly mapped to HTTP status via `spec.errors` / `spec.outcomes`), not the result of compensation.
+- For journeys, `JourneyOutcome.phase` and `JourneyOutcome.error` continue to describe the original outcome from the main run (for example a Failed outcome or a Succeeded partial-success outcome); compensation errors may be attached as extensions but MUST NOT change `phase`.
 
-The DSL reference (`docs/3-reference/dsl.md`) is updated with a new section “2d. Global compensation (spec.compensation)” capturing this shape and semantics.
+The DSL reference (`docs/3-reference/dsl.md`) is updated with a new section “2.5 Global compensation (spec.compensation)” capturing this shape and semantics.
 
 ## Consequences
 - Pros:

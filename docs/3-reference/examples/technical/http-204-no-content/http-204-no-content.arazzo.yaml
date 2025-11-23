@@ -1,0 +1,44 @@
+arazzo: 1.0.1
+info:
+  title: JourneyForge – http-204-no-content workflows
+  version: 0.1.0
+  summary: Workflows for HTTP 204 No Content responses.
+  description: Workflows for HTTP 204 No Content responses.
+sourceDescriptions:
+  - name: http204NoContent
+    type: openapi
+    url: http-204-no-content.openapi.yaml
+workflows:
+  - workflowId: http-204-no-content-happy-path
+    summary: Start an http-204-no-content journey and retrieve the final outcome.
+    description: Start an http-204-no-content journey and retrieve the final outcome.
+    inputs:
+      type: object
+      properties:
+        startRequest:
+          description: Initial payload for the http-204-no-content journey.
+          type: object
+          required:
+            - key
+          properties:
+            key:
+              type: string
+          additionalProperties: true
+    steps:
+      - stepId: startJourney
+        description: Start a new http-204-no-content journey instance.
+        operationId: http204NoContent_start
+        x-source: http204NoContent
+        requestBody:
+          contentType: application/json
+          payload: $inputs.startRequest
+        outputs:
+          journeyId: $response.body.journeyId
+      - stepId: getResult
+        description: Retrieve the final outcome for the 204 No Content check.
+        operationId: http204NoContent_getResult
+        x-source: http204NoContent
+        parameters:
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId

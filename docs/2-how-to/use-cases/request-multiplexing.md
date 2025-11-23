@@ -2,6 +2,12 @@
 
 Status: Draft | Last updated: 2025-11-20
 
+## Where to start
+
+For the full pattern and example journey, see:
+
+- Technical pattern: `docs/3-reference/examples/technical/http-chained-calls/http-chained-calls.md`
+
 ## Problem
 
 Combine multiple upstream HTTP calls into a single journey:
@@ -11,6 +17,7 @@ Combine multiple upstream HTTP calls into a single journey:
 
 ## Relevant DSL Features
 
+- Data-driven branching pattern: `task` writes results into `context.<resultVar>`, and a `choice` state branches on that data.
 - `task` with `kind: httpCall` and `resultVar`.
 - `choice` with DataWeave predicates over `context.<resultVar>`.
 - `succeed` / `fail` with explicit error codes.

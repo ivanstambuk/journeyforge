@@ -1,0 +1,162 @@
+arazzo: 1.0.1
+info:
+  title: JourneyForge – subscription-lifecycle workflows
+  version: 0.1.0
+  summary: Workflows for subscription trials, upgrades, and cancel/reactivate decisions.
+  description: Workflows for starting a trial subscription, upgrading to paid, and later cancelling or reactivating the subscription.
+sourceDescriptions:
+  - name: subscriptionLifecycle
+    type: openapi
+    url: subscription-lifecycle.openapi.yaml
+workflows:
+  - workflowId: subscription-upgrade-and-cancel
+    summary: Start a trial, upgrade to paid, cancel the subscription, and read the final outcome.
+    description: Start a subscription-lifecycle journey, let the engine create a trial, have the customer upgrade to paid, and later cancel the subscription.
+    inputs:
+      type: object
+      properties:
+        startRequest:
+          description: Initial subscription request payload.
+          type: object
+          required:
+            - customerId
+            - planId
+          properties:
+            customerId:
+              type: string
+            planId:
+              type: string
+          additionalProperties: true
+        upgradeDecision:
+          description: Customer decision to upgrade the trial.
+          type: object
+          required:
+            - decision
+          properties:
+            decision:
+              type: string
+              enum:
+                - upgrade
+          additionalProperties: false
+        cancelDecision:
+          description: Customer decision to cancel the subscription.
+          type: object
+          required:
+            - action
+          properties:
+            action:
+              type: string
+              enum:
+                - cancel
+          additionalProperties: false
+    steps:
+      - stepId: startJourney
+        description: Start a new subscription-lifecycle journey instance.
+        operationId: subscriptionLifecycle_start
+        x-source: subscriptionLifecycle
+        requestBody:
+          contentType: application/json
+          payload: $inputs.startRequest
+        outputs:
+          journeyId: $response.body.journeyId
+      - stepId: getStatusDuringTrial
+        description: Poll journey status while the subscription trial is active and before upgrade or expiry.
+        operationId: subscriptionLifecycle_getStatus
+        x-source: subscriptionLifecycle
+        parameters:
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId
+        outputs:
+          phase: $response.body.phase
+      - stepId: submitUpgrade
+        description: Provide the customer's decision to upgrade the trial subscription.
+        operationId: subscriptionLifecycle_upgradeSubscription
+        x-source: subscriptionLifecycle
+        parameters:
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId
+        requestBody:
+          contentType: application/json
+          payload: $inputs.upgradeDecision
+        outputs:
+          phase: $response.body.phase
+      - stepId: getStatusAfterUpgrade
+        description: Poll journey status after activation of the paid subscription.
+        operationId: subscriptionLifecycle_getStatus
+        x-source: subscriptionLifecycle
+        parameters:
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId
+        outputs:
+          phase: $response.body.phase
+      - stepId: submitCancel
+        description: Provide the customer's decision to cancel the subscription.
+        operationId: subscriptionLifecycle_changeSubscriptionStatus
+        x-source: subscriptionLifecycle
+        parameters:
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId
+        requestBody:
+          contentType: application/json
+          payload: $inputs.cancelDecision
+        outputs:
+          phase: $response.body.phase
+      - stepId: getResult
+        description: Retrieve the final outcome after cancellation has been processed.
+        operationId: subscriptionLifecycle_getResult
+        x-source: subscriptionLifecycle
+        parameters:
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId
+
+  - workflowId: subscription-trial-expires
+    summary: Start a trial that expires without upgrade and read the outcome.
+    description: Start a subscription-lifecycle journey where the customer does not upgrade and the trial expires.
+    inputs:
+      type: object
+      properties:
+        startRequest:
+          description: Initial subscription request payload.
+          type: object
+          required:
+            - customerId
+            - planId
+          properties:
+            customerId:
+              type: string
+            planId:
+              type: string
+          additionalProperties: true
+    steps:
+      - stepId: startJourney
+        description: Start a new subscription-lifecycle journey instance.
+        operationId: subscriptionLifecycle_start
+        x-source: subscriptionLifecycle
+        requestBody:
+          contentType: application/json
+          payload: $inputs.startRequest
+        outputs:
+          journeyId: $response.body.journeyId
+      - stepId: getStatusDuringTrial
+        description: Poll journey status while the subscription trial is active.
+        operationId: subscriptionLifecycle_getStatus
+        x-source: subscriptionLifecycle
+        parameters:
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId
+        outputs:
+          phase: $response.body.phase
+      - stepId: getResult
+        description: Retrieve the final outcome after the trial has expired via the timer.
+        operationId: subscriptionLifecycle_getResult
+        x-source: subscriptionLifecycle
+        parameters:
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId

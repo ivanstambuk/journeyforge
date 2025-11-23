@@ -1,0 +1,30 @@
+@startuml
+!include journey-diagram-theme.puml
+title mortgage-repricing-rate-lock – repricing and lock sequence
+
+actor "Mortgage client" as Client
+actor "Rate lock provider" as Provider
+participant "Journeys API" as Journeys
+
+Client -> Journeys: POST /api/v1/journeys/mortgage-repricing-rate-lock/start\nMortgageRepricingStartRequest
+Journeys --> Client: 202 Accepted\nJourneyStartResponse (journeyId, ...)
+
+Client -> Journeys: GET /api/v1/journeys/{journeyId}\n(getStatusWhilePricing)
+Journeys --> Client: 200 OK\nJourneyStatus (pricing in progress)
+
+Client -> Journeys: GET /api/v1/journeys/{journeyId}\n(getStatusAwaitingCustomer)
+Journeys --> Client: 200 OK\nJourneyStatus (currentState == waitForCustomerAcceptance)
+
+Client -> Journeys: POST /api/v1/journeys/{journeyId}/steps/customerAcceptance\nCustomerAcceptanceInput
+Journeys --> Client: 200 OK\nCustomerAcceptanceStepResponse
+
+Client -> Journeys: GET /api/v1/journeys/{journeyId}\n(getStatusAwaitingLock)
+Journeys --> Client: 200 OK\nJourneyStatus (waiting for lock confirmation)
+
+Provider -> Journeys: POST /api/v1/journeys/{journeyId}/steps/waitForLockConfirmation\n(secured with X-RateLock-Secret)
+Journeys --> Provider: 200 OK\n(rate lock confirmation accepted)
+
+Client -> Journeys: GET /api/v1/journeys/{journeyId}/result\n(getResult)
+Journeys --> Client: 200 OK\nJourneyOutcome (LOCKED, EXPIRED, or REJECTED)
+
+@enduml

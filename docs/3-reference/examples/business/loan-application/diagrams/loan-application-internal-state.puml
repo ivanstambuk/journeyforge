@@ -1,0 +1,44 @@
+@startuml
+!include journey-diagram-theme.puml
+title loan-application – internal DSL state graph
+
+[*] --> runChecks
+
+state runChecks
+state scoreAndRoute
+state autoApprove
+state waitForUnderwriter
+state issueApprovedLoan
+state approved
+state rejected
+
+runChecks --> scoreAndRoute : parallel checks\nbureauA, bureauB, kyc\nresultVar: checks
+
+scoreAndRoute --> autoApprove : all checks ok\nand amount <= 25_000
+scoreAndRoute --> waitForUnderwriter : checks ok\namount > 25_000
+scoreAndRoute --> rejected : any check fails
+
+autoApprove --> approved : accounts.createAccount
+waitForUnderwriter --> issueApprovedLoan : payload.decision == "approved"
+waitForUnderwriter --> rejected : default (decision != "approved")
+issueApprovedLoan --> approved : accounts.createAccount
+
+approved --> [*]
+rejected --> [*]
+
+note right of runChecks
+  type: parallel
+  branches: bureauA, bureauB, kyc
+  join.strategy: allOf
+  join.resultVar: checks
+end note
+
+note right of waitForUnderwriter
+  type: wait (manual channel)
+  step id: underwriterApproval
+  input: UnderwriterDecisionInput
+  response.outputVar: underwriterResponse
+end note
+
+@enduml
+

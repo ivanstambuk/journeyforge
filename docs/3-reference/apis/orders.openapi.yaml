@@ -1,0 +1,115 @@
+openapi: 3.1.0
+info:
+  title: Orders API
+  version: 1.0.0
+  description: Orders API for e-commerce checkout and order orchestration. See Q-013 in docs/4-architecture/open-questions.md for journey design context.
+  contact:
+    name: JourneyForge
+servers:
+  - url: https://orders.example.com
+paths:
+  /orders:
+    post:
+      operationId: createOrder
+      summary: Create a new e-commerce order
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - orderId
+                - customerId
+                - items
+                - shippingAddress
+              properties:
+                orderId:
+                  type: string
+                customerId:
+                  type: string
+                items:
+                  type: array
+                  items:
+                    type: object
+                    required:
+                      - sku
+                      - quantity
+                    properties:
+                      sku:
+                        type: string
+                      quantity:
+                        type: integer
+                      warehousePreference:
+                        type: string
+                    additionalProperties: true
+                shippingAddress:
+                  type: object
+                  properties:
+                    line1:
+                      type: string
+                    line2:
+                      type: string
+                    city:
+                      type: string
+                    country:
+                      type: string
+                    postalCode:
+                      type: string
+                channel:
+                  type: string
+              additionalProperties: true
+      responses:
+        "201":
+          description: Order created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  orderId:
+                    type: string
+                  status:
+                    type: string
+                  createdAt:
+                    type: string
+                    format: date-time
+        "400":
+          description: Invalid order request
+      tags:
+        - orders
+      description: Create a new e-commerce order with items and shipping details.
+  /orders/{orderId}/cancel:
+    post:
+      operationId: cancelOrder
+      summary: Cancel an existing order
+      parameters:
+        - in: path
+          name: orderId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason:
+                  type: string
+      responses:
+        "200":
+          description: Order cancelled
+          content:
+            application/json:
+              schema:
+                type: object
+        "404":
+          description: Order not found
+      tags:
+        - orders
+      description: Cancel an existing e-commerce order.
+tags:
+  - name: orders
+

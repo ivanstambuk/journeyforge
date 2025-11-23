@@ -1,0 +1,32 @@
+@startuml
+!include journey-diagram-theme.puml
+title travel-booking-bundle – reservation, confirmation, change sequence
+
+actor "Client" as Client
+actor "Traveler UI" as Traveler
+actor "Trip Aggregator" as Aggregator
+participant "Journeys API" as Journeys
+
+Client -> Journeys: POST /api/v1/journeys/travel-booking-bundle/start\nTravelBookingStartRequest
+Journeys --> Client: 202 Accepted\nJourneyStartResponse (journeyId, ...)
+
+Client -> Journeys: GET /api/v1/journeys/{journeyId}\n(getStatusAfterReservation)
+Journeys --> Client: 200 OK\nJourneyStatus (reservations evaluated)
+
+Traveler -> Journeys: POST /api/v1/journeys/{journeyId}/steps/confirmBundle\nTravelerConfirmationInput
+Journeys --> Traveler: 200 OK\nTravelerConfirmationStepResponse
+
+Aggregator -> Journeys: POST /api/v1/journeys/{journeyId}/steps/waitForTripUpdates\n(secured with X-Trip-Update-Secret)
+Journeys --> Aggregator: 200 OK\nTripStatusStepResponse
+
+Client -> Journeys: GET /api/v1/journeys/{journeyId}\n(getStatusBeforeChangeOrComplete)
+Journeys --> Client: 200 OK\nJourneyStatus (post-booking action available)
+
+Traveler -> Journeys: POST /api/v1/journeys/{journeyId}/steps/changeOrCancel\nChangeOrCancelInput
+Journeys --> Traveler: 200 OK\nChangeOrCancelStepResponse
+
+Client -> Journeys: GET /api/v1/journeys/{journeyId}/result\n(getResult)
+Journeys --> Client: 200 OK\nJourneyOutcome (CONFIRMED, PARTIALLY_CONFIRMED, or CANCELLED)
+
+@enduml
+

@@ -72,7 +72,7 @@ Execution semantics:
 
 Specification updates:
 - The DSL reference (`docs/3-reference/dsl.md`) is updated to:
-  - Introduce section “2c. Execution deadlines (spec.execution)” with the above shape, semantics, and validation rules.
+  - Introduce section “2.4 Execution deadlines (spec.execution)” with the above shape, semantics, and validation rules.
 - Mention that execution may also terminate due to a global execution timeout, in addition to `succeed`/`fail` and engine execution errors.
   - Refine `kind: Api` control-flow guidance to state that, when `spec.execution.maxDurationSec` is present, implementations MUST enforce this budget and fail with `spec.execution.onTimeout` when it is exceeded.
 

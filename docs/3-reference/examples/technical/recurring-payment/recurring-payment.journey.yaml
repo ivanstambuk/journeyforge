@@ -1,0 +1,159 @@
+apiVersion: v1
+kind: Journey
+metadata:
+  name: recurring-payment
+  version: 0.1.0
+  description: Recurring payment journey configured interactively and executed on schedule.
+spec:
+  apis:
+    payments: { openApiRef: apis/payments.openapi.yaml }
+  input:
+    schema:
+      title: RecurringPaymentStartRequest
+      type: object
+      required:
+        - userId
+        - paymentMethodRef
+        - amount
+        - currency
+        - interval
+        - maxRuns
+      properties:
+        userId:
+          type: string
+        paymentMethodRef:
+          type: string
+        amount:
+          type: number
+        currency:
+          type: string
+        interval:
+          type: string
+          description: ISO-8601 duration for the schedule cadence (for example P1M).
+        maxRuns:
+          type: integer
+      additionalProperties: true
+  output:
+    schema:
+      title: RecurringPaymentStartOutcome
+      type: object
+      required:
+        - status
+        - userId
+        - paymentMethodRef
+        - amount
+        - currency
+        - interval
+        - maxRuns
+      properties:
+        status:
+          type: string
+          enum:
+            - SCHEDULED
+        userId:
+          type: string
+        paymentMethodRef:
+          type: string
+        amount:
+          type: number
+        currency:
+          type: string
+        interval:
+          type: string
+        maxRuns:
+          type: integer
+      additionalProperties: true
+  start: configureAndSchedule
+  states:
+    configureAndSchedule:
+      type: task
+      task:
+        kind: schedule
+        schedule:
+          start: runPayment
+          interval:
+            mapper:
+              lang: dataweave
+              expr: context.interval
+          maxRuns:
+            mapper:
+              lang: dataweave
+              expr: context.maxRuns
+          subjectId:
+            mapper:
+              lang: dataweave
+              expr: context.userId
+          context:
+            mapper:
+              lang: dataweave
+              expr: context
+          onExisting: upsert
+      next: prepareStartOutcome
+
+    prepareStartOutcome:
+      type: transform
+      transform:
+        mapper:
+          lang: dataweave
+          expr: |
+            context ++ {
+              startOutcome: {
+                status: "SCHEDULED",
+                userId: context.userId,
+                paymentMethodRef: context.paymentMethodRef,
+                amount: context.amount,
+                currency: context.currency,
+                interval: context.interval,
+                maxRuns: context.maxRuns
+              }
+            }
+        target:
+          kind: context
+          path: ""
+      next: completeConfigured
+
+    completeConfigured:
+      type: succeed
+      outputVar: startOutcome
+
+    runPayment:
+      type: task
+      task:
+        kind: httpCall
+        operationRef: payments.authorizePayment
+        params:
+          path:
+            paymentId: "${context.paymentMethodRef}"
+          headers:
+            Accept: application/json
+        body:
+          mapper:
+            lang: dataweave
+            expr: |
+              {
+                amount: context.amount,
+                currency: context.currency
+              }
+        timeoutMs: 5000
+        resultVar: payment
+      next: updateScheduledState
+
+    updateScheduledState:
+      type: transform
+      transform:
+        mapper:
+          lang: dataweave
+          expr: |
+            context ++ {
+              lastRunAt: now(),
+              lastStatus: payment.status,
+              lastOk: payment.ok
+            }
+        target:
+          kind: context
+          path: ""
+      next: scheduledDone
+
+    scheduledDone:
+      type: succeed
+

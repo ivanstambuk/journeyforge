@@ -1,0 +1,107 @@
+openapi: 3.1.0
+info:
+  title: Claims API
+  version: 1.0.0
+  description: Claims API for FNOL (first notice of loss) and settlement recording. See Q-015 in docs/4-architecture/open-questions.md for journey design context.
+  contact:
+    name: JourneyForge
+servers:
+  - url: https://claims.example.com
+paths:
+  /claims:
+    post:
+      operationId: createClaim
+      summary: Create a new insurance claim (FNOL)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - claimId
+                - policyId
+                - claimantId
+                - lossDate
+              properties:
+                claimId:
+                  type: string
+                policyId:
+                  type: string
+                claimantId:
+                  type: string
+                lossDate:
+                  type: string
+                  format: date
+                lossType:
+                  type: string
+                description:
+                  type: string
+              additionalProperties: true
+      responses:
+        "201":
+          description: Claim created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  claimId:
+                    type: string
+                  status:
+                    type: string
+                  createdAt:
+                    type: string
+                    format: date-time
+        "400":
+          description: Invalid FNOL request
+      tags:
+        - claims
+      description: Create a new insurance claim based on FNOL input.
+  /claims/{claimId}/settlement:
+    post:
+      operationId: recordSettlementDecision
+      summary: Record settlement decision and outcome for a claim
+      parameters:
+        - in: path
+          name: claimId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                decision:
+                  type: string
+                  description: Settlement decision for the claim.
+                  enum:
+                    - SETTLED
+                    - DENIED
+                    - REOPENED
+                    - SUBROGATED
+                settlementAmount:
+                  type: number
+                currency:
+                  type: string
+                notes:
+                  type: string
+              additionalProperties: true
+      responses:
+        "200":
+          description: Settlement decision recorded
+          content:
+            application/json:
+              schema:
+                type: object
+        "404":
+          description: Claim not found
+      tags:
+        - claims
+      description: Record the settlement decision for an existing claim, including amount and any later phases (reopen/subrogation markers).
+tags:
+  - name: claims
+

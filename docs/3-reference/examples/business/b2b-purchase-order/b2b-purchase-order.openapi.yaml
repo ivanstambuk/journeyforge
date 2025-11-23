@@ -1,0 +1,464 @@
+openapi: 3.1.0
+info:
+  title: "JourneyForge – b2b-purchase-order"
+  version: 0.1.0
+  description: "JourneyForge – b2b-purchase-order"
+  contact:
+    name: JourneyForge
+servers:
+  - url: /api/v1
+tags:
+  - name: b2b-purchase-order
+paths:
+  /journeys/b2b-purchase-order/start:
+    post:
+      summary: Start b2b-purchase-order journey
+      operationId: b2bPurchaseOrder_start
+      tags:
+        - b2b-purchase-order
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/B2bPurchaseOrderStartRequest"
+      responses:
+        "202":
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JourneyStartResponse"
+      description: Start b2b-purchase-order journey
+  /journeys/{journeyId}:
+    get:
+      summary: Get journey status
+      operationId: b2bPurchaseOrder_getStatus
+      tags:
+        - b2b-purchase-order
+      parameters:
+        - in: path
+          name: journeyId
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JourneyStatus"
+      description: Get journey status
+  /journeys/{journeyId}/steps/approveLevel1:
+    post:
+      summary: Provide manager approval or rejection for the purchase order (level 1)
+      operationId: b2bPurchaseOrder_approveLevel1
+      tags:
+        - b2b-purchase-order
+      parameters:
+        - in: path
+          name: journeyId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Level1ApprovalInput"
+      responses:
+        "200":
+          description: Updated status after processing level 1 approval decision
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Level1ApprovalStepResponse"
+      description: Provide manager approval or rejection for the purchase order at level 1.
+  /journeys/{journeyId}/steps/approveLevel2Department:
+    post:
+      summary: Provide department head approval or rejection for the purchase order (level 2 – department)
+      operationId: b2bPurchaseOrder_approveLevel2Department
+      tags:
+        - b2b-purchase-order
+      parameters:
+        - in: path
+          name: journeyId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Level2DepartmentApprovalInput"
+      responses:
+        "200":
+          description: Updated status after processing level 2 department approval decision
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Level2DepartmentApprovalStepResponse"
+      description: Provide department head approval or rejection for the purchase order at level 2.
+  /journeys/{journeyId}/steps/approveLevel2Finance:
+    post:
+      summary: Provide finance approval or rejection for the purchase order (level 2 – finance)
+      operationId: b2bPurchaseOrder_approveLevel2Finance
+      tags:
+        - b2b-purchase-order
+      parameters:
+        - in: path
+          name: journeyId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Level2FinanceApprovalInput"
+      responses:
+        "200":
+          description: Updated status after processing level 2 finance approval decision
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Level2FinanceApprovalStepResponse"
+      description: Provide finance approval or rejection for the purchase order at level 2.
+  /journeys/{journeyId}/steps/approveLevel3:
+    post:
+      summary: Provide procurement board approval or rejection for the purchase order (level 3)
+      operationId: b2bPurchaseOrder_approveLevel3
+      tags:
+        - b2b-purchase-order
+      parameters:
+        - in: path
+          name: journeyId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Level3ApprovalInput"
+      responses:
+        "200":
+          description: Updated status after processing level 3 approval decision
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Level3ApprovalStepResponse"
+      description: Provide procurement board approval or rejection for the purchase order at level 3.
+  /journeys/{journeyId}/result:
+    get:
+      summary: Retrieve final outcome
+      operationId: b2bPurchaseOrder_getResult
+      tags:
+        - b2b-purchase-order
+      parameters:
+        - in: path
+          name: journeyId
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Final outcome
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JourneyOutcome"
+        "409":
+          description: Journey not terminal yet
+      description: Retrieve final outcome
+components:
+  schemas:
+    B2bPurchaseOrderStartRequest:
+      type: object
+      required:
+        - purchaseOrderId
+        - buyerId
+        - supplierId
+        - lineItems
+      properties:
+        purchaseOrderId:
+          type: string
+        buyerId:
+          type: string
+        supplierId:
+          type: string
+        lineItems:
+          type: array
+          items:
+            type: object
+            required:
+              - sku
+              - quantity
+              - unitPrice
+            properties:
+              sku:
+                type: string
+              quantity:
+                type: integer
+              unitPrice:
+                type: number
+            additionalProperties: true
+        currency:
+          type: string
+        requestedDeliveryDate:
+          type: string
+          format: date
+        notes:
+          type: string
+        channel:
+          type: string
+      additionalProperties: true
+    Level1ApprovalInput:
+      type: object
+      description: Manager approval or rejection of the purchase order.
+      required:
+        - decision
+      properties:
+        decision:
+          type: string
+          enum:
+            - approve
+            - reject
+        comment:
+          type: string
+      additionalProperties: false
+    Level2DepartmentApprovalInput:
+      type: object
+      description: Department head approval or rejection of the purchase order.
+      required:
+        - decision
+      properties:
+        decision:
+          type: string
+          enum:
+            - approve
+            - reject
+        comment:
+          type: string
+      additionalProperties: false
+    Level2FinanceApprovalInput:
+      type: object
+      description: Finance approval or rejection of the purchase order budget.
+      required:
+        - decision
+      properties:
+        decision:
+          type: string
+          enum:
+            - approve
+            - reject
+        comment:
+          type: string
+      additionalProperties: false
+    Level3ApprovalInput:
+      type: object
+      description: Procurement board approval or rejection of the purchase order.
+      required:
+        - decision
+      properties:
+        decision:
+          type: string
+          enum:
+            - approve
+            - reject
+        comment:
+          type: string
+      additionalProperties: false
+    JourneyStartResponse:
+      type: object
+      required:
+        - journeyId
+        - journeyName
+        - statusUrl
+      properties:
+        journeyId:
+          type: string
+        journeyName:
+          type: string
+        statusUrl:
+          type: string
+          format: uri
+        _links:
+          description: "Optional hypermedia links (HAL-style) describing related resources and next actions.\n\nPresence is controlled per-journey via spec.httpSurface.links.enabled; when enabled, the engine typically includes at least `self` and `result` links.\n"
+          type: object
+          additionalProperties:
+            $ref: "#/components/schemas/Link"
+    JourneyStatus:
+      type: object
+      required:
+        - journeyId
+        - journeyName
+        - phase
+        - currentState
+        - updatedAt
+      properties:
+        journeyId:
+          type: string
+        journeyName:
+          type: string
+        phase:
+          type: string
+          enum:
+            - Running
+            - Succeeded
+            - Failed
+        currentState:
+          type: string
+        updatedAt:
+          type: string
+          format: date-time
+        tags:
+          type: array
+          description: "Effective tags for this journey instance, derived from the journey's metadata.tags and any instance tag sourcing rules. Tags are non-sensitive, short identifiers intended for filtering and grouping.\n"
+          items:
+            type: string
+        attributes:
+          type: object
+          description: "Lightweight metadata for this journey instance, such as subjectId, tenantId, channel, and correlation ids (orderId, paymentIntentId, crmCaseId). Values are strings and MUST respect the limits configured via MetadataLimits.\n"
+          additionalProperties:
+            type: string
+        _links:
+          description: "Optional hypermedia links (HAL-style) describing related resources and next actions.\n\nWhen links are enabled for a journey, the engine SHOULD include at least `self` and `result`, and MAY include links for active step endpoints. For step links, the relation name MUST equal the external-input state id (for example `waitForApproval`, `confirm`). When the journey is Running and user-cancellable, the engine SHOULD also expose a `cancel` link pointing to the canonical cancellation step `/journeys/{journeyId}/steps/cancel` with method POST.\n"
+          type: object
+          additionalProperties:
+            $ref: "#/components/schemas/Link"
+    JourneyOutcome:
+      allOf:
+        - type: object
+          required:
+            - journeyId
+            - journeyName
+            - phase
+          properties:
+            journeyId:
+              type: string
+            journeyName:
+              type: string
+            phase:
+              type: string
+              enum:
+                - Succeeded
+                - Failed
+            output: {}
+            error:
+              type: object
+              properties:
+                code:
+                  type: string
+                reason:
+                  type: string
+            tags:
+              type: array
+              description: "Effective tags for this journey instance, repeated here for convenience when reading final outcomes.\n"
+              items:
+                type: string
+            attributes:
+              type: object
+              description: "Instance attributes such as subjectId, tenantId, channel, and correlation ids, repeated here for convenience when reading final outcomes.\n"
+              additionalProperties:
+                type: string
+            _links:
+              description: "Optional hypermedia links (HAL-style) describing related resources (for example `self`) when a journey is terminal. Presence is controlled per-journey via spec.httpSurface.links.enabled.\n"
+              type: object
+              additionalProperties:
+                $ref: "#/components/schemas/Link"
+        - type: object
+          properties:
+            output:
+              type: object
+              required:
+                - purchaseOrderId
+                - finalStatus
+              properties:
+                purchaseOrderId:
+                  type: string
+                finalStatus:
+                  type: string
+                  enum:
+                    - APPROVED
+                    - REJECTED
+                approvals:
+                  type: object
+                rejectionCode:
+                  type: string
+                rejectionReason:
+                  type: string
+              additionalProperties: true
+    Level1ApprovalStepResponse:
+      allOf:
+        - $ref: "#/components/schemas/JourneyStatus"
+        - type: object
+          description: Additional top-level fields returned from the approveLevel1 step.
+          properties:
+            decision:
+              type: string
+              enum:
+                - approve
+                - reject
+            comment:
+              type: string
+          additionalProperties: true
+    Level2DepartmentApprovalStepResponse:
+      allOf:
+        - $ref: "#/components/schemas/JourneyStatus"
+        - type: object
+          description: Additional top-level fields returned from the approveLevel2Department step.
+          properties:
+            decision:
+              type: string
+              enum:
+                - approve
+                - reject
+            comment:
+              type: string
+          additionalProperties: true
+    Level2FinanceApprovalStepResponse:
+      allOf:
+        - $ref: "#/components/schemas/JourneyStatus"
+        - type: object
+          description: Additional top-level fields returned from the approveLevel2Finance step.
+          properties:
+            decision:
+              type: string
+              enum:
+                - approve
+                - reject
+            comment:
+              type: string
+          additionalProperties: true
+    Level3ApprovalStepResponse:
+      allOf:
+        - $ref: "#/components/schemas/JourneyStatus"
+        - type: object
+          description: Additional top-level fields returned from the approveLevel3 step.
+          properties:
+            decision:
+              type: string
+              enum:
+                - approve
+                - reject
+            comment:
+              type: string
+          additionalProperties: true
+    Link:
+      type: object
+      required:
+        - href
+      properties:
+        href:
+          type: string
+          description: Target URI for this link
+        method:
+          type: string
+          description: HTTP method to use when following this link (for example GET, POST, DELETE)
+

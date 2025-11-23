@@ -2,6 +2,12 @@
 
 Status: Draft | Last updated: 2025-11-20
 
+## Where to start
+
+For the full pattern and example journey, see:
+
+- Technical pattern: `docs/3-reference/examples/technical/multitenant-routing/multitenant-routing.md`
+
 ## Problem
 
 Route requests to different upstream backends based on tenant identity:

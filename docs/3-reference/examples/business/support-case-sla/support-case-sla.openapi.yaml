@@ -1,0 +1,308 @@
+openapi: 3.1.0
+info:
+  title: "JourneyForge – support-case-sla"
+  version: 0.1.0
+  description: "JourneyForge – support-case-sla"
+  contact:
+    name: JourneyForge
+servers:
+  - url: /api/v1
+tags:
+  - name: support-case-sla
+paths:
+  /journeys/support-case-sla/start/status:
+    get:
+      summary: Get journey status shortly after start
+      operationId: supportCaseSla_getStatusAfterStart
+      tags:
+        - support-case-sla
+      parameters:
+        - in: query
+          name: journeyId
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Status after initial assignment
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JourneyStatus"
+      description: Convenience status check shortly after starting the support-case-sla journey.
+  /journeys/support-case-sla/start:
+    post:
+      summary: Start support-case-sla journey
+      operationId: supportCaseSla_start
+      tags:
+        - support-case-sla
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SupportCaseStartRequest"
+      responses:
+        "202":
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JourneyStartResponse"
+      description: Start support-case-sla journey
+  /journeys/{journeyId}:
+    get:
+      summary: Get journey status
+      operationId: supportCaseSla_getStatus
+      tags:
+        - support-case-sla
+      parameters:
+        - in: path
+          name: journeyId
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JourneyStatus"
+      description: Get journey status
+  /journeys/{journeyId}/steps/waitForAgentUpdate:
+    post:
+      summary: Provide agent update for step waitForAgentUpdate
+      operationId: supportCaseSla_waitForAgentUpdate
+      tags:
+        - support-case-sla
+      parameters:
+        - in: path
+          name: journeyId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SupportCaseAgentUpdateInput"
+      responses:
+        "200":
+          description: Updated status after processing agent update
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SupportCaseAgentUpdateStepResponse"
+      description: Provide agent update for step waitForAgentUpdate
+  /journeys/{journeyId}/result:
+    get:
+      summary: Retrieve final outcome
+      operationId: supportCaseSla_getResult
+      tags:
+        - support-case-sla
+      parameters:
+        - in: path
+          name: journeyId
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Final outcome
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JourneyOutcome"
+        "409":
+          description: Journey not terminal yet
+      description: Retrieve final outcome
+components:
+  schemas:
+    SupportCaseStartRequest:
+      type: object
+      required:
+        - caseId
+        - customerId
+        - priority
+        - summary
+      properties:
+        caseId:
+          type: string
+        customerId:
+          type: string
+        priority:
+          type: string
+          enum:
+            - P1
+            - P2
+            - P3
+        summary:
+          type: string
+        channel:
+          type: string
+      additionalProperties: true
+    SupportCaseOutcome:
+      type: object
+      required:
+        - status
+      properties:
+        status:
+          type: string
+          enum:
+            - RESOLVED
+            - ESCALATED
+        caseId:
+          type: string
+        customerId:
+          type: string
+        priority:
+          type: string
+        resolvedAt:
+          type: string
+          format: date-time
+        escalatedAt:
+          type: string
+          format: date-time
+        resolutionSummary:
+          type: string
+      additionalProperties: true
+    SupportCaseAgentUpdateInput:
+      type: object
+      description: Agent update for the support case.
+      required:
+        - status
+      properties:
+        status:
+          type: string
+          enum:
+            - RESOLVED
+        resolutionSummary:
+          type: string
+      additionalProperties: true
+    JourneyStartResponse:
+      type: object
+      required:
+        - journeyId
+        - journeyName
+        - statusUrl
+      properties:
+        journeyId:
+          type: string
+        journeyName:
+          type: string
+        statusUrl:
+          type: string
+          format: uri
+        _links:
+          description: "Optional hypermedia links (HAL-style) describing related resources and next actions.\n\nPresence is controlled per-journey via spec.httpSurface.links.enabled; when enabled, the engine typically includes at least `self` and `result` links.\n"
+          type: object
+          additionalProperties:
+            $ref: "#/components/schemas/Link"
+    JourneyStatus:
+      type: object
+      required:
+        - journeyId
+        - journeyName
+        - phase
+        - currentState
+        - updatedAt
+      properties:
+        journeyId:
+          type: string
+        journeyName:
+          type: string
+        phase:
+          type: string
+          enum:
+            - Running
+            - Succeeded
+            - Failed
+        currentState:
+          type: string
+        updatedAt:
+          type: string
+          format: date-time
+        tags:
+          type: array
+          description: "Effective tags for this journey instance, derived from the journey's metadata.tags and any instance tag sourcing rules. Tags are non-sensitive, short identifiers intended for filtering and grouping.\n"
+          items:
+            type: string
+        attributes:
+          type: object
+          description: "Lightweight metadata for this journey instance, such as subjectId, tenantId, channel, and correlation ids (orderId, paymentIntentId, crmCaseId). Values are strings and MUST respect the limits configured via MetadataLimits.\n"
+          additionalProperties:
+            type: string
+        _links:
+          description: "Optional hypermedia links (HAL-style) describing related resources and next actions.\n\nWhen links are enabled for a journey, the engine SHOULD include at least `self` and `result`, and MAY include links for active step endpoints. For step links, the relation name MUST equal the external-input state id (for example `waitForApproval`, `confirm`). When the journey is Running and user-cancellable, the engine SHOULD also expose a `cancel` link pointing to the canonical cancellation step `/api/v1/journeys/{journeyId}/steps/cancel` with method POST.\n"
+          type: object
+          additionalProperties:
+            $ref: "#/components/schemas/Link"
+    JourneyOutcome:
+      allOf:
+        - type: object
+          required:
+            - journeyId
+            - journeyName
+            - phase
+          properties:
+            journeyId:
+              type: string
+            journeyName:
+              type: string
+            phase:
+              type: string
+              enum:
+                - Succeeded
+                - Failed
+            output: {}
+            error:
+              type: object
+              properties:
+                code:
+                  type: string
+                reason:
+                  type: string
+            tags:
+              type: array
+              description: "Effective tags for this journey instance, repeated here for convenience when reading final outcomes.\n"
+              items:
+                type: string
+            attributes:
+              type: object
+              description: "Instance attributes such as subjectId, tenantId, channel, and correlation ids, repeated here for convenience when reading final outcomes.\n"
+              additionalProperties:
+                type: string
+            _links:
+              description: "Optional hypermedia links (HAL-style) describing related resources (for example `self`) when a journey is terminal. Presence is controlled per-journey via spec.httpSurface.links.enabled.\n"
+              type: object
+              additionalProperties:
+                $ref: "#/components/schemas/Link"
+        - type: object
+          properties:
+            output:
+              $ref: "#/components/schemas/SupportCaseOutcome"
+    SupportCaseAgentUpdateStepResponse:
+      allOf:
+        - $ref: "#/components/schemas/JourneyStatus"
+        - type: object
+          description: Additional top-level fields returned from the agent update step.
+          properties:
+            status:
+              type: string
+            resolutionSummary:
+              type: string
+          additionalProperties: true
+    Link:
+      type: object
+      required:
+        - href
+      properties:
+        href:
+          type: string
+          description: Target URI for this link
+        method:
+          type: string
+          description: HTTP method to use when following this link (for example GET, POST, DELETE)
+      additionalProperties: true

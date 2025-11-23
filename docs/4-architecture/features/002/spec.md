@@ -21,7 +21,7 @@ This feature also defines configurable limits for tags/attributes via a `Metadat
 
 Primary references:
 - ADR: `docs/6-decisions/ADR-0011-journey-metadata-tags-and-query.md`.
-- DSL reference: `docs/3-reference/dsl.md` (sections 2a, 2g, 18, 21).
+- DSL reference: `docs/3-reference/dsl.md` (sections 2.1, 2.8, 18, 21).
 - Journeys OpenAPI: `docs/3-reference/openapi/journeys.openapi.yaml`.
  - How-to use case: `docs/2-how-to/use-cases/journey-metadata-tags-attributes.md`.
 

@@ -1,0 +1,43 @@
+openapi: 3.1.0
+info:
+  title: High-Value Transfers API
+  version: 1.0.0
+  description: High-value transfer initiation API.
+  contact:
+    name: JourneyForge
+servers:
+  - url: https://transfers.example.com
+paths:
+  /transfers/{transferId}/initiate:
+    post:
+      operationId: initiateHighValueTransfer
+      parameters:
+        - in: path
+          name: transferId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                amount:
+                  type: number
+                currency:
+                  type: string
+                sourceAccountId:
+                  type: string
+                destinationAccountId:
+                  type: string
+      responses:
+        "202":
+          description: Transfer initiation accepted
+      description: Initiate a high-value transfer; final settlement is reported asynchronously.
+      tags:
+        - transfers
+tags:
+  - name: transfers
+

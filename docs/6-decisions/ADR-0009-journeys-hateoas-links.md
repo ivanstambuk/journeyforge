@@ -64,7 +64,7 @@ Key points:
 
 Specification updates:
 - DSL reference (`docs/3-reference/dsl.md`):
-  - New section “2e. HTTP surface & hypermedia links (spec.httpSurface.links)” describing:
+  - New section “2.6 HTTP surface & hypermedia links (spec.httpSurface.links)” describing:
     - The `spec.httpSurface.links.enabled` flag.
     - Default behaviour (links enabled when the block is absent).
     - How `_links` is attached to `JourneyStartResponse`, `JourneyStatus`, and `JourneyOutcome`.

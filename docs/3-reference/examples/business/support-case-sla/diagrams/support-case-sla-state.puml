@@ -1,0 +1,20 @@
+@startuml
+!include journey-diagram-theme.puml
+title support-case-sla – HTTP-visible states
+
+[*] --> startJourney
+
+state startJourney
+state getStatusAssigned
+state getStatusInProgress
+state waitForAgentUpdate
+state getResult
+
+startJourney --> getStatusAssigned : POST /journeys/support-case-sla/start\n(case created and assigned)
+getStatusAssigned --> getStatusInProgress : GET /journeys/{journeyId}\n(case in progress)
+getStatusInProgress --> waitForAgentUpdate : GET /journeys/{journeyId}\n(waiting for agent update)
+waitForAgentUpdate --> getResult : GET /journeys/{journeyId}/result\n(after resolution or SLA escalation)
+
+getResult --> [*]
+
+@enduml

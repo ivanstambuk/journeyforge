@@ -1,0 +1,174 @@
+arazzo: 1.0.1
+info:
+  title: JourneyForge – high-value-transfer workflows
+  version: 0.1.0
+  summary: Workflows for high-value transfers with fraud/sanctions checks, manual approval, settlement, and settlement timeouts.
+  description: Workflows for initiating high-value transfers, running fraud and sanctions checks, collecting operator approval, and observing final settlement or timeout.
+sourceDescriptions:
+  - name: highValueTransfer
+    type: openapi
+    url: high-value-transfer.openapi.yaml
+workflows:
+  - workflowId: high-value-transfer-approved
+    summary: Start a high-value-transfer journey, approve it, and read the settled outcome.
+    description: Start a high-value-transfer journey, let the engine perform fraud/sanctions checks, submit operator approval, and then read the final settled outcome (or a timeout-treated-as-failure outcome).
+    inputs:
+      type: object
+      properties:
+        startRequest:
+          description: Initial high-value transfer request.
+          type: object
+          required:
+            - transferId
+            - customerId
+            - sourceAccountId
+            - destinationAccountId
+            - amount
+            - currency
+          properties:
+            transferId:
+              type: string
+            customerId:
+              type: string
+            sourceAccountId:
+              type: string
+            destinationAccountId:
+              type: string
+            amount:
+              type: number
+            currency:
+              type: string
+          additionalProperties: true
+        approvalInput:
+          description: Operator approval or rejection for the high-value transfer.
+          type: object
+          required:
+            - decision
+          properties:
+            decision:
+              type: string
+              enum:
+                - approve
+            comment:
+              type: string
+          additionalProperties: false
+    steps:
+      - stepId: startJourney
+        description: Start a new high-value-transfer journey instance.
+        operationId: highValueTransfer_start
+        x-source: highValueTransfer
+        requestBody:
+          contentType: application/json
+          payload: $inputs.startRequest
+        outputs:
+          journeyId: $response.body.journeyId
+      - stepId: getStatusAfterChecks
+        description: Poll journey status until fraud and sanctions checks have completed.
+        operationId: highValueTransfer_getStatus
+        x-source: highValueTransfer
+        parameters:
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId
+        outputs:
+          phase: $response.body.phase
+      - stepId: getStatusAwaitingApproval
+        description: Poll journey status until the transfer is waiting for operator approval.
+        operationId: highValueTransfer_getStatus
+        x-source: highValueTransfer
+        parameters:
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId
+        outputs:
+          phase: $response.body.phase
+      - stepId: submitApproval
+        description: Provide operator approval for the high-value transfer.
+        operationId: highValueTransfer_approveTransfer
+        x-source: highValueTransfer
+        parameters:
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId
+        requestBody:
+          contentType: application/json
+          payload: $inputs.approvalInput
+        outputs:
+          phase: $response.body.phase
+      - stepId: getStatusAwaitingSettlement
+        description: Poll journey status while the engine is waiting for settlement callback or timeout.
+        operationId: highValueTransfer_getStatus
+        x-source: highValueTransfer
+        parameters:
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId
+        outputs:
+          phase: $response.body.phase
+      - stepId: getResult
+        description: Retrieve the final settled outcome once settlement has completed.
+        operationId: highValueTransfer_getResult
+        x-source: highValueTransfer
+        parameters:
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId
+
+  - workflowId: high-value-transfer-rejected-by-checks
+    summary: Start a high-value-transfer journey that is rejected by fraud or sanctions checks.
+    description: Start a high-value-transfer journey where fraud or sanctions checks fail, and read the rejected outcome.
+    inputs:
+      type: object
+      properties:
+        startRequest:
+          description: Initial high-value transfer request.
+          type: object
+          required:
+            - transferId
+            - customerId
+            - sourceAccountId
+            - destinationAccountId
+            - amount
+            - currency
+          properties:
+            transferId:
+              type: string
+            customerId:
+              type: string
+            sourceAccountId:
+              type: string
+            destinationAccountId:
+              type: string
+            amount:
+              type: number
+            currency:
+              type: string
+          additionalProperties: true
+    steps:
+      - stepId: startJourney
+        description: Start a new high-value-transfer journey instance.
+        operationId: highValueTransfer_start
+        x-source: highValueTransfer
+        requestBody:
+          contentType: application/json
+          payload: $inputs.startRequest
+        outputs:
+          journeyId: $response.body.journeyId
+      - stepId: getStatusAfterChecks
+        description: Poll journey status until fraud and sanctions checks have completed.
+        operationId: highValueTransfer_getStatus
+        x-source: highValueTransfer
+        parameters:
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId
+        outputs:
+          phase: $response.body.phase
+      - stepId: getResult
+        description: Retrieve the final rejected outcome after checks have failed.
+        operationId: highValueTransfer_getResult
+        x-source: highValueTransfer
+        parameters:
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId

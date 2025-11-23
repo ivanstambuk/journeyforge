@@ -1,0 +1,37 @@
+@startuml
+!include journey-diagram-theme.puml
+title high-value-transfer – checks, approval, settlement sequence
+
+actor "Client" as Client
+actor "Operator UI" as Operator
+actor "Settlement system" as Settlement
+participant "Journeys API" as Journeys
+
+Client -> Journeys: POST /api/v1/journeys/high-value-transfer/start\nHighValueTransferStartRequest
+Journeys --> Client: 202 Accepted\nJourneyStartResponse (journeyId, ...)
+
+Client -> Journeys: GET /api/v1/journeys/{journeyId}\n(getStatusAfterChecks)
+Journeys --> Client: 200 OK\nJourneyStatus (checks completed)
+
+Client -> Journeys: GET /api/v1/journeys/{journeyId}\n(getStatusAwaitingApproval)
+Journeys --> Client: 200 OK\nJourneyStatus (currentState == waitForApproval)
+
+note over Client, Operator
+  Client and operator may discuss the high-value transfer
+  outside of the journey before the operator records
+  the approval/rejection in the Operator UI.
+end note
+
+Operator -> Journeys: POST /api/v1/journeys/{journeyId}/steps/approveTransfer\nApproveTransferInput
+Journeys --> Operator: 200 OK\nApproveTransferStepResponse
+
+Client -> Journeys: GET /api/v1/journeys/{journeyId}\n(getStatusAwaitingSettlement)
+Journeys --> Client: 200 OK\nJourneyStatus (waiting for settlement)
+
+Settlement -> Journeys: POST /api/v1/journeys/{journeyId}/steps/waitForSettlement\n(secured with X-Settlement-Secret)
+Journeys --> Settlement: 200 OK\n(settlement callback accepted)
+
+Client -> Journeys: GET /api/v1/journeys/{journeyId}/result\n(getResult)
+Journeys --> Client: 200 OK\nJourneyOutcome (SETTLED, FAILED, or REJECTED)
+
+@enduml

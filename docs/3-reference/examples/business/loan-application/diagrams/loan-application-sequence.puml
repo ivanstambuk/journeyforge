@@ -1,0 +1,33 @@
+@startuml
+!include journey-diagram-theme.puml
+title loan-application – underwriter review sequence
+
+actor "Loan app client" as Client
+actor "Underwriter UI" as Underwriter
+participant "Journeys API" as Journeys
+
+Client -> Journeys: POST /api/v1/journeys/loan-application/start\nLoanApplicationStartRequest
+Journeys --> Client: 202 Accepted\nJourneyStartResponse (journeyId, ...)
+
+Client -> Journeys: GET /api/v1/journeys/{journeyId}\n(getStatusAfterChecks)
+Journeys --> Client: 200 OK\nJourneyStatus (phase, currentState)
+
+Client -> Journeys: GET /api/v1/journeys/{journeyId}\n(getStatusAwaitingUnderwriter)
+Journeys --> Client: 200 OK\nJourneyStatus (phase, currentState == waitForUnderwriter)
+
+note over Client, Underwriter
+  Client and underwriter review the application
+  outside of the journey; the underwriter then
+  records the decision via the Underwriter UI.
+end note
+
+Underwriter -> Journeys: POST /api/v1/journeys/{journeyId}/steps/underwriterApproval\nUnderwriterDecisionInput
+Journeys --> Underwriter: 200 OK\nUnderwriterDecisionStepResponse
+
+Client -> Journeys: GET /api/v1/journeys/{journeyId}\n(getStatusAfterUnderwriter)
+Journeys --> Client: 200 OK\nJourneyStatus (phase, currentState)
+
+Client -> Journeys: GET /api/v1/journeys/{journeyId}/result\n(getResult)
+Journeys --> Client: 200 OK\nJourneyOutcome (decision, terms)
+
+@enduml

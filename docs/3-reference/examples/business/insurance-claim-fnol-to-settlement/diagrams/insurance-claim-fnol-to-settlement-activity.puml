@@ -1,0 +1,36 @@
+@startuml
+!include journey-diagram-theme.puml
+title insurance-claim-fnol-to-settlement – client activity flow
+
+start
+
+:Client sends\nPOST /api/v1/journeys/insurance-claim-fnol-to-settlement/start\nwith InsuranceClaimStartRequest;
+
+repeat
+  :Client calls\nGET /api/v1/journeys/{journeyId}/result;
+  :Journeys API returns\nJourneyOutcome with phase/output;
+repeat while (phase == "Running" and\ncurrentState != "waitForFnolDetails") is (creating claim)
+
+if (currentState == "waitForFnolDetails"?) then (yes)
+  :Claimant submits additional FNOL details\nPOST /api/v1/journeys/{journeyId}/steps/submitFnolDetails;
+endif
+
+if (currentState == "assessmentParallel"?) then (yes)
+  :Adjuster submits report\nPOST /api/v1/journeys/{journeyId}/steps/submitAdjusterReport;
+  :Provider submits estimate\nPOST /api/v1/journeys/{journeyId}/steps/submitProviderEstimate;
+endif
+
+if (currentState == "waitForSettlementApproval"?) then (yes)
+  :Claims ops confirms or denies settlement\nPOST /api/v1/journeys/{journeyId}/steps/confirmSettlement;
+endif
+
+if (phase == "Succeeded" and finalStatus == "SETTLED"?) then (settled)
+  :Client confirms settlement and updates\nclaim and payment records;
+  stop
+else (denied)
+  :Client handles DENIED outcome based on\nsettlementReason and assessment details;
+  stop
+endif
+
+@enduml
+

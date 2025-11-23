@@ -1,0 +1,20 @@
+@startuml
+!include journey-diagram-theme.puml
+title mortgage-repricing-rate-lock – HTTP-visible states
+
+[*] --> startJourney
+
+state startJourney
+state getStatusWhilePending
+state submitCustomerAcceptance
+state getResult
+
+startJourney --> getStatusWhilePending : GET /journeys/{journeyId}\n(offer/lock pending)
+startJourney --> submitCustomerAcceptance : POST /steps/customerAcceptance
+submitCustomerAcceptance --> getResult : GET /journeys/{journeyId}/result
+getStatusWhilePending --> getResult : GET /journeys/{journeyId}/result
+
+getResult --> [*]
+
+@enduml
+

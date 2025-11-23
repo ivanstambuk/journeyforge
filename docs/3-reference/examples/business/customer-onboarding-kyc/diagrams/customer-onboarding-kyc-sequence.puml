@@ -1,0 +1,34 @@
+@startuml
+!include journey-diagram-theme.puml
+title customer-onboarding-kyc – intake, checks, risk sequence
+
+actor "Client" as Client
+actor "Customer UI" as CustomerUI
+actor "KYC Provider" as KycProvider
+actor "AML Provider" as AmlProvider
+actor "Risk System" as RiskSystem
+participant "Journeys API" as Journeys
+
+Client -> Journeys: POST /api/v1/journeys/customer-onboarding-kyc/start\nCustomerOnboardingKycStartRequest
+Journeys --> Client: 202 Accepted\nJourneyStartResponse (journeyId, ...)
+
+Client -> Journeys: GET /api/v1/journeys/{journeyId}\n(getStatusAfterProspect)
+Journeys --> Client: 200 OK\nJourneyStatus (waiting for KYC documents)
+
+CustomerUI -> Journeys: POST /api/v1/journeys/{journeyId}/steps/submitKycDocuments\nKycDocumentsInput
+Journeys --> CustomerUI: 200 OK\nKycDocumentsStepResponse
+
+KycProvider -> Journeys: POST /api/v1/journeys/{journeyId}/steps/waitForKycResult\n(secured with X-Kyc-Result-Secret)
+Journeys --> KycProvider: 200 OK\nKycResultStepResponse
+
+AmlProvider -> Journeys: POST /api/v1/journeys/{journeyId}/steps/waitForAmlResult\n(secured with X-Aml-Result-Secret)
+Journeys --> AmlProvider: 200 OK\nAmlResultStepResponse
+
+RiskSystem -> Journeys: POST /api/v1/journeys/{journeyId}/steps/waitForRiskDecision\n(secured with X-Risk-Decision-Secret)
+Journeys --> RiskSystem: 200 OK\nRiskDecisionStepResponse
+
+Client -> Journeys: GET /api/v1/journeys/{journeyId}/result\n(getResult)
+Journeys --> Client: 200 OK\nJourneyOutcome (APPROVED or REJECTED)
+
+@enduml
+

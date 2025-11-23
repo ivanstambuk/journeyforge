@@ -1,0 +1,74 @@
+openapi: 3.1.0
+info:
+  title: Flights API
+  version: 1.0.0
+  description: Flights API for creating and cancelling flight bookings. See Q-017 in docs/4-architecture/open-questions.md for journey design context.
+  contact:
+    name: JourneyForge
+servers:
+  - url: https://flights.example.com
+paths:
+  /flights/bookings:
+    post:
+      operationId: createFlightBooking
+      summary: Create a new flight booking
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - tripId
+                - travelerId
+                - flightOption
+              properties:
+                tripId:
+                  type: string
+                travelerId:
+                  type: string
+                flightOption:
+                  type: object
+              additionalProperties: true
+      responses:
+        "201":
+          description: Flight booking created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  bookingId:
+                    type: string
+                  status:
+                    type: string
+        "400":
+          description: Invalid flight booking request
+      tags:
+        - flights
+      description: Create a new flight booking for a trip.
+  /flights/bookings/{bookingId}/cancel:
+    post:
+      operationId: cancelFlightBooking
+      summary: Cancel an existing flight booking
+      parameters:
+        - in: path
+          name: bookingId
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Flight booking cancelled
+          content:
+            application/json:
+              schema:
+                type: object
+        "404":
+          description: Flight booking not found
+      tags:
+        - flights
+      description: Cancel an existing flight booking.
+tags:
+  - name: flights
+

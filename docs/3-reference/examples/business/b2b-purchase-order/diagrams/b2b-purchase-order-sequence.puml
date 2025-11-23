@@ -1,0 +1,54 @@
+@startuml
+!include journey-diagram-theme.puml
+title b2b-purchase-order – multi-level approval sequence
+
+actor "Client" as Client
+actor "Manager UI" as Manager
+actor "Department Head UI" as DepartmentHead
+actor "Finance UI" as FinanceUI
+actor "Board UI" as Board
+participant "Journeys API" as Journeys
+
+Client -> Journeys: POST /api/v1/journeys/b2b-purchase-order/start\nB2bPurchaseOrderStartRequest
+Journeys --> Client: 202 Accepted\nJourneyStartResponse (journeyId, ...)
+
+Client -> Journeys: GET /api/v1/journeys/{journeyId}\n(getStatusAfterCreation)
+Journeys --> Client: 200 OK\nJourneyStatus (waiting for level 1 approval)
+
+note over Client, Manager
+  Buyer and manager may discuss the purchase order
+  outside of the journey; the manager then submits
+  the level 1 approval via the Manager UI.
+end note
+
+Manager -> Journeys: POST /api/v1/journeys/{journeyId}/steps/approveLevel1\nLevel1ApprovalInput
+Journeys --> Manager: 200 OK\nLevel1ApprovalStepResponse
+
+DepartmentHead -> Journeys: POST /api/v1/journeys/{journeyId}/steps/approveLevel2Department\nLevel2DepartmentApprovalInput
+Journeys --> DepartmentHead: 200 OK\nLevel2DepartmentApprovalStepResponse
+
+note over Client, FinanceUI
+  Finance team reviews PO details outside the journey
+  before the finance approver records the level 2
+  finance decision via the Finance UI.
+end note
+
+FinanceUI -> Journeys: POST /api/v1/journeys/{journeyId}/steps/approveLevel2Finance\nLevel2FinanceApprovalInput
+Journeys --> FinanceUI: 200 OK\nLevel2FinanceApprovalStepResponse
+
+Client -> Journeys: GET /api/v1/journeys/{journeyId}\n(getStatusBeforeLevel3)
+Journeys --> Client: 200 OK\nJourneyStatus (waiting for level 3 approval)
+
+note over Client, Board
+  Buyer, management, and board may align offline
+  before the procurement board records the level 3
+  decision via the Board UI.
+end note
+
+Board -> Journeys: POST /api/v1/journeys/{journeyId}/steps/approveLevel3\nLevel3ApprovalInput
+Journeys --> Board: 200 OK\nLevel3ApprovalStepResponse
+
+Client -> Journeys: GET /api/v1/journeys/{journeyId}/result\n(getResult)
+Journeys --> Client: 200 OK\nJourneyOutcome (APPROVED or REJECTED)
+
+@enduml

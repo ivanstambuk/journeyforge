@@ -1,0 +1,48 @@
+openapi: 3.1.0
+info:
+  title: KYC Checks API
+  version: 1.0.0
+  description: KYC checks API for starting identity verification flows. See Q-019 in docs/4-architecture/open-questions.md for journey design context.
+  contact:
+    name: JourneyForge
+servers:
+  - url: https://kyc.example.com
+paths:
+  /kyc/checks:
+    post:
+      operationId: startKycCheck
+      summary: Start a KYC check for an individual
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - customerId
+              properties:
+                customerId:
+                  type: string
+                fullName:
+                  type: string
+                dateOfBirth:
+                  type: string
+                  format: date
+                nationality:
+                  type: string
+              additionalProperties: true
+      responses:
+        "202":
+          description: KYC check accepted and will complete asynchronously
+          content:
+            application/json:
+              schema:
+                type: object
+        "400":
+          description: Invalid KYC request
+      tags:
+        - kyc
+      description: Start an asynchronous KYC check for an individual; results are delivered via webhook.
+tags:
+  - name: kyc
+

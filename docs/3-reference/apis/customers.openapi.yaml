@@ -1,0 +1,48 @@
+openapi: 3.1.0
+info:
+  title: Customers API
+  version: 1.0.0
+  description: Customers API for creating customer records after successful onboarding. See Q-019 in docs/4-architecture/open-questions.md for journey design context.
+  contact:
+    name: JourneyForge
+servers:
+  - url: https://customers.example.com
+paths:
+  /customers:
+    post:
+      operationId: createCustomer
+      summary: Create a new customer record
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - customerId
+                - fullName
+              properties:
+                customerId:
+                  type: string
+                fullName:
+                  type: string
+                email:
+                  type: string
+                riskRating:
+                  type: string
+              additionalProperties: true
+      responses:
+        "201":
+          description: Customer created
+          content:
+            application/json:
+              schema:
+                type: object
+        "400":
+          description: Invalid customer payload
+      tags:
+        - customers
+      description: Create a new customer record in the core system after successful onboarding.
+tags:
+  - name: customers
+

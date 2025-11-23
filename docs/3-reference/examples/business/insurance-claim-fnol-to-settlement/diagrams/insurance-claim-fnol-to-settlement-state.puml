@@ -1,0 +1,28 @@
+@startuml
+!include journey-diagram-theme.puml
+title insurance-claim-fnol-to-settlement – HTTP-visible states
+
+[*] --> startJourney
+
+state startJourney
+state getStatusAfterCreation
+state submitFnolDetails
+state submitAdjusterReport
+state submitProviderEstimate
+state getStatusBeforeSettlement
+state confirmSettlement
+state getResult
+
+startJourney --> getStatusAfterCreation : GET /journeys/{journeyId}\n(waiting for FNOL details)
+getStatusAfterCreation --> submitFnolDetails : POST /steps/submitFnolDetails
+submitFnolDetails --> submitAdjusterReport : POST /steps/submitAdjusterReport
+submitFnolDetails --> submitProviderEstimate : POST /steps/submitProviderEstimate
+submitAdjusterReport --> getStatusBeforeSettlement : GET /journeys/{journeyId}\n(assessments complete)
+submitProviderEstimate --> getStatusBeforeSettlement : GET /journeys/{journeyId}\n(assessments complete)
+getStatusBeforeSettlement --> confirmSettlement : POST /steps/confirmSettlement
+confirmSettlement --> getResult : GET /journeys/{journeyId}/result
+
+getResult --> [*]
+
+@enduml
+

@@ -1,0 +1,43 @@
+openapi: 3.1.0
+info:
+  title: Sanctions Screening API
+  version: 1.0.0
+  description: Sanctions screening API for high-value transfers.
+  contact:
+    name: JourneyForge
+servers:
+  - url: https://sanctions.example.com
+paths:
+  /sanctions/screen-transfer:
+    post:
+      operationId: screenTransfer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                transferId:
+                  type: string
+                customerId:
+                  type: string
+                sourceAccountId:
+                  type: string
+                destinationAccountId:
+                  type: string
+      responses:
+        "200":
+          description: Screening result returned
+          content:
+            application/json:
+              schema:
+                type: object
+        "500":
+          description: Error
+      description: Screen a high-value transfer against sanctions lists.
+      tags:
+        - sanctions
+tags:
+  - name: sanctions
+

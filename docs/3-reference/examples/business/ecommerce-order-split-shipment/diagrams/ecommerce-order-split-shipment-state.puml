@@ -1,0 +1,23 @@
+@startuml
+!include journey-diagram-theme.puml
+title ecommerce-order-split-shipment – HTTP-visible states
+
+[*] --> startJourney
+
+state startJourney
+state getStatusAfterReservation
+state getStatusAwaitingConfirmation
+state confirmOrder
+state getStatusDuringFulfillment
+state getResult
+
+startJourney --> getStatusAfterReservation : GET /journeys/{journeyId}\n(reservation running/completed)
+getStatusAfterReservation --> getStatusAwaitingConfirmation : GET /journeys/{journeyId}\n(waiting for confirmation)
+getStatusAwaitingConfirmation --> confirmOrder : POST /steps/confirmOrder
+confirmOrder --> getStatusDuringFulfillment : GET /journeys/{journeyId}\n(waiting for fulfillment)
+getStatusDuringFulfillment --> getResult : GET /journeys/{journeyId}/result
+
+getResult --> [*]
+
+@enduml
+

@@ -1,0 +1,71 @@
+openapi: 3.1.0
+info:
+  title: Mortgages API
+  version: 1.0.0
+  description: Mortgages API
+  contact:
+    name: JourneyForge
+servers:
+  - url: https://mortgages.example.com
+paths:
+  /mortgages/{mortgageId}/reprice:
+    post:
+      operationId: requestRepricingOffer
+      parameters:
+        - in: path
+          name: mortgageId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                requestedFixYears:
+                  type: integer
+                requestedProductCode:
+                  type: string
+                channel:
+                  type: string
+      responses:
+        "200":
+          description: Repricing offer returned
+          content:
+            application/json:
+              schema:
+                type: object
+        "400":
+          description: Not eligible for repricing
+      description: Request a repricing offer for an existing mortgage.
+      tags:
+        - mortgages
+  /mortgages/{mortgageId}/lock:
+    post:
+      operationId: lockRate
+      parameters:
+        - in: path
+          name: mortgageId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                offerId:
+                  type: string
+      responses:
+        "202":
+          description: Rate lock accepted and will be confirmed asynchronously
+      description: Initiate a rate lock for a repricing offer.
+      tags:
+        - mortgages
+tags:
+  - name: mortgages
+

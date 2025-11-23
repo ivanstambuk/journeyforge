@@ -1,0 +1,284 @@
+arazzo: 1.0.1
+info:
+  title: JourneyForge – b2b-purchase-order workflows
+  version: 0.1.0
+  summary: Workflows for B2B purchase orders with multi-level approvals.
+  description: Workflows for creating B2B purchase orders and driving multi-level approvals (manager, parallel department+finance, procurement board) to an approved or rejected outcome. See Q-014 in docs/4-architecture/open-questions.md for design context.
+sourceDescriptions:
+  - name: b2bPurchaseOrder
+    type: openapi
+    url: b2b-purchase-order.openapi.yaml
+workflows:
+  - workflowId: b2b-purchase-order-approved
+    summary: Start a B2B purchase order journey, collect approvals at all three levels, and read the approved outcome.
+    description: Start a b2b-purchase-order journey, let the engine handle manager approval, parallel department and finance approvals, and a final procurement board approval, then retrieve the APPROVED outcome.
+    inputs:
+      type: object
+      properties:
+        startRequest:
+          description: Initial B2B purchase order request.
+          type: object
+          required:
+            - purchaseOrderId
+            - buyerId
+            - supplierId
+            - lineItems
+          properties:
+            purchaseOrderId:
+              type: string
+            buyerId:
+              type: string
+            supplierId:
+              type: string
+            lineItems:
+              type: array
+              items:
+                type: object
+                required:
+                  - sku
+                  - quantity
+                  - unitPrice
+                properties:
+                  sku:
+                    type: string
+                  quantity:
+                    type: integer
+                  unitPrice:
+                    type: number
+            currency:
+              type: string
+          additionalProperties: true
+        level1ApprovalInput:
+          description: Manager approval decision for level 1.
+          type: object
+          required:
+            - decision
+          properties:
+            decision:
+              type: string
+              enum:
+                - approve
+            comment:
+              type: string
+          additionalProperties: false
+        level2DepartmentApprovalInput:
+          description: Department head approval decision for level 2.
+          type: object
+          required:
+            - decision
+          properties:
+            decision:
+              type: string
+              enum:
+                - approve
+            comment:
+              type: string
+          additionalProperties: false
+        level2FinanceApprovalInput:
+          description: Finance approval decision for level 2.
+          type: object
+          required:
+            - decision
+          properties:
+            decision:
+              type: string
+              enum:
+                - approve
+            comment:
+              type: string
+          additionalProperties: false
+        level3ApprovalInput:
+          description: Procurement board approval decision for level 3.
+          type: object
+          required:
+            - decision
+          properties:
+            decision:
+              type: string
+              enum:
+                - approve
+            comment:
+              type: string
+          additionalProperties: false
+    steps:
+      - stepId: startJourney
+        description: Start a new b2b-purchase-order journey instance.
+        operationId: b2bPurchaseOrder_start
+        x-source: b2bPurchaseOrder
+        requestBody:
+          contentType: application/json
+          payload: $inputs.startRequest
+        outputs:
+          journeyId: $response.body.journeyId
+      - stepId: getStatusAfterCreation
+        description: Poll journey status until creation is complete and the journey is waiting for manager approval.
+        operationId: b2bPurchaseOrder_getStatus
+        x-source: b2bPurchaseOrder
+        parameters:
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId
+        outputs:
+          phase: $response.body.phase
+      - stepId: approveLevel1
+        description: Provide manager approval for the purchase order (level 1).
+        operationId: b2bPurchaseOrder_approveLevel1
+        x-source: b2bPurchaseOrder
+        parameters:
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId
+        requestBody:
+          contentType: application/json
+          payload: $inputs.level1ApprovalInput
+        outputs:
+          phase: $response.body.phase
+      - stepId: approveLevel2Department
+        description: Provide department head approval for the purchase order (level 2 – department).
+        operationId: b2bPurchaseOrder_approveLevel2Department
+        x-source: b2bPurchaseOrder
+        parameters:
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId
+        requestBody:
+          contentType: application/json
+          payload: $inputs.level2DepartmentApprovalInput
+        outputs:
+          phase: $response.body.phase
+      - stepId: approveLevel2Finance
+        description: Provide finance approval for the purchase order (level 2 – finance).
+        operationId: b2bPurchaseOrder_approveLevel2Finance
+        x-source: b2bPurchaseOrder
+        parameters:
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId
+        requestBody:
+          contentType: application/json
+          payload: $inputs.level2FinanceApprovalInput
+        outputs:
+          phase: $response.body.phase
+      - stepId: getStatusBeforeLevel3
+        description: Poll journey status until both level 2 approvals have been processed and the journey is waiting for procurement board approval.
+        operationId: b2bPurchaseOrder_getStatus
+        x-source: b2bPurchaseOrder
+        parameters:
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId
+        outputs:
+          phase: $response.body.phase
+      - stepId: approveLevel3
+        description: Provide procurement board approval for the purchase order (level 3).
+        operationId: b2bPurchaseOrder_approveLevel3
+        x-source: b2bPurchaseOrder
+        parameters:
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId
+        requestBody:
+          contentType: application/json
+          payload: $inputs.level3ApprovalInput
+        outputs:
+          phase: $response.body.phase
+      - stepId: getResult
+        description: Retrieve the final approved outcome once all levels have approved the purchase order.
+        operationId: b2bPurchaseOrder_getResult
+        x-source: b2bPurchaseOrder
+        parameters:
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId
+
+  - workflowId: b2b-purchase-order-rejected
+    summary: Start a B2B purchase order journey and observe a rejection at any level.
+    description: Start a b2b-purchase-order journey where one of the approval levels rejects the purchase order, then retrieve the REJECTED outcome and inspect the level-specific rejection code.
+    inputs:
+      type: object
+      properties:
+        startRequest:
+          description: Initial B2B purchase order request.
+          type: object
+          required:
+            - purchaseOrderId
+            - buyerId
+            - supplierId
+            - lineItems
+          properties:
+            purchaseOrderId:
+              type: string
+            buyerId:
+              type: string
+            supplierId:
+              type: string
+            lineItems:
+              type: array
+              items:
+                type: object
+                required:
+                  - sku
+                  - quantity
+                  - unitPrice
+                properties:
+                  sku:
+                    type: string
+                  quantity:
+                    type: integer
+                  unitPrice:
+                    type: number
+          additionalProperties: true
+        rejectingApprovalInput:
+          description: Approval decision that rejects the purchase order at one of the levels.
+          type: object
+          required:
+            - decision
+          properties:
+            decision:
+              type: string
+              enum:
+                - reject
+            comment:
+              type: string
+          additionalProperties: false
+    steps:
+      - stepId: startJourney
+        description: Start a new b2b-purchase-order journey instance.
+        operationId: b2bPurchaseOrder_start
+        x-source: b2bPurchaseOrder
+        requestBody:
+          contentType: application/json
+          payload: $inputs.startRequest
+        outputs:
+          journeyId: $response.body.journeyId
+      - stepId: getStatusAfterCreation
+        description: Poll journey status until the journey is waiting for the first relevant approval.
+        operationId: b2bPurchaseOrder_getStatus
+        x-source: b2bPurchaseOrder
+        parameters:
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId
+        outputs:
+          phase: $response.body.phase
+      - stepId: submitRejectingApproval
+        description: Submit a rejecting approval decision (for example at level 1).
+        operationId: b2bPurchaseOrder_approveLevel1
+        x-source: b2bPurchaseOrder
+        parameters:
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId
+        requestBody:
+          contentType: application/json
+          payload: $inputs.rejectingApprovalInput
+        outputs:
+          phase: $response.body.phase
+      - stepId: getResult
+        description: Retrieve the final rejected outcome and inspect the rejection code and reason.
+        operationId: b2bPurchaseOrder_getResult
+        x-source: b2bPurchaseOrder
+        parameters:
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId

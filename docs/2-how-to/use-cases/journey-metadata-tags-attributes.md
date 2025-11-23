@@ -2,6 +2,12 @@
 
 Status: Draft | Last updated: 2025-11-21
 
+## Where to start
+
+For the full pattern and example journey, see:
+
+- Technical pattern: `docs/3-reference/examples/technical/metadata-from-payload/metadata-from-payload.md`
+
 ## Problem
 
 We want to:

@@ -1,0 +1,44 @@
+arazzo: 1.0.1
+info:
+  title: JourneyForge – http-post-json workflows
+  version: 0.1.0
+  summary: Workflows for HTTP POST with JSON body and 201 checks.
+  description: Workflows for HTTP POST with JSON body and 201 checks.
+sourceDescriptions:
+  - name: httpPostJson
+    type: openapi
+    url: http-post-json.openapi.yaml
+workflows:
+  - workflowId: http-post-json-happy-path
+    summary: Start an http-post-json journey and retrieve the final outcome.
+    description: Start an http-post-json journey and retrieve the final outcome.
+    inputs:
+      type: object
+      properties:
+        startRequest:
+          description: Initial payload for the http-post-json journey.
+          type: object
+          required:
+            - inputId
+          properties:
+            inputId:
+              type: string
+          additionalProperties: true
+    steps:
+      - stepId: startJourney
+        description: Start a new http-post-json journey instance.
+        operationId: httpPostJson_start
+        x-source: httpPostJson
+        requestBody:
+          contentType: application/json
+          payload: $inputs.startRequest
+        outputs:
+          journeyId: $response.body.journeyId
+      - stepId: getResult
+        description: Retrieve the final outcome after the POST.
+        operationId: httpPostJson_getResult
+        x-source: httpPostJson
+        parameters:
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId

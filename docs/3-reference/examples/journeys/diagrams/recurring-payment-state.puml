@@ -1,0 +1,15 @@
+@startuml
+!include journey-diagram-theme.puml
+title recurring-payment – HTTP-visible states
+
+[*] --> startJourney
+
+state startJourney
+state getResult
+
+startJourney --> getResult : GET /journeys/{journeyId}/result\n(after configuration)
+
+getResult --> [*]
+
+@enduml
+

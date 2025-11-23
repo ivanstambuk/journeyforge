@@ -1,0 +1,31 @@
+@startuml
+!include journey-diagram-theme.puml
+title travel-booking-bundle – client activity flow
+
+start
+
+:Client sends\nPOST /api/v1/journeys/travel-booking-bundle/start\nwith TravelBookingStartRequest;
+
+repeat
+  :Client calls\nGET /api/v1/journeys/{journeyId}/result;
+  :Journeys API returns\nJourneyOutcome with phase/output;
+repeat while (phase == "Running" and\ncurrentState != "waitForTravelerConfirmation") is (reserving bundle)
+
+if (currentState == "waitForTravelerConfirmation"?) then (yes)
+  :Traveler confirms or cancels bundle\nPOST /api/v1/journeys/{journeyId}/steps/confirmBundle;
+endif
+
+if (currentState == "waitForChangeOrCancel"?) then (yes)
+  :Traveler or agent performs post-booking action\nPOST /api/v1/journeys/{journeyId}/steps/changeOrCancel;
+endif
+
+if (phase == "Succeeded" and overallStatus == "CONFIRMED"?) then (confirmed)
+  :Client confirms confirmed trip and\nupdates itinerary storage;
+  stop
+else (partial/cancelled/failed)
+  :Client handles PARTIALLY_CONFIRMED, CANCELLED,\nor FAILED based on segment details;
+  stop
+endif
+
+@enduml
+

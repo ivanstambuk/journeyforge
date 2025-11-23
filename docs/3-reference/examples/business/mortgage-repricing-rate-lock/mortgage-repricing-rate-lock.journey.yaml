@@ -1,0 +1,264 @@
+apiVersion: v1
+kind: Journey
+metadata:
+  name: mortgage-repricing-rate-lock
+  version: 0.1.0
+  description: Mortgage repricing journey with customer acceptance and asynchronous rate lock confirmation.
+spec:
+  apis:
+    mortgages: { openApiRef: apis/mortgages.openapi.yaml }
+  input:
+    schema:
+      title: MortgageRepricingStartRequest
+      type: object
+      required:
+        - mortgageId
+        - requestedFixYears
+        - requestedProductCode
+      properties:
+        mortgageId:
+          type: string
+        requestedFixYears:
+          type: integer
+        requestedProductCode:
+          type: string
+        channel:
+          type: string
+        customerId:
+          type: string
+      additionalProperties: true
+  output:
+    schema:
+      title: MortgageRepricingOutcome
+      type: object
+      required:
+        - decision
+      properties:
+        decision:
+          type: string
+          enum:
+            - LOCKED
+            - EXPIRED
+            - REJECTED
+        mortgageId:
+          type: string
+        previousRate:
+          type: number
+        lockedRate:
+          type: number
+        lockExpiry:
+          type: string
+          format: date-time
+        lockId:
+          type: string
+        rejectionReason:
+          type: string
+        repricingSummary:
+          type: object
+      additionalProperties: true
+  start: requestOffer
+  states:
+    requestOffer:
+      type: task
+      task:
+        kind: httpCall
+        operationRef: mortgages.requestRepricingOffer
+        params:
+          path:
+            mortgageId: "${context.mortgageId}"
+          headers:
+            Accept: application/json
+        body:
+          mapper:
+            lang: dataweave
+            expr: |
+              {
+                requestedFixYears: context.requestedFixYears,
+                requestedProductCode: context.requestedProductCode,
+                channel: context.channel
+              }
+        timeoutMs: 5000
+        resultVar: offer
+      next: evaluateOffer
+
+    evaluateOffer:
+      type: choice
+      choices:
+        - when:
+            predicate:
+              lang: dataweave
+              expr: |
+                offer.ok == true
+          next: waitForCustomerAcceptance
+      default: rejected
+
+    waitForCustomerAcceptance:
+      type: wait
+      wait:
+        channel: manual
+        input:
+          schema:
+            description: Customer acceptance or rejection of the repricing offer.
+            type: object
+            required:
+              - decision
+            properties:
+              decision:
+                type: string
+                enum:
+                  - accept
+                  - decline
+              comment:
+                type: string
+            additionalProperties: false
+        response:
+          outputVar: customerAcceptanceResponse
+          schema:
+            title: CustomerAcceptanceProjection
+            type: object
+            description: Additional top-level fields returned from the customerAcceptance step.
+            properties:
+              decision:
+                type: string
+                enum:
+                  - accept
+                  - decline
+              comment:
+                type: string
+            additionalProperties: true
+        apply:
+          mapper:
+            lang: dataweave
+            expr: |
+              context ++ {
+                customerAcceptance: payload,
+                customerAcceptanceResponse: {
+                  decision: payload.decision,
+                  comment: payload.comment
+                }
+              }
+        on:
+          - when:
+              predicate:
+                lang: dataweave
+                expr: |
+                  payload.decision == "accept"
+            next: initiateRateLock
+        default: declined
+
+    initiateRateLock:
+      type: task
+      task:
+        kind: httpCall
+        operationRef: mortgages.lockRate
+        params:
+          path:
+            mortgageId: "${context.mortgageId}"
+          headers:
+            Accept: application/json
+        body:
+          mapper:
+            lang: dataweave
+            expr: |
+              {
+                offerId: offer.body.offerId
+              }
+        timeoutMs: 3000
+        resultVar: lockRequest
+      next: waitForLockConfirmation
+
+    waitForLockConfirmation:
+      type: webhook
+      webhook:
+        input:
+          schema:
+            title: Rate lock confirmation input
+            type: object
+            required:
+              - mortgageId
+              - status
+            properties:
+              mortgageId:
+                type: string
+              status:
+                type: string
+                enum:
+                  - LOCKED
+                  - EXPIRED
+                  - REJECTED
+              previousRate:
+                type: number
+              lockedRate:
+                type: number
+              lockExpiry:
+                type: string
+                format: date-time
+              lockId:
+                type: string
+              reason:
+                type: string
+            additionalProperties: true
+        response:
+          outputVar: lockResponse
+          schema:
+            title: Rate lock step response
+            type: object
+            description: Additional top-level fields returned from the rate lock confirmation step.
+            properties:
+              status:
+                type: string
+                enum:
+                  - LOCKED
+                  - EXPIRED
+                  - REJECTED
+              lockedRate:
+                type: number
+              lockExpiry:
+                type: string
+                format: date-time
+              lockId:
+                type: string
+              reason:
+                type: string
+            additionalProperties: true
+        security:
+          kind: sharedSecretHeader
+          header: X-RateLock-Secret
+          secretRef: secret://webhook/mortgages-rate-lock
+        apply:
+          mapper:
+            lang: dataweave
+            expr: |
+              context ++ {
+                lockCallback: payload,
+                lockResponse: {
+                  status: payload.status,
+                  lockedRate: payload.lockedRate,
+                  lockExpiry: payload.lockExpiry,
+                  lockId: payload.lockId,
+                  reason: payload.reason
+                }
+              }
+        on:
+          - when:
+              predicate:
+                lang: dataweave
+                expr: |
+                  payload.status == "LOCKED"
+            next: locked
+        default: expiredOrRejected
+
+    locked:
+      type: succeed
+      outputVar: lockCallback
+
+    declined:
+      type: fail
+      errorCode: CUSTOMER_DECLINED
+      reason: "Customer declined the repricing offer"
+
+    expiredOrRejected:
+      type: fail
+      errorCode: RATE_LOCK_FAILED
+      reason: "Rate lock expired or was rejected by the provider"
+

@@ -1,0 +1,21 @@
+@startuml
+!include journey-diagram-theme.puml
+title loan-application – HTTP-visible states
+
+[*] --> startJourney
+
+state startJourney
+state getStatusWhilePending
+state submitUnderwriterDecision
+state getResult
+
+startJourney --> getStatusWhilePending : GET /journeys/{journeyId}\n(while checks or review pending)
+startJourney --> getResult : GET /journeys/{journeyId}/result\n(auto-approved cases)
+
+getStatusWhilePending --> submitUnderwriterDecision : POST /steps/underwriterApproval
+submitUnderwriterDecision --> getResult : GET /journeys/{journeyId}/result
+
+getResult --> [*]
+
+@enduml
+

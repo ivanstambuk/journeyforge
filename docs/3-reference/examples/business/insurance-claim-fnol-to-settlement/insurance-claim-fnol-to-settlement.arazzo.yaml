@@ -1,0 +1,272 @@
+arazzo: 1.0.1
+info:
+  title: JourneyForge – insurance-claim-fnol-to-settlement workflows
+  version: 0.1.0
+  summary: Workflows for insurance claims from FNOL to settlement with multi-party assessment.
+  description: Workflows for starting an insurance claim at FNOL, collecting additional FNOL details, coordinating parallel adjuster and provider assessments, confirming settlement, and reading the final outcome. See Q-015 in docs/4-architecture/open-questions.md for design context.
+sourceDescriptions:
+  - name: insuranceClaim
+    type: openapi
+    url: insurance-claim-fnol-to-settlement.openapi.yaml
+workflows:
+  - workflowId: insurance-claim-fnol-to-settlement-approved
+    summary: Start a claim journey, collect FNOL details and assessments, approve settlement, and read the settled outcome.
+    description: Start an insurance-claim-fnol-to-settlement journey, let the engine collect additional FNOL details, parallel adjuster and provider assessments, confirm settlement, and then retrieve the SETTLED outcome.
+    inputs:
+      type: object
+      properties:
+        startRequest:
+          description: Initial insurance claim FNOL request.
+          type: object
+          required:
+            - claimId
+            - policyId
+            - claimantId
+            - lossDate
+          properties:
+            claimId:
+              type: string
+            policyId:
+              type: string
+            claimantId:
+              type: string
+            lossDate:
+              type: string
+              format: date
+            lossType:
+              type: string
+            description:
+              type: string
+            estimatedLossAmount:
+              type: number
+            currency:
+              type: string
+          additionalProperties: true
+        fnolDetailsInput:
+          description: Additional FNOL details from the claimant.
+          type: object
+          required:
+            - decision
+          properties:
+            decision:
+              type: string
+              enum:
+                - submit
+            notes:
+              type: string
+          additionalProperties: false
+        adjusterReportInput:
+          description: Adjuster report approving the claim with a recommended amount.
+          type: object
+          required:
+            - decision
+          properties:
+            decision:
+              type: string
+              enum:
+                - approve
+            recommendedAmount:
+              type: number
+            notes:
+              type: string
+          additionalProperties: false
+        providerEstimateInput:
+          description: Provider estimate approving the claim with an estimated cost.
+          type: object
+          required:
+            - decision
+          properties:
+            decision:
+              type: string
+              enum:
+                - approve
+            estimatedCost:
+              type: number
+            notes:
+              type: string
+          additionalProperties: false
+        settlementApprovalInput:
+          description: Internal approval for settlement amount and decision.
+          type: object
+          required:
+            - decision
+          properties:
+            decision:
+              type: string
+              enum:
+                - approve
+            settlementAmount:
+              type: number
+            notes:
+              type: string
+          additionalProperties: false
+    steps:
+      - stepId: startJourney
+        description: Start a new insurance-claim-fnol-to-settlement journey instance.
+        operationId: insuranceClaimFnolToSettlement_start
+        x-source: insuranceClaim
+        requestBody:
+          contentType: application/json
+          payload: $inputs.startRequest
+        outputs:
+          journeyId: $response.body.journeyId
+      - stepId: getStatusAfterCreation
+        description: Poll journey status until the claim has been created and the journey is waiting for additional FNOL details.
+        operationId: insuranceClaimFnolToSettlement_getStatus
+        x-source: insuranceClaim
+        parameters:
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId
+        outputs:
+          phase: $response.body.phase
+      - stepId: submitFnolDetails
+        description: Provide additional FNOL details from the claimant.
+        operationId: insuranceClaimFnolToSettlement_submitFnolDetails
+        x-source: insuranceClaim
+        parameters:
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId
+        requestBody:
+          contentType: application/json
+          payload: $inputs.fnolDetailsInput
+        outputs:
+          phase: $response.body.phase
+      - stepId: submitAdjusterReport
+        description: Provide adjuster report approving the claim.
+        operationId: insuranceClaimFnolToSettlement_submitAdjusterReport
+        x-source: insuranceClaim
+        parameters:
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId
+        requestBody:
+          contentType: application/json
+          payload: $inputs.adjusterReportInput
+        outputs:
+          phase: $response.body.phase
+      - stepId: submitProviderEstimate
+        description: Provide provider estimate approving the claim.
+        operationId: insuranceClaimFnolToSettlement_submitProviderEstimate
+        x-source: insuranceClaim
+        parameters:
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId
+        requestBody:
+          contentType: application/json
+          payload: $inputs.providerEstimateInput
+        outputs:
+          phase: $response.body.phase
+      - stepId: getStatusBeforeSettlement
+        description: Poll journey status until assessments are complete and the journey is waiting for settlement approval.
+        operationId: insuranceClaimFnolToSettlement_getStatus
+        x-source: insuranceClaim
+        parameters:
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId
+        outputs:
+          phase: $response.body.phase
+      - stepId: confirmSettlement
+        description: Provide internal approval for the settlement amount.
+        operationId: insuranceClaimFnolToSettlement_confirmSettlement
+        x-source: insuranceClaim
+        parameters:
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId
+        requestBody:
+          contentType: application/json
+          payload: $inputs.settlementApprovalInput
+        outputs:
+          phase: $response.body.phase
+      - stepId: getResult
+        description: Retrieve the final settled outcome once settlement and payment have been processed.
+        operationId: insuranceClaimFnolToSettlement_getResult
+        x-source: insuranceClaim
+        parameters:
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId
+
+  - workflowId: insurance-claim-fnol-to-settlement-denied
+    summary: Start a claim journey and observe a denial during assessment or settlement.
+    description: Start an insurance-claim-fnol-to-settlement journey where either FNOL details, adjuster report, provider estimate, or settlement approval leads to a denial, then retrieve the DENIED outcome and inspect the settlement code and reason.
+    inputs:
+      type: object
+      properties:
+        startRequest:
+          description: Initial insurance claim FNOL request likely to result in denial.
+          type: object
+          required:
+            - claimId
+            - policyId
+            - claimantId
+            - lossDate
+          properties:
+            claimId:
+              type: string
+            policyId:
+              type: string
+            claimantId:
+              type: string
+            lossDate:
+              type: string
+              format: date
+          additionalProperties: true
+        denyingApprovalInput:
+          description: Approval decision that denies the claim at one of the steps (for example settlement approval).
+          type: object
+          required:
+            - decision
+          properties:
+            decision:
+              type: string
+              enum:
+                - deny
+            notes:
+              type: string
+          additionalProperties: false
+    steps:
+      - stepId: startJourney
+        description: Start a new insurance-claim-fnol-to-settlement journey instance.
+        operationId: insuranceClaimFnolToSettlement_start
+        x-source: insuranceClaim
+        requestBody:
+          contentType: application/json
+          payload: $inputs.startRequest
+        outputs:
+          journeyId: $response.body.journeyId
+      - stepId: getStatusAfterCreation
+        description: Poll journey status until the journey is ready for the denying step.
+        operationId: insuranceClaimFnolToSettlement_getStatus
+        x-source: insuranceClaim
+        parameters:
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId
+        outputs:
+          phase: $response.body.phase
+      - stepId: submitDenyingApproval
+        description: Submit a denial decision (for example at settlement approval).
+        operationId: insuranceClaimFnolToSettlement_confirmSettlement
+        x-source: insuranceClaim
+        parameters:
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId
+        requestBody:
+          contentType: application/json
+          payload: $inputs.denyingApprovalInput
+        outputs:
+          phase: $response.body.phase
+      - stepId: getResult
+        description: Retrieve the final denied outcome and inspect settlementReason or related details.
+        operationId: insuranceClaimFnolToSettlement_getResult
+        x-source: insuranceClaim
+        parameters:
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId

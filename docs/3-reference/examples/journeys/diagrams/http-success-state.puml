@@ -1,0 +1,20 @@
+@startuml
+!include journey-diagram-theme.puml
+title http-success – state transitions
+
+[*] --> call_api
+
+state call_api
+state decide
+state done
+state failure
+
+call_api --> decide : HTTP result stored in context.api
+decide --> done : context.api.ok == true
+decide --> failure : default branch
+
+done --> [*]
+failure --> [*]
+
+@enduml
+

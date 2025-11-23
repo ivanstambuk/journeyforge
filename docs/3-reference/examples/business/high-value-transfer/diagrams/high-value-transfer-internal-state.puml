@@ -1,0 +1,53 @@
+@startuml
+!include journey-diagram-theme.puml
+title high-value-transfer – internal DSL state graph
+
+[*] --> runChecks
+
+state runChecks
+state evaluateChecks
+state waitForApproval
+state initiateTransfer
+state waitForSettlement
+state settled
+state rejected
+state failed
+
+runChecks --> evaluateChecks : fraud.checkTransfer &\nsanctions.screenTransfer\nresultVar: checks
+
+evaluateChecks --> waitForApproval : checks.fraud.ok &&\nchecks.sanctions.ok
+evaluateChecks --> rejected : default (checks failed)
+
+waitForApproval --> initiateTransfer : payload.decision == "approve"
+waitForApproval --> rejected : decision == "reject"
+
+initiateTransfer --> waitForSettlement : transfers.initiateHighValueTransfer
+
+waitForSettlement --> settled : payload.status == "SETTLED"
+waitForSettlement --> failed : status == "FAILED"
+
+settled --> [*]
+rejected --> [*]
+failed --> [*]
+
+note right of runChecks
+  type: parallel
+  branches: fraud, sanctions
+  join.strategy: allOf
+  join.resultVar: checks
+end note
+
+note right of waitForApproval
+  type: wait (manual channel)
+  step id: approveTransfer
+  input: ApproveTransferInput
+end note
+
+note right of waitForSettlement
+  type: webhook (provider callback)
+  step id: waitForSettlement
+  security: X-Settlement-Secret
+end note
+
+@enduml
+

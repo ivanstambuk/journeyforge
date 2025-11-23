@@ -1,0 +1,23 @@
+@startuml
+!include journey-diagram-theme.puml
+title recurring-payment – client activity flow
+
+start
+
+:Client sends\nPOST /api/v1/journeys/recurring-payment/start\nwith RecurringPaymentStartRequest\n(userId, paymentMethodRef,\namount, currency, interval, maxRuns);
+
+:Journeys API creates or updates\nschedule binding via task.kind: schedule;
+
+:Client calls\nGET /api/v1/journeys/{journeyId}/result;
+:Journeys API returns\nJourneyOutcome with output.status == "SCHEDULED"\nand configured schedule fields;
+
+if (JourneyOutcome.phase == "Succeeded"?) then (yes)
+  :Client records schedule configuration\nfor the user;
+  stop
+else (failed)
+  :Client handles configuration failure\nbased on error.code / error.reason;
+  stop
+endif
+
+@enduml
+

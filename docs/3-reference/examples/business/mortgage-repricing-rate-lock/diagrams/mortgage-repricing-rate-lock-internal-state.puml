@@ -1,0 +1,46 @@
+@startuml
+!include journey-diagram-theme.puml
+title mortgage-repricing-rate-lock – internal DSL state graph
+
+[*] --> requestOffer
+
+state requestOffer
+state evaluateOffer
+state waitForCustomerAcceptance
+state initiateRateLock
+state waitForLockConfirmation
+state locked
+state declined
+state expiredOrRejected
+
+requestOffer --> evaluateOffer : mortgages.requestRepricingOffer\nresultVar: offer
+
+evaluateOffer --> waitForCustomerAcceptance : offer.ok == true
+evaluateOffer --> expiredOrRejected : default (not eligible or error)
+
+waitForCustomerAcceptance --> initiateRateLock : payload.decision == "accept"
+waitForCustomerAcceptance --> declined : decision == "decline"
+
+initiateRateLock --> waitForLockConfirmation : mortgages.lockRate\nresultVar: lockRequest
+
+waitForLockConfirmation --> locked : payload.status == "LOCKED"
+waitForLockConfirmation --> expiredOrRejected : status == "EXPIRED" or "REJECTED"
+
+locked --> [*]
+declined --> [*]
+expiredOrRejected --> [*]
+
+note right of waitForCustomerAcceptance
+  type: wait (manual channel)
+  step id: customerAcceptance
+  input: CustomerAcceptanceInput
+end note
+
+note right of waitForLockConfirmation
+  type: webhook (provider callback)
+  step id: waitForLockConfirmation
+  security: X-RateLock-Secret
+end note
+
+@enduml
+

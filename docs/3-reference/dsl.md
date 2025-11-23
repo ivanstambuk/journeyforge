@@ -1,38 +1,70 @@
 # JourneyForge DSL – Reference
 
-Status: Draft | Last updated: 2025-11-21
+Status: Draft | Last updated: 2025-11-23
 
-This document is **normative** for the JourneyForge journey DSL (for `kind: Journey` and `kind: Api`) supported by Feature 001. It defines language surface and semantics only; **engine implementation status is non-normative and tracked in feature specs** (for example `docs/4-architecture/features/001/spec.md`). See Q-004 in `docs/4-architecture/open-questions.md` for background.
+This document is **normative** for the JourneyForge journey DSL (for `kind: Journey` and `kind: Api`) supported by Feature 001. It defines language surface and semantics only; **engine implementation status is non-normative and tracked in feature specs** (for example `docs/4-architecture/features/001/spec.md`).
 
 This document normatively defines the JourneyForge journey DSL (for `kind: Journey` and `kind: Api`) supported by Feature 001. It aims to be explicit about behaviour and limitations so we can refine before implementation.
 
+## Contents
+
+- [1. Overview](#dsl-1-overview)
+- [2. Top-level shape](#dsl-2-top-level-shape)
+- [3. Context and paths](#dsl-3-context-and-paths)
+- [4. Interpolation](#dsl-4-interpolation)
+- [5. States](#dsl-5-states)
+- [6. Example](#dsl-6-example)
+- [7. Limitations (explicit non-capabilities)](#dsl-7-limitations)
+- [8. Naming & terminology](#dsl-8-naming-and-terminology)
+- [9. Forward-compatibility notes](#dsl-9-forward-compatibility-notes)
+- [10. DataWeave – Expressions & Mappers](#dsl-10-dataweave)
+- [11. Schemas (optional)](#dsl-11-schemas)
+- [12. External-Input States (wait/webhook)](#dsl-12-external-input-states)
+- [13. Resilience Policies (HTTP)](#dsl-13-resilience-policies)
+- [14. Transform State (DataWeave)](#dsl-14-transform-state)
+- [15. Cache Resources & Operations](#dsl-15-cache)
+- [16. Parallel State (branches with join)](#dsl-16-parallel-state)
+- [17. HTTP Bindings (Inbound)](#dsl-17-http-bindings)
+- [18. HTTP Security Policies (Auth)](#dsl-18-http-security-policies)
+- [19. Outbound HTTP Auth (httpClientAuth)](#dsl-19-outbound-http-auth)
+- [20. Named Outcomes (spec.outcomes)](#dsl-20-named-outcomes)
+- [21. Metadata limits (MetadataLimits)](#dsl-21-metadata-limits)
+- [22. HTTP Cookies (spec.cookies)](#dsl-22-http-cookies)
+- [23. Journey Access Binding](#dsl-23-journey-access-binding)
+- [24. Error configuration (spec.errors)](#dsl-24-error-configuration)
+
+<a id="dsl-1-overview"></a>
 ## 1. Overview
 - Purpose: describe small, synchronous API journeys (defined by `kind: Journey`) in a human-friendly format (YAML 1.2 subset) with a precise JSON model.
 - Files: `.journey.yaml` / `.journey.yml` or `.journey.json`.
-- States: `task` (HTTP call), `choice` (branch), `transform` (DataWeave mapping), `parallel` (branches with join), `wait` (external input), `webhook` (callback input), `succeed` (terminal), `fail` (terminal).
+- States: `task` (HTTP, event publish, schedule), `choice` (branch), `transform` (DataWeave mapping), `parallel` (branches with join), `wait` (external input), `webhook` (callback input), `timer` (durable in-journey delay, journeys only), `succeed` (terminal), `fail` (terminal).
 - Expressions & transforms: DataWeave 2.x is the canonical language for predicates and (future) transform nodes.
-- Execution: starts at `spec.start`, mutates a JSON `context`, and terminates on `succeed`/`fail`, a global execution timeout (`spec.execution.maxDurationSec`), or an engine execution error. When `spec.compensation` is present, a separate compensation jo urney MAY run after non-successful termination.
+- Execution: starts at `spec.start`, mutates a JSON `context`, and terminates on `succeed`/`fail`, a global execution timeout (`spec.execution.maxDurationSec`), or an engine execution error. When `spec.compensation` is present, a separate compensation journey MAY run after non-successful termination and, optionally, after selected successful terminations.
 
-### 1a. State types and surface
+### 1.1 State types and surface
 
 The DSL surface defines the following state types and configuration blocks. All of them belong to the same language; the engine may support them in stages, but the spec treats them as a single coherent DSL.
 
 | State type / construct                    | Description                                      | Notes in spec                                          |
 |------------------------------------------|--------------------------------------------------|--------------------------------------------------------|
 | `task` (`kind: httpCall`)                | HTTP call with structured result recording       | Fully specified, including `operationRef` and errors   |
-| `choice`                                 | Branch on predicates                             | Fully specified, DataWeave predicates only             |
+| `task` (`kind: eventPublish`)            | Publish events to an external transport          | Fully specified for Kafka in this version              |
+| `task` (`kind: schedule`)                | Create/update schedule bindings for future runs  | Fully specified for `kind: Journey`                   |
+| `choice`                                 | Predicate-based, data-driven branching on context | Fully specified, DataWeave predicates only             |
 | `succeed`                                | Terminal success                                 | Fully specified                                        |
 | `fail`                                   | Terminal failure with error code/reason          | Fully specified; aligned with RFC 9457 Problem Details |
 | `transform`                              | DataWeave mapping into context/vars              | Fully specified                                        |
-| `wait`                                   | Manual/external input                            | DSL shape + REST callback surface defined              |
+| `wait`                                   | Manual/external input                            | DSL shape + REST step surface defined                  |
 | `webhook`                                | Callback input                                   | DSL shape + callback surface and security hooks defined|
+| `timer`                                  | Durable time-based delay within a journey        | Journeys only; non-interactive, see section 12.3       |
 | `parallel`                               | Parallel branches with join                      | DSL shape + join contract defined                      |
 | Cache resources/tasks (`cacheGet`/`cachePut`) | Named caches and cache operations           | DSL shape defined; cache semantics described in section 15 |
 | Policies (`httpResilience`, `httpSecurity`, `httpClientAuth`) | Resiliency/auth configuration (inbound & outbound) | Configuration surface defined; policy semantics described in sections 17–19 |
 
+<a id="dsl-2-top-level-shape"></a>
 ## 2. Top-level shape
 
-### 2a. Inline JSON Schemas
+### 2.1 Inline JSON Schemas
 
 The DSL embeds JSON Schemas directly in a few well-known locations:
 - `spec.input.schema` – logical input object for the journey/API.
@@ -92,7 +124,7 @@ spec:
       additionalProperties: true
 ```
 
-## 2b. API catalog (OpenAPI binding)
+### 2.2 API catalog (OpenAPI binding)
 To reference downstream services by OpenAPI operationId instead of raw URLs, a journey definition (`kind: Journey`) or API endpoint may declare an API catalog and use `operationRef` in HTTP tasks.
 
 Catalog shape (under `spec.apis`):
@@ -136,7 +168,7 @@ Constraints
   - MUST respect the maximum count configured via the `MetadataLimits` document (see section 21); tools SHOULD treat specs that exceed this as validation errors.
 - `spec.states` must contain `spec.start`.
 
-### 2a.i. Journeys (`kind: Journey`)
+#### 2.2.1 Journeys (`kind: Journey`)
 
 `kind: Journey` specs are “journey definitions”:
 - Initiated via `/api/v1/journeys/{journeyName}/start` (see `docs/3-reference/openapi/journeys.openapi.yaml` and the OpenAPI export guideline).
@@ -144,9 +176,9 @@ Constraints
 - May use all state types, including long‑lived external input (`wait`, `webhook`).
  - For the start call, the HTTP request body is deserialised as JSON and used directly as the initial `context` object for the journey (subject to any input schema the journey definition declares).
 
-The semantics of `succeed`/`fail` for journeys are defined in sections 5.4–5.6, which describe the `JourneyOutcome` envelope.
+The semantics of `succeed`/`fail` for journeys are defined in sections 5.4–5.7, which describe the `JourneyOutcome` envelope.
 
-### 2a.ii. API endpoints (`kind: Api`)
+#### 2.2.2 API endpoints (`kind: Api`)
 
 API endpoints reuse the same state machine model but are exposed as synchronous, stateless HTTP endpoints:
 - HTTP surface:
@@ -218,7 +250,7 @@ Context and results for `kind: Api`
   - The response body is taken from `context.<outputVar>` when `outputVar` is set on the `succeed` state; otherwise the full `context` is used.
 - Error responses:
   - Reaching `fail` terminates execution and produces a non‑2xx HTTP response.
-  - `errorCode` and `reason` follow the RFC 9457 alignment rules in section 5.6.
+  - `errorCode` and `reason` follow the RFC 9457 alignment rules in section 5.7.
   - The structure of the error payload for a given journey or API MUST follow the journey’s error configuration:
     - When `spec.errors.envelope` is omitted or uses `format: problemDetails`, the error body MUST use the Problem Details shape.
     - When `spec.errors.envelope.format: custom` is present, the error body MUST be produced by the journey’s configured envelope mapper.
@@ -229,7 +261,7 @@ Context and results for `kind: Api`
       - For `phase = Failed`, the engine MUST use the Problem `status` field when present and valid, or 500 when absent.
   - The error envelope itself remains governed by `spec.errors.envelope` and MUST be uniform for a given journey or API; `spec.apiResponses` MUST NOT change the error body shape, only the HTTP status code.
 
-## 2b. Defaults (spec.defaults)
+### 2.3 Defaults (spec.defaults)
 
 Journey definitions may define per-journey defaults to reduce repetition. Defaults apply when specific fields are omitted at state level.
 
@@ -262,7 +294,7 @@ Validation
 - `headers` must be a map of string keys to string values.
 - `resiliencePolicyRef`, when present, SHOULD refer to an id under `spec.policies.httpResilience.definitions` (or a platform-level policy); unknown ids are a validation warning for tools, but may be resolved by the platform or at engine configuration time.
 
-## 2c. Execution deadlines (spec.execution)
+### 2.4 Execution deadlines (spec.execution)
 
 Journeys and API endpoints may define a global execution budget to avoid unbounded run times. The execution block expresses a spec-visible wall-clock limit and how timeouts are surfaced to callers.
 
@@ -289,7 +321,7 @@ Semantics
 - Timeout outcome:
   - When the global deadline is reached, the engine MUST stop scheduling new states and complete the run as a failure using `spec.execution.onTimeout`.
   - For `kind: Journey`:
-    - The resulting `JourneyOutcome` has `phase = Failed` and `error` populated from `onTimeout.errorCode` and `onTimeout.reason` (following the Problem Details alignment rules in section 5.6).
+    - The resulting `JourneyOutcome` has `phase = Failed` and `error` populated from `onTimeout.errorCode` and `onTimeout.reason` (following the Problem Details alignment rules in section 5.7).
   - For `kind: Api`:
     - The engine terminates the HTTP request with a non‑2xx response that reflects the same error code and reason.
     - Exporters and the engine MAY map execution timeouts to HTTP 504 Gateway Timeout by default, or use `spec.outcomes` and canonical Problem Details `status` as inputs when choosing HTTP status codes for timeouts.
@@ -306,13 +338,14 @@ Validation
     - `reason`: non-empty string describing the timeout condition for humans (operators, API clients).
  - `spec.execution` MAY be used for both `kind: Journey` and `kind: Api` specs.
 
-## 2d. Global compensation (spec.compensation)
+### 2.5 Global compensation (spec.compensation)
 
-Some journeys and APIs need a global “compensation journey” that runs when the main execution does not succeed, to undo or mitigate side effects (for example, HTTP mutations, database writes, or emitted events). The `spec.compensation` block allows authors to attach such a compensation path to a journey definition in a declarative, opt‑in way.
+Some journeys and APIs need a global “compensation journey” that runs when the main execution does not succeed, to undo or mitigate side effects (for example, HTTP mutations, database writes, or emitted events). In some cases, authors also want to run compensation‑style cleanup for selected successful outcomes (for example partial successes) while keeping `JourneyOutcome.phase = Succeeded`. The `spec.compensation` block allows authors to attach such a compensation path to a journey definition in a declarative, opt‑in way.
 
 At a high level:
 - The main journey executes as usual from `spec.start` until it reaches `succeed`/`fail`, hits a global execution timeout (`spec.execution.maxDurationSec`), or is cancelled.
-- When the main run terminates in any non‑success state (fail, timeout, cancel, engine execution error), and `spec.compensation` is present, the engine may start a separate compensation journey using the embedded compensation state machine.
+- When the main run terminates in any non‑success state (fail, timeout, cancel, engine execution error), and `spec.compensation` is present, the engine starts a separate compensation journey using the embedded compensation state machine.
+- Optionally, authors can declare that compensation SHOULD ALSO run for certain successful outcomes (for example, when the final output indicates partial success). In those cases the main journey still terminates with `JourneyOutcome.phase = Succeeded`, and compensation runs as a follow‑up journey that can inspect the final `context` and `output`.
 
 Shape:
 
@@ -327,6 +360,12 @@ spec:
   compensation:
     mode: async                  # optional; async (default) | sync
     start: rollback              # required; compensation start state id
+    alsoFor:                     # optional; success-only triggers for compensation
+      - when:
+          predicate:             # optional; DataWeave, evaluated after a successful run
+            lang: dataweave
+            expr: |
+              output.overallStatus == "PARTIALLY_CONFIRMED"
     states:                      # required; map<string, State> (same shapes as top-level)
       rollback:
         type: task
@@ -369,12 +408,18 @@ spec:
 Semantics
 - Trigger conditions:
   - `spec.compensation` is optional; when absent, no global compensation is performed.
-  - When present, compensation is triggered when the main run terminates with a non‑success outcome:
+  - When present, compensation is always triggered when the main run terminates with a non‑success outcome:
     - It reaches a terminal `fail` state.
     - It hits the global execution deadline and terminates using `spec.execution.onTimeout`.
     - It is cancelled via an engine/admin API.
     - It ends due to an internal engine error.
-  - Successful runs (terminal `succeed` without error) MUST NOT trigger compensation.
+  - Successful runs (terminal `succeed` without error) MAY ALSO trigger compensation when `alsoFor` is declared:
+    - After the main run terminates successfully and `JourneyOutcome.phase = Succeeded`, the engine evaluates each entry in `alsoFor` in a deterministic order (for example, insertion order).
+    - For each `alsoFor` rule:
+      - If `when.predicate` is present, the engine evaluates it with the final journey context and bindings such as `output` available; if it returns `true`, the rule matches.
+      - If `when.predicate` is omitted, the rule matches unconditionally for successful runs.
+    - If at least one rule matches, the engine triggers compensation exactly once for that run (regardless of how many rules match), using the same `mode` semantics as for non‑success outcomes.
+    - If no rules match, no compensation is performed for that successful run.
 - Compensation journey:
   - The `compensation.states` map defines a separate state machine, using the same state types and configuration shapes as the top-level journey definition (`task`, `choice`, `transform`, `parallel`, `wait`, `webhook`, `succeed`, `fail`, etc.), subject to the same `kind: Journey` / `kind: Api` constraints.
   - `compensation.start` identifies the first state in this map.
@@ -386,8 +431,8 @@ Semantics
   - The `outcome` object has the conceptual shape:
     ```json
     {
-      "phase": "Failed",
-      "terminationKind": "Fail | Timeout | Cancel | RuntimeError",
+      "phase": "Succeeded or Failed",
+      "terminationKind": "Success | Fail | Timeout | Cancel | RuntimeError",
       "error": {
         "code": "string or null",
         "reason": "string or null"
@@ -397,7 +442,7 @@ Semantics
       "journeyName": "string"
     }
     ```
-  - Compensation logic can branch on `outcome` (for example, run different undo steps for cancellation vs timeout) and use the copied `context` to determine which side effects to revert.
+  - Compensation logic can branch on `outcome` (for example, run different undo steps for cancellation vs timeout vs partial success) and use the copied `context` (and, where supported by the engine, bindings such as `output`) to determine which side effects to revert or clean up.
 - Mode (`sync` vs `async`):
   - `mode` controls whether the caller waits for compensation to finish.
   - `async` (default when `mode` is omitted):
@@ -411,7 +456,7 @@ Semantics
       - The response still reflects the original failure (for example, from `fail` or `spec.execution.onTimeout`), not the result of compensation.
     - For `kind: Journey`:
       - `JourneyOutcome` is only finalised after compensation finishes.
-      - `JourneyOutcome.phase` and `JourneyOutcome.error` continue to represent the original failure; compensation errors MAY be recorded in telemetry or as extensions but MUST NOT change `phase`.
+      - `JourneyOutcome.phase` and `JourneyOutcome.error` continue to represent the original outcome from the main run (for example, `phase = Failed` for failures, `phase = Succeeded` for partial-success runs); compensation errors MAY be recorded in telemetry or as extensions but MUST NOT change `phase`.
 - Relationship with sub-journeys:
   - `spec.compensation` describes a coarse-grained, global compensation journey for the entire journey/API run.
   - Future features (for example a `subjourney` state or per-step `compensate` blocks) may provide more fine-grained SAGA semantics; these are complementary and not required to use `spec.compensation`.
@@ -425,7 +470,7 @@ Validation
   - Compensation states MUST obey the same constraints as the main spec for the given `kind` (for example, no `wait`/`webhook` in `kind: Api`).
   - Tooling SHOULD flag specs where `spec.compensation` is declared but the engine does not support compensation journeys.
 
-## 2e. HTTP surface & hypermedia links (spec.httpSurface.links)
+### 2.6 HTTP surface & hypermedia links (spec.httpSurface.links)
 
 Journeys (`kind: Journey`) are exposed via the Journeys API, which returns JSON envelopes such as `JourneyStartResponse`, `JourneyStatus`, and `JourneyOutcome`. To make the next legal actions discoverable, implementations MAY expose a HAL-like `_links` object alongside the core fields.
 
@@ -510,7 +555,7 @@ This matches the generic Journeys schema (`JourneyStatus` and `Link`) defined in
 `docs/3-reference/openapi/journeys.openapi.yaml` and illustrates how `_links` describes the
 canonical resources (`self`, `result`), the user‑cancellation action (`cancel`), and active step endpoints.
 
-## 2f. Lifecycle and user cancellation (spec.lifecycle)
+### 2.7 Lifecycle and user cancellation (spec.lifecycle)
 
 Some journeys are long‑running, user‑facing flows where the end user should be able to cancel their own run (for example, abandoning a multi‑step order orchestration). The optional `spec.lifecycle` block lets authors control whether a journey is user‑cancellable.
 
@@ -529,14 +574,14 @@ Semantics
   - When explicitly `false`, self‑service clients MUST NOT be offered a cancel action for this journey.
 - Interaction with Journeys API and `_links`:
   - When `spec.httpSurface.links` are enabled and `cancellable != false`:
-    - While `JourneyStatus.phase == "Running"`, the engine SHOULD expose a `_links.cancel` entry as described in section 2e, pointing to the canonical cancellation step `/api/v1/journeys/{journeyId}/steps/cancel`.
+    - While `JourneyStatus.phase == "Running"`, the engine SHOULD expose a `_links.cancel` entry as described in section 2.6, pointing to the canonical cancellation step `/api/v1/journeys/{journeyId}/steps/cancel`.
     - Once the journey is terminal (`Succeeded` or `Failed`), `_links.cancel` MUST be omitted.
   - When `cancellable == false`, the engine MUST omit `_links.cancel` even if the journey is `Running`.
 - Cancellation semantics (conceptual):
   - When an engine honours a user‑initiated cancellation, it SHOULD:
     - Stop scheduling new states for the run.
     - Complete the run as a failure with a stable error code such as `JOURNEY_CANCELLED` and a human‑readable reason (for example, "Cancelled by user").
-    - Treat the cancellation as a non‑success outcome for the purposes of `spec.compensation`, using `terminationKind = "Cancel"` in the compensation `outcome` binding (see section 2d).
+    - Treat the cancellation as a non‑success outcome for the purposes of `spec.compensation`, using `terminationKind = "Cancel"` in the compensation `outcome` binding (see section 2.5).
 
 Validation
 - When present:
@@ -563,14 +608,14 @@ A cancelled journey might produce an outcome like:
 
 Here cancellation is represented as a failure with a stable error code, aligned with the execution and compensation semantics above.
 
-## 2g. Journey metadata (tags & attributes)
+### 2.8 Journey metadata (tags & attributes)
 
 Journey definitions and journey instances expose lightweight metadata for classification and querying. The DSL
 distinguishes:
 - Definition-level tags (`metadata.tags`) on journey definitions.
 - Instance-level tags (`journey.tags`) and attributes (`journey.attributes`) on journey instances, populated by the engine according to explicit rules.
 
-### 2g.i. Definition tags (`metadata.tags`)
+#### 2.8.1 Definition tags (`metadata.tags`)
 
 - Shape:
   - Optional `metadata.tags: string[]` for both `kind: Journey` and `kind: Api`.
@@ -584,7 +629,7 @@ distinguishes:
   - The maximum number of tags per spec is controlled via the `MetadataLimits` document
     (see section 21).
 
-### 2g.ii. Instance tags (`journey.tags`)
+#### 2.8.2 Instance tags (`journey.tags`)
 
 - Concept:
   - Each journey instance may carry a set of tags derived from:
@@ -601,7 +646,7 @@ distinguishes:
   - The maximum number of instance tags per journey and maximum tag length are controlled by
     `MetadataLimits` (section 21).
 
-### 2g.iii. Instance attributes (`journey.attributes`)
+#### 2.8.3 Instance attributes (`journey.attributes`)
 
 - Concept:
   - `journey.attributes` is a small `Map<String,String>` attached to each journey for
@@ -636,7 +681,7 @@ distinguishes:
   - The maximum number of attribute keys and key/value lengths are controlled by
     `MetadataLimits` (section 21).
 
-### 2g.iv. Metadata bindings (spec.metadata.bindings)
+#### 2.8.4 Metadata bindings (spec.metadata.bindings)
 
 Journey definitions can declare how to bind values from the start request into journey
 instance tags and attributes. Bindings are evaluated exactly once, when handling the start
@@ -730,16 +775,19 @@ Validation
 - Attribute names used in bindings SHOULD follow the same naming guidance as other
   attribute keys (`lowerCamel` / `snake_case`) and are subject to `MetadataLimits`.
 
+<a id="dsl-3-context-and-paths"></a>
 ## 3. Context and paths
 - `context` is a per-journey mutable JSON object initialised to `{}` unless a caller provides an initial value. It lives only for that journey instance and is not shared across journeys.
 - Dot‑paths reference nested fields: `a.b.c` reads `context.a.b.c`.
 - Arrays: the DSL does not support array indexing in paths (no `a[0]`). Future versions may add it.
 
+<a id="dsl-4-interpolation"></a>
 ## 4. Interpolation
 - String fields annotated as “interpolated” support `${context.<dotPath>}` placeholders.
 - Interpolation is supported in HTTP `url`, `headers` values, and `body` (when `body` is a string). Interpolation of non‑string values coerces to JSON string.
 - Unknown/missing variables produce a validation error (not an empty string).
 
+<a id="dsl-5-states"></a>
 ## 5. States
 
 ### 5.1 `task` (HTTP call)
@@ -836,7 +884,7 @@ Validation
   - When absent, and when `spec.policies.httpClientAuth.default` is set, the engine MAY use the default policy as if `auth.policyRef` were set to that id.
   - When neither a task-level `auth.policyRef` nor a usable default can be resolved, the request is sent without additional outbound auth (subject to implementation defaults).
 - HTTP outcomes (status/timeouts) do not terminate execution; you must branch explicitly. In `notify` mode the journey instance cannot branch on call outcomes because they are not observable.
-### 5.1b `task` (event publish)
+### 5.2 `task` (event publish)
 
 In addition to HTTP calls, `task` can publish events to external transports such as Kafka.
 
@@ -879,7 +927,7 @@ Semantics
   - On publish failures after any configured retries, implementations MAY treat this as an engine execution error (failing the journey/API call); the DSL does not surface partial success states.
 
 Validation
-- `task.kind` may be `httpCall` or `eventPublish`.
+- `task.kind` may be `httpCall`, `eventPublish`, or `schedule`.
 - For `kind: eventPublish`:
   - `eventPublish.transport` is required and must be `kafka`.
   - `eventPublish.topic` is required and must be a non-empty string.
@@ -889,7 +937,141 @@ Validation
   - `eventPublish.keySchemaRef` and `eventPublish.valueSchemaRef` (when present) must be non-empty strings referring to JSON Schema documents.
 - `resultVar`, `errorMapping`, and `resiliencePolicyRef` MUST NOT be used with `kind: eventPublish`; event publishes do not produce structured results for branching or error mapping.
 
-### 5.2 `choice` (branch)
+### 5.3 `task` (schedule)
+
+`task.kind: schedule` allows an interactive journey instance to create or update a **schedule binding** that will trigger future, non-interactive runs of the same journey starting from a specific state, with evolving `context` across runs.
+
+```yaml
+type: task
+task:
+  kind: schedule
+  schedule:
+    start: scheduledStart            # required – entry state for scheduled runs
+
+    # Optional start time – omit ⇒ "start as soon as possible"
+    startAt: "2025-01-01T00:00:00Z"  # RFC 3339 timestamp string
+    # or:
+    # startAt:
+    #   mapper:
+    #     lang: dataweave
+    #     expr: context.billing.firstRunAt
+
+    # Required cadence – ISO-8601 duration
+    interval: "P1D"                  # once per day
+    # or:
+    # interval:
+    #   mapper:
+    #     lang: dataweave
+    #     expr: context.billing.interval
+
+    # Required run bound
+    maxRuns: 12
+    # or:
+    # maxRuns:
+    #   mapper:
+    #     lang: dataweave
+    #     expr: context.billing.maxRuns
+
+    # Optional subject binding
+    subjectId:
+      mapper:
+        lang: dataweave
+        expr: context.userId
+
+    # Optional initial context snapshot for the FIRST scheduled run;
+    # later runs use the previous run's final context
+    context:
+      mapper:
+        lang: dataweave
+        expr: context - ["sensitiveStuff"]
+
+    # Optional behaviour when a schedule already exists for this journey/subject/start
+    # fail (default), upsert, or addAnother
+    onExisting: fail | upsert | addAnother
+next: <stateId>
+```
+
+Semantics
+- Scope:
+  - `task.kind: schedule` is only allowed in `kind: Journey` specs.
+  - It MUST NOT be used in `kind: Api` specs.
+- Creation and update:
+  - When a journey executes a `task.kind: schedule` state, the engine evaluates the `schedule` block against the current `context`:
+    - `start` MUST resolve to a valid state id in `spec.states`.
+    - `startAt`:
+      - When omitted, the effective start time is “as soon as possible” according to the scheduler.
+      - When a string, it MUST be an RFC 3339 timestamp.
+      - When a mapper, it MUST evaluate to an RFC 3339 timestamp string.
+    - `interval`:
+      - Required; when a string, it MUST be a supported ISO-8601 duration.
+      - When a mapper, it MUST evaluate to a supported ISO-8601 duration string.
+    - `maxRuns`:
+      - Required; when a literal, it MUST be a positive integer.
+      - When a mapper, it MUST evaluate to a positive integer.
+    - `subjectId`:
+      - Optional; when present, the mapper MUST evaluate to a non-empty string at runtime.
+    - `context`:
+      - Optional; when present, the mapper result becomes the initial context snapshot for the FIRST scheduled run.
+      - When absent, the full current `context` is used as the initial snapshot.
+  - The engine then creates or updates a schedule binding based on `onExisting`:
+    - Conceptual identity key: `(journeyName, journeyVersion, subjectId, startStateId)`.
+    - `onExisting: fail` (or omitted):
+      - If a binding already exists for the identity key, the schedule task fails and no binding is created or changed.
+    - `onExisting: upsert`:
+      - If a binding exists, update its `startAt`, `interval`, `maxRuns`, `subjectId`, and initial `lastContext` from the new schedule.
+      - If none exists, create a new binding.
+    - `onExisting: addAnother`:
+      - Always create a new binding, even if another exists with the same identity key.
+  - After handling the binding, the journey continues to `next`; the schedule task itself is not terminal.
+
+- Scheduled runs:
+  - Each schedule binding stores:
+    - Journey identity (name/version).
+    - Scheduled entry state id (`start`).
+    - `startAt`, `interval`, `maxRuns`, and `runsExecuted`.
+    - `lastContext` (the evolving context snapshot).
+  - First scheduled run:
+    - At or after `startAt`, the scheduler creates a new journey instance.
+    - Initial `context` is the binding’s `lastContext`, which is:
+      - the `context` mapper result when provided, or
+      - the full `context` snapshot from the scheduling journey instance when `context` is omitted.
+    - Execution starts at the state referenced by `schedule.start`.
+  - On completion of each scheduled run:
+    - The engine sets the binding’s `lastContext` to the run’s final `context`.
+    - The engine increments `runsExecuted`.
+  - Subsequent runs:
+    - Each run’s initial `context` is the binding’s current `lastContext`, i.e. the final `context` from the previous run.
+  - When `runsExecuted >= maxRuns`, the scheduler MUST NOT start further runs for that binding.
+
+- Non-interactive path constraint:
+  - For each `task.kind: schedule`, engines and tools MUST verify that all states reachable from `schedule.start` are non-interactive:
+    - No `type: wait` states.
+    - No `type: webhook` states.
+  - Specs that violate this rule SHOULD be rejected at validation time, with errors that reference the offending state ids.
+  - If static validation is not available and a scheduled run reaches a `wait` or `webhook` at runtime, the engine MUST treat this as an internal engine error and fail the run.
+
+Validation
+- `task.kind` may be `httpCall`, `eventPublish`, or `schedule`.
+- For `kind: schedule`:
+  - `schedule.start` is required and MUST be a state id in `spec.states`.
+  - `schedule.interval` is required and MUST be either:
+    - A string representing a supported ISO-8601 duration, or
+    - A `mapper` that evaluates to such a string.
+  - `schedule.maxRuns` is required and MUST be either:
+    - A positive integer literal, or
+    - A `mapper` that evaluates to a positive integer.
+  - `schedule.startAt`, when present, MUST be either:
+    - A string representing an RFC 3339 timestamp, or
+    - A `mapper` that evaluates to such a string.
+  - `schedule.subjectId`, when present, MUST be a `mapper` object with `lang: dataweave` and an inline `expr`.
+  - `schedule.context`, when present, MUST be a `mapper` object with `lang: dataweave` and an inline `expr`.
+  - `schedule.onExisting`, when present, MUST be one of `fail`, `upsert`, or `addAnother`.
+  - `task.kind: schedule` MUST NOT be used in `kind: Api` specs.
+  - Engines and tools SHOULD perform a reachability check from `schedule.start` and reject specs where reachable states include `wait` or `webhook`.
+
+### 5.4 `choice` (branch)
+Choice states enable data-driven branching: tasks and other states write results into `context`, and predicates over that data decide which `next` state is taken.
+
 ```yaml
 type: choice
 choices:
@@ -912,7 +1094,7 @@ Semantics
   - This outcome indicates a bug or misconfiguration in the journey or platform; well‑behaved journeys SHOULD avoid triggering it in normal operation.
 - If no branch matches, transition to `default` if present; otherwise validation error.
 
-### 5.3 `succeed`
+### 5.4 `succeed`
 ```yaml
 type: succeed
 outputVar: <identifier>         # optional
@@ -920,7 +1102,7 @@ outputVar: <identifier>         # optional
 Semantics
 - Terminal success. If `outputVar` is set and exists in `context`, return its value; else return full `context`.
 
-### 5.4 `fail`
+### 5.5 `fail`
 ```yaml
 type: fail
 errorCode: <string>
@@ -931,7 +1113,7 @@ Semantics
 - `errorCode` MUST be a stable identifier for the error condition (for example a URI or string key); by default it SHOULD align with the RFC 9457 Problem Details `type` when a Problem object is available.
 - `reason` SHOULD be a concise, human-friendly summary suitable for operators and API consumers (often derived from a Problem Details `title` or `detail`).
 
-### 5.5 Error handling patterns
+### 5.6 Error handling patterns
 
 - Task-level errors as data
 - `task` states (for example `httpCall`) never auto-terminate a journey. They always store a structured result in `context.<resultVar>` (including `status`, `ok`, `headers`, `body`, optional `error`) and then continue to `next`.
@@ -948,7 +1130,7 @@ Semantics
   - Sequential aggregation: perform multiple `task` calls (each with its own `resultVar`), then use a `choice` and optional `transform` to combine their outcomes into a single success result or a single `fail` state (for example, "one or more upstream calls failed").
   - Parallel aggregation: when using `parallel`, branches write their own results; the `join.mapper` can aggregate branch-level results into a single `context.<resultVar>` that a subsequent `choice` uses to decide whether to `succeed` or `fail`. Concurrency and detailed error propagation for `parallel` are defined under the Parallel feature.
 
-### 5.6 Error model and RFC 9457 (Problem Details)
+### 5.7 Error model and RFC 9457 (Problem Details)
 
 - Default error model (journey outcome)
   - `succeed` produces a `JourneyOutcome` with `phase = Succeeded` and `output` taken from `context.<outputVar>` (when set) or from the full `context`.
@@ -976,7 +1158,8 @@ Semantics
 	- Reuse via shared mappers
 	  - Journeys MAY still use shared DataWeave modules (`.dwl` files) for common transformations in general, but `spec.errors` is defined in terms of inline mappers in this version (see Q-002 in `docs/4-architecture/open-questions.md`).
 
-## 19. Error configuration (spec.errors)
+<a id="dsl-6-example"></a>
+## 6. Example
 	
 	The `spec.errors` block allows journeys to centralise, per journey, how they normalise and expose errors, building on the canonical RFC 9457 Problem Details model (see ADR‑0003 and Q-002 in `docs/4-architecture/open-questions.md`).
 	
@@ -1044,7 +1227,6 @@ Semantics
 	- When `envelope.format` is `custom`, `envelope.mapper` MUST be present and must declare `lang: dataweave` and an inline `expr`.
 	- Tools SHOULD flag references to unknown normaliser ids from HTTP tasks or other configuration as validation errors.
 
-## 6. Example
 ```yaml
 apiVersion: v1
 kind: Journey
@@ -1087,6 +1269,7 @@ spec:
       reason: "Item not OK"
 ```
 
+<a id="dsl-7-limitations"></a>
 ## 7. Limitations (explicit non-capabilities)
 - Terminal success/failure are explicit via `succeed`/`fail`; tasks never auto‑terminate a journey.
 - Enforcement for retries, circuit breakers, bulkheads, or authentication policies is not defined here; only configuration via resilience policies is specified.
@@ -1095,14 +1278,17 @@ spec:
 - No environment‑variable substitution or secret references (future features may add).
 - No persistence/resume across process restarts.
 
+<a id="dsl-8-naming-and-terminology"></a>
 ## 8. Naming & terminology
 - State identifiers are arbitrary keys under `spec.states` (e.g., `call_api`, `decide`). They do not imply special behaviour.
 - The branch state type is `choice` (canonical, ASL-aligned). The spec and snapshots use `choice`; no alias is defined.
 
+<a id="dsl-9-forward-compatibility-notes"></a>
 ## 9. Forward-compatibility notes
 - Policies block (auth/resiliency) will be added in a future feature.
 - DataWeave is the canonical expression language. Future convenience operators (e.g., `in`, numeric comparisons) may be added as sugar and compiled to DataWeave.
 
+<a id="dsl-10-dataweave"></a>
 ## 10. DataWeave – Expressions & Mappers
 - Language: DataWeave 2.x (expressions authored inline via `expr`; v1 does not support DSL-level references to external `.dwl` modules; see ADR-0015 and Q-003).
 - Binding: `context` variable is bound to the current journey context JSON value.
@@ -1152,6 +1338,7 @@ Validation
 - `spec.mappers` must be a map of ids to mapper objects; each mapper must declare `lang: dataweave` and an inline `expr`.
 - `mapperRef` values must be non-empty strings that resolve to an existing entry in `spec.mappers`.
 
+<a id="dsl-11-schemas"></a>
 ## 11. Schemas (optional)
 - `spec.input.schema`: inline JSON Schema (2020-12) that validates the initial `context` provided at journey start.
 - `spec.output.schema`: inline JSON Schema for the terminal output returned by `succeed` (or the overall `context` if `outputVar` is omitted).
@@ -1196,11 +1383,14 @@ Usage notes
 - `accept` selects the response media type; default `application/json`.
 - Cannot mix `operationRef` with raw `method`/`url` in the same task.
 
-## 12. External-Input States (wait/webhook)
+<a id="dsl-12-external-input-states"></a>
+## 12. External-Input & Timer States (wait/webhook/timer)
 
-External-input states pause the journey instance and require a step submission to continue. Submissions are sent to `/journeys/{journeyId}/steps/{stepId}` where `stepId` equals the state id.
+External-input and timer states pause the journey instance and resume it later, either due to an external submission or when a durable timer fires.
 
-Bindings available to DataWeave expressions during step handling:
+External-input states (`wait`, `webhook`) expose a step surface: they require a step submission to continue. Submissions are sent to `/journeys/{journeyId}/steps/{stepId}` where `stepId` equals the state id.
+
+Bindings available to DataWeave expressions during external-input step handling:
 - `context`: the current journey context JSON object.
 - `payload`: the submitted step input JSON (validated against the state’s `input.schema`, when present).
 
@@ -1291,14 +1481,98 @@ Validation
 - `webhook.input.schema` is required.
 - `response` (when present) follows the same rules as for `wait.response`: `outputVar` must be a valid variable name, `schema` a JSON Schema object, and projected properties MUST NOT collide with reserved `JourneyStatus` fields.
 
-### 12.3 Export mapping (steps)
-- For each external-input state, the exporter emits:
+### 12.3 `timer` (durable in-journey delay)
+
+Timer states represent non-interactive, durable delays inside a single `kind: Journey` instance. They provide pure time-based control flow (“sleep until duration/until”) without exposing a step endpoint.
+
+Shape (journeys only):
+
+```yaml
+type: timer
+timer:
+  duration: <string|mapper>             # ISO-8601 duration, e.g. "PT5M" (xor with until)
+  # xor:
+  # until: <string|mapper>              # RFC 3339 timestamp, e.g. "2025-12-31T23:59:00Z"
+next: <stateId>
+```
+
+Semantics
+- Journeys only:
+  - `type: timer` is only valid in specs with `kind: Journey`.
+  - Timer states MAY be used in both interactive runs and scheduled runs created via `task.kind: schedule`.
+- XOR between `duration` and `until`:
+  - Exactly one of `timer.duration` or `timer.until` MUST be present.
+  - Both fields, when present, MAY be either:
+    - A literal string, or
+    - A `mapper` object with `lang: dataweave` and `expr` that evaluates to the effective string at runtime.
+- `duration`:
+  - When a literal, MUST be an ISO-8601 duration string (for example `PT5M`, `PT1H`, `P1D`).
+  - When a mapper, MUST evaluate to such a duration string at runtime.
+- `until`:
+  - When a literal, MUST be an RFC 3339 timestamp string.
+  - When a mapper, MUST evaluate to such a timestamp string at runtime.
+- `next`:
+  - Required; MUST refer to a state id in the same journey.
+
+Execution model
+- Entering a timer:
+  - When a journey instance enters a `type: timer` state, the engine:
+    - Evaluates `duration` or `until` according to the XOR rule.
+    - Computes an absolute due time `dueAt` from:
+      - `now + duration` when `duration` is used, or
+      - the parsed timestamp when `until` is used.
+    - Persists:
+      - The journey instance state (including `context`, `currentState`, and metadata).
+      - A durable timer record that includes `journeyId`, the timer state id, and `dueAt`.
+    - Returns control to the host platform; no worker thread or HTTP request is blocked while waiting for the timer.
+- Firing a timer:
+  - When `dueAt` is reached (or shortly after, depending on scheduler behaviour), the scheduler:
+    - Locates the timer record.
+    - Loads the journey instance if it is still `Running`.
+    - If the instance is still at the same timer state id, resumes execution and transitions to `next`.
+  - If the journey has already reached a terminal outcome (for example due to cancellation or a global execution timeout), the engine MUST treat the timer record as stale and MUST NOT resume the run.
+- Global execution deadlines:
+  - Timer states do not extend or override `spec.execution.maxDurationSec`:
+    - If a timer’s effective `dueAt` is after the global deadline, the journey MAY still be accepted, but the run will terminate via the global timeout if it fails to complete before the deadline.
+  - Reaching the global execution deadline while a timer is active uses the existing timeout semantics (`spec.execution.onTimeout`); there is no separate timer-specific error.
+
+Interaction, cancellation, and parallelism
+- Non-interactive:
+  - Timer states do not expose a step endpoint.
+  - They do not have `input.schema`, `response`, `timeoutSec`, or `onTimeout`.
+  - Timer states do not implicitly mutate `context` (for example they do not add `firedAt` by default).
+- Cancellation:
+  - Journey-level cancellation (for example via `_links.cancel` when `spec.lifecycle.cancellable == true`) remains available while paused at a timer.
+  - Cancelling a journey at a timer terminates the run with the usual cancellation outcome; the engine MUST discard any associated timer record.
+- Parallel flows:
+  - To model patterns like “wait for user input OR timeout after N minutes”, authors SHOULD use `type: parallel`:
+    - One branch uses `type: timer` to represent the timeout path.
+    - Another branch uses `type: wait` or `type: webhook` (or other states) to represent user/system interactions.
+  - A subsequent join or `choice`/`transform` state can inspect `context` to decide which branch “won”.
+
+Validation
+- `type: timer` MUST NOT be used in specs with `kind: Api`.
+- For `type: timer`:
+  - Exactly one of `timer.duration` or `timer.until` MUST be present.
+  - `timer.duration`, when present:
+    - MUST be either:
+      - A string that is a valid ISO-8601 duration, or
+      - A `mapper` that evaluates to such a string.
+  - `timer.until`, when present:
+    - MUST be either:
+      - A string that is a valid RFC 3339 timestamp, or
+      - A `mapper` that evaluates to such a string.
+  - `next` is required and MUST refer to a state id in `spec.states`.
+
+### 12.4 Export mapping (steps)
+- For each external-input state (`wait`, `webhook`), the exporter emits:
   - `POST /journeys/{journeyId}/steps/{stepId}` with request body schema = the state’s `input.schema`, when present.
   - `200` response schema:
     - When `response.schema` is absent: `JourneyStatus` as defined in `docs/3-reference/openapi/journeys.openapi.yaml`.
     - When `response.schema` is present: an `allOf` composition of `JourneyStatus` and the step-specific schema taken from `response.schema`, so that additional top-level fields are described explicitly.
 - Journeys without external-input states do not emit `/steps/{stepId}` paths.
 
+<a id="dsl-13-resilience-policies"></a>
 ## 13. Resilience Policies (HTTP)
 
 Resilience policies define reusable behaviour for HTTP tasks: retries, backoff, basic circuit-breaker thresholds, and bulkhead-style concurrency limits.
@@ -1359,6 +1633,7 @@ Validation
 Notes
 - This section defines the configuration model only; enforcement belongs to the policy implementation in the engine and is out of scope for the DSL reference.
 
+<a id="dsl-14-transform-state"></a>
 ## 14. Transform State (DataWeave)
 
 The `transform` state uses DataWeave to compute a new value and either assign it into the context or expose it via a variable. It is the primary building block for non-HTTP data shaping.
@@ -1418,6 +1693,7 @@ fail_with_problem:
 ```
 
 
+<a id="dsl-15-cache"></a>
 ## 15. Cache Resources & Operations
 
 Caches are modelled as named resources plus cache-focused task kinds. This section defines the configuration and wiring; concrete cache implementations and eviction behaviour belong to the engine.
@@ -1505,6 +1781,7 @@ Notes
 
 
 
+<a id="dsl-16-parallel-state"></a>
 ## 16. Parallel State (branches with join)
 
 The `parallel` state executes multiple branches in parallel (or logically in parallel) and then joins their results before continuing. Each branch is a self-contained sub-state-machine with its own `start` and `states` map.
@@ -1593,6 +1870,7 @@ Validation
 Notes
 - This section defines the DSL shape and join semantics only; concurrency, scheduling, and detailed error propagation are implemented under Feature 004 (Parallel).
 
+<a id="dsl-17-http-bindings"></a>
 ## 17. HTTP Bindings (Inbound)
 
 HTTP bindings describe how inbound HTTP metadata (headers and query params) are projected into `context`, and optionally passed through directly to outbound HTTP calls.
@@ -1661,6 +1939,7 @@ Validation
 Notes
 - This section defines the binding model; concrete enforcement and header sets are implemented in the engine/API layer.
 
+<a id="dsl-18-http-security-policies"></a>
 ## 18. HTTP Security Policies (Auth)
 
 HTTP security policies define reusable authentication constraints for inbound HTTP requests (start and step calls). They are configured under `spec.policies.httpSecurity` and attached via `securityPolicyRef` at journey and step levels.
@@ -1760,6 +2039,7 @@ Semantics
 Notes
 - This section defines the configuration model only; enforcement belongs to the security implementation in the engine and is out of scope for the DSL reference.
 
+<a id="dsl-19-outbound-http-auth"></a>
 ## 19. Outbound HTTP Auth (httpClientAuth)
 
 Outbound HTTP auth policies define how HTTP tasks authenticate *to* downstream services (for example, using static bearer tokens, OAuth2 client credentials, or mTLS client certificates). They are configured under `spec.policies.httpClientAuth` and referenced from HTTP `task` definitions.
@@ -1892,6 +2172,7 @@ mtls-normalise:
 
 This keeps `context` as the canonical place for data that influences journey behaviour, while `httpSecurity` governs authentication and `httpBindings` governs how inbound metadata becomes available to the journey instance and downstream calls.
 
+<a id="dsl-20-named-outcomes"></a>
 ## 20. Named Outcomes (spec.outcomes)
 
 Named outcomes provide a way to classify terminal journey results into a small, stable vocabulary for clients, dashboards, and telemetry, without changing execution semantics.
@@ -1929,6 +2210,7 @@ Semantics (classification only)
   - Record the selected outcome id for telemetry or include it as an additional field (for example `outcomeId`) in `JourneyOutcome` without changing existing fields.
 - If no outcome matches, the journey remains unclassified from the DSL’s perspective.
 
+<a id="dsl-21-metadata-limits"></a>
 ## 21. Metadata limits (MetadataLimits)
 
 To keep metadata predictable and avoid unbounded growth, operators configure limits for
@@ -1951,6 +2233,10 @@ spec:
     maxKeys: 16
     maxKeyLength: 32
     maxValueLength: 256
+
+  execution:
+    defaultMaxDurationSec: 86400       # optional; default lifetime for specs without spec.execution
+    maxDurationUpperBoundSec: 604800   # optional; hard upper bound for spec.execution.maxDurationSec
 ```
 
 Semantics
@@ -1975,6 +2261,14 @@ Semantics
     - Maximum length, in characters, of an attribute key.
   - `attributes.maxValueLength`:
     - Maximum length, in characters, of an attribute value.
+  - `execution.defaultMaxDurationSec`:
+    - Optional; when present, expresses the desired default wall-clock lifetime (in whole seconds) for a single journey instance or API invocation when the journey/API spec does not declare `spec.execution`.
+    - Engines that support global execution limits SHOULD enforce a deadline of at most this value for such specs, applying the execution-deadline semantics from section “2.4 Execution deadlines (spec.execution)” with an engine-defined timeout error mapping when `spec.execution.onTimeout` is not available.
+    - The effective default for a given installation is conceptually `min(defaultMaxDurationSec, maxDurationUpperBoundSec, platformCaps)`; platform limits continue to take precedence (see Q-015).
+  - `execution.maxDurationUpperBoundSec`:
+    - Optional; when present, defines a hard upper bound (in whole seconds) that engines MUST apply when interpreting `spec.execution.maxDurationSec` in journey/API definitions.
+    - When a spec sets `spec.execution.maxDurationSec` greater than this value, engines MUST clamp the effective global budget to `execution.maxDurationUpperBoundSec` (or stricter platform caps) while still using the spec’s `spec.execution.onTimeout` for the timeout outcome as described in section “2.4 Execution deadlines (spec.execution)” and ADR‑0007.
+    - When absent, the effective upper bound is determined solely by platform/installation limits; authors MAY still use large `spec.execution.maxDurationSec` values, but engines MAY clamp them further based on configuration outside of `MetadataLimits`.
 
 Validation
 - Tools and the engine SHOULD treat violations of `MetadataLimits` as validation errors when
@@ -1982,6 +2276,10 @@ Validation
 - During execution, attempts to add tags or attributes that would exceed the configured
   limits SHOULD cause the operation to fail fast with a clear error; behaviour is
   implementation-defined but MUST be documented.
+- When `execution` is present:
+  - `defaultMaxDurationSec`, when present, MUST be an integer ≥ 1 representing seconds.
+  - `maxDurationUpperBoundSec`, when present, MUST be an integer ≥ 1 representing seconds.
+  - Tools SHOULD warn when `defaultMaxDurationSec` exceeds `maxDurationUpperBoundSec`, as the effective default will be clamped down to the upper bound or stricter platform limits.
 
 Validation
 - Outcome ids must be unique strings.
@@ -1992,6 +2290,7 @@ Usage notes
 - Use outcomes to give names to common scenarios such as “SucceededWithCacheHit”, “SucceededWithoutCache”, “FailedUpstream”, “RejectedByPolicy”.
 - Keep outcome predicates simple and stable; they should refer to durable semantics (for example `error.code`) rather than transient implementation details.
 
+<a id="dsl-22-http-cookies"></a>
 ## 22. HTTP Cookies (spec.cookies)
 
 The cookies configuration allows journey definitions and API endpoints to use HTTP cookies in a controlled way, aligned with standard HTTP cookie semantics (RFC 6265 or successors):
@@ -2172,7 +2471,11 @@ Validation
 - When `spec.cookies.returnToClient` is present but `spec.cookies.jar` is absent, implementations SHOULD treat this as a configuration error (there is no jar to source cookies from).
 - Invalid regex patterns in `namePatterns` MUST be reported as spec validation errors.
 
+<a id="dsl-23-journey-access-binding"></a>
 ## 23. Journey Access Binding
+
+<a id="dsl-24-error-configuration"></a>
+## 24. Error configuration (spec.errors)
 
 This section summarises the minimal, normative rules for journey access binding. For background and rationale, see
 ADR-0014 (`docs/6-decisions/ADR-0014-journey-access-binding-and-session-semantics.md`).

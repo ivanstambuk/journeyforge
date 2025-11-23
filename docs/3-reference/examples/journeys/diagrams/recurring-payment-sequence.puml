@@ -1,0 +1,22 @@
+@startuml
+!include journey-diagram-theme.puml
+title recurring-payment – configure and scheduled run sequence
+
+actor "Client" as Client
+participant "Journeys API" as Journeys
+participant "Payments API" as Payments
+
+Client -> Journeys: POST /api/v1/journeys/recurring-payment/start\nRecurringPaymentStartRequest
+Journeys --> Client: 202 Accepted\nJourneyStartResponse (journeyId, ...)
+
+Client -> Journeys: GET /api/v1/journeys/{journeyId}/result\n(getResult)
+Journeys --> Client: 200 OK\nJourneyOutcome (status = SCHEDULED, config fields)
+
+... later, on schedule ...
+
+Journeys -> Payments: POST /payments/{paymentMethodRef}/authorize\n(amount, currency)
+Payments --> Journeys: 202 Accepted\n(authorization accepted)
+
+Journeys -> Journeys: update context.lastRunAt / lastStatus / lastOk\nfor the scheduled run
+
+@enduml

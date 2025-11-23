@@ -1,0 +1,37 @@
+@startuml
+!include journey-diagram-theme.puml
+title recurring-payment – internal DSL state graph
+
+[*] --> configureAndSchedule
+
+state configureAndSchedule
+state prepareStartOutcome
+state completeConfigured
+state runPayment
+state updateScheduledState
+state scheduledDone
+
+configureAndSchedule --> prepareStartOutcome : task.kind: schedule\ncreates/updates schedule\n(start = runPayment)
+prepareStartOutcome --> completeConfigured : build startOutcome
+completeConfigured --> [*]
+
+runPayment --> updateScheduledState : payments.authorizePayment\n(resultVar: payment)
+updateScheduledState --> scheduledDone : update lastRunAt / lastStatus / lastOk
+scheduledDone --> [*]
+
+note right of configureAndSchedule
+  Interactive path:
+  - Reads schedule parameters from context
+  - Creates or updates schedule binding
+  - Returns SCHEDULED outcome
+end note
+
+note right of runPayment
+  Scheduled path:
+  - Non-interactive
+  - Uses evolving context across runs
+  - Bounded by maxRuns
+end note
+
+@enduml
+

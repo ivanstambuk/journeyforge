@@ -1,0 +1,18 @@
+@startuml
+!include journey-diagram-theme.puml
+title http-put-delete – client activity flow
+
+start
+
+:Client sends\nPOST /api/v1/journeys/http-put-delete/start;
+:Client polls\nGET /api/v1/journeys/{journeyId}/result\nuntil phase != "Running";
+
+if (phase == "Succeeded"?) then (yes)
+  :Client processes successful\nJourneyOutcome.output;
+else (no)
+  :Client handles failure via\nJourneyOutcome.error;
+endif
+
+stop
+
+@enduml

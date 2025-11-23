@@ -1,0 +1,73 @@
+openapi: 3.1.0
+info:
+  title: Inventory API
+  version: 1.0.0
+  description: Inventory API for reserving items and planning split shipments. See Q-013 in docs/4-architecture/open-questions.md for journey design context.
+  contact:
+    name: JourneyForge
+servers:
+  - url: https://inventory.example.com
+paths:
+  /inventory/reservations:
+    post:
+      operationId: reserveItemsForOrder
+      summary: Reserve inventory for an order and propose split shipments
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - orderId
+                - items
+              properties:
+                orderId:
+                  type: string
+                items:
+                  type: array
+                  items:
+                    type: object
+                    required:
+                      - sku
+                      - quantity
+                    properties:
+                      sku:
+                        type: string
+                      quantity:
+                        type: integer
+                    additionalProperties: true
+              additionalProperties: true
+      responses:
+        "200":
+          description: Reservation evaluated with proposed shipments
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    description: Business decision for the reservation.
+                    enum:
+                      - RESERVED
+                      - PARTIAL
+                      - UNAVAILABLE
+                  proposedShipments:
+                    type: array
+                    description: Proposed split shipments when at least some items are in stock.
+                    items:
+                      type: object
+                  unavailableItems:
+                    type: array
+                    description: Items that could not be reserved.
+                    items:
+                      type: object
+        "400":
+          description: Invalid reservation request
+      tags:
+        - inventory
+      description: Reserve inventory for the order and propose split shipments or mark items as unavailable.
+tags:
+  - name: inventory
+

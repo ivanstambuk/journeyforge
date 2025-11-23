@@ -1,0 +1,54 @@
+@startuml
+!include journey-diagram-theme.puml
+title ecommerce-order-split-shipment – internal DSL state graph
+
+[*] --> createOrder
+
+state createOrder
+state reserveInventory
+state evaluateReservation
+state waitForConfirmation
+state prepareShipments
+state waitForFulfillment
+state completeFulfilled
+state completePartiallyFulfilled
+state completeCancelled
+state unfulfillable
+state failed
+
+createOrder --> reserveInventory : orders.createOrder
+reserveInventory --> evaluateReservation : inventory.reserveItemsForOrder\nresultVar: reservation
+
+evaluateReservation --> waitForConfirmation : reservation.ok &&\n(status == RESERVED or PARTIAL)
+evaluateReservation --> unfulfillable : default (UNAVAILABLE or error)
+
+waitForConfirmation --> prepareShipments : payload.decision == "proceed"
+waitForConfirmation --> completeCancelled : decision == "cancel"
+
+prepareShipments --> waitForFulfillment : shipping.createShipmentsForOrder
+
+waitForFulfillment --> completeFulfilled : payload.overallStatus == "FULFILLED"
+waitForFulfillment --> completePartiallyFulfilled : status == "PARTIALLY_FULFILLED"
+waitForFulfillment --> completeCancelled : status == "CANCELLED"
+waitForFulfillment --> failed : default
+
+completeFulfilled --> [*]
+completePartiallyFulfilled --> [*]
+completeCancelled --> [*]
+unfulfillable --> [*]
+failed --> [*]
+
+note right of waitForConfirmation
+  type: wait (manual channel)
+  step id: confirmOrder
+  input: ConfirmOrderInput
+end note
+
+note right of waitForFulfillment
+  type: webhook (callback)
+  step id: waitForFulfillment
+  security: X-Fulfillment-Secret
+end note
+
+@enduml
+

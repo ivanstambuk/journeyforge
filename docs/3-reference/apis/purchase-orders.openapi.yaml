@@ -1,0 +1,79 @@
+openapi: 3.1.0
+info:
+  title: Purchase Orders API
+  version: 1.0.0
+  description: Purchase Orders API for creating B2B purchase orders. See Q-014 in docs/4-architecture/open-questions.md for journey design context.
+  contact:
+    name: JourneyForge
+servers:
+  - url: https://purchase-orders.example.com
+paths:
+  /purchase-orders:
+    post:
+      operationId: createPurchaseOrder
+      summary: Create a new B2B purchase order
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - purchaseOrderId
+                - buyerId
+                - supplierId
+                - lineItems
+              properties:
+                purchaseOrderId:
+                  type: string
+                buyerId:
+                  type: string
+                supplierId:
+                  type: string
+                lineItems:
+                  type: array
+                  items:
+                    type: object
+                    required:
+                      - sku
+                      - quantity
+                      - unitPrice
+                    properties:
+                      sku:
+                        type: string
+                      quantity:
+                        type: integer
+                      unitPrice:
+                        type: number
+                    additionalProperties: true
+                currency:
+                  type: string
+                requestedDeliveryDate:
+                  type: string
+                  format: date
+                notes:
+                  type: string
+              additionalProperties: true
+      responses:
+        "201":
+          description: Purchase order created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  purchaseOrderId:
+                    type: string
+                  status:
+                    type: string
+                  createdAt:
+                    type: string
+                    format: date-time
+        "400":
+          description: Invalid purchase order request
+      tags:
+        - purchase-orders
+      description: Create a new B2B purchase order with line items and commercial details.
+tags:
+  - name: purchase-orders
+

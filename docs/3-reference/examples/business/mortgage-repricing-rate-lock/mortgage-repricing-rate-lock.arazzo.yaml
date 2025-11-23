@@ -1,0 +1,182 @@
+arazzo: 1.0.1
+info:
+  title: JourneyForge – mortgage-repricing-rate-lock workflows
+  version: 0.1.0
+  summary: Workflows for repricing an existing mortgage and locking the new rate.
+  description: Workflows for repricing an existing mortgage, collecting customer acceptance, and handling asynchronous rate lock confirmation.
+sourceDescriptions:
+  - name: mortgageRepricingRateLock
+    type: openapi
+    url: mortgage-repricing-rate-lock.openapi.yaml
+workflows:
+  - workflowId: mortgage-repricing-lock-approved
+    summary: Start a mortgage-repricing-rate-lock journey, accept the offer, and read the locked outcome.
+    description: Start a mortgage-repricing-rate-lock journey, let the engine obtain a repricing offer, have the customer accept it, and then read the final locked outcome.
+    inputs:
+      type: object
+      properties:
+        startRequest:
+          description: Initial repricing request payload.
+          type: object
+          required:
+            - mortgageId
+            - requestedFixYears
+            - requestedProductCode
+          properties:
+            mortgageId:
+              type: string
+            requestedFixYears:
+              type: integer
+            requestedProductCode:
+              type: string
+          additionalProperties: true
+        customerAcceptance:
+          description: Customer decision and optional comment.
+          type: object
+          required:
+            - decision
+          properties:
+            decision:
+              type: string
+              enum:
+                - accept
+            comment:
+              type: string
+          additionalProperties: false
+    steps:
+      - stepId: startJourney
+        description: Start a new mortgage-repricing-rate-lock journey instance.
+        operationId: mortgageRepricingRateLock_start
+        x-source: mortgageRepricingRateLock
+        requestBody:
+          contentType: application/json
+          payload: $inputs.startRequest
+        outputs:
+          journeyId: $response.body.journeyId
+      - stepId: getStatusWhilePricing
+        description: Poll journey status while the engine is requesting a repricing offer.
+        operationId: mortgageRepricingRateLock_getStatus
+        x-source: mortgageRepricingRateLock
+        parameters:
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId
+        outputs:
+          phase: $response.body.phase
+      - stepId: getStatusAwaitingCustomer
+        description: Poll journey status until the journey is waiting for customer acceptance.
+        operationId: mortgageRepricingRateLock_getStatus
+        x-source: mortgageRepricingRateLock
+        parameters:
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId
+        outputs:
+          phase: $response.body.phase
+      - stepId: submitCustomerAcceptance
+        description: Provide the customer's acceptance of the repricing offer.
+        operationId: mortgageRepricingRateLock_customerAcceptance
+        x-source: mortgageRepricingRateLock
+        parameters:
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId
+        requestBody:
+          contentType: application/json
+          payload: $inputs.customerAcceptance
+        outputs:
+          phase: $response.body.phase
+      - stepId: getStatusAwaitingLock
+        description: Poll journey status while the engine is waiting for rate lock confirmation.
+        operationId: mortgageRepricingRateLock_getStatus
+        x-source: mortgageRepricingRateLock
+        parameters:
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId
+        outputs:
+          phase: $response.body.phase
+      - stepId: getResult
+        description: Retrieve the final locked outcome once the rate lock has been confirmed.
+        operationId: mortgageRepricingRateLock_getResult
+        x-source: mortgageRepricingRateLock
+        parameters:
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId
+
+  - workflowId: mortgage-repricing-customer-declines
+    summary: Start a mortgage-repricing-rate-lock journey, decline the offer, and read the rejected outcome.
+    description: Start a mortgage-repricing-rate-lock journey, let the engine obtain a repricing offer, have the customer decline it, and then read the rejected outcome.
+    inputs:
+      type: object
+      properties:
+        startRequest:
+          description: Initial repricing request payload.
+          type: object
+          required:
+            - mortgageId
+            - requestedFixYears
+            - requestedProductCode
+          properties:
+            mortgageId:
+              type: string
+            requestedFixYears:
+              type: integer
+            requestedProductCode:
+              type: string
+          additionalProperties: true
+        customerDecline:
+          description: Customer decline decision and optional comment.
+          type: object
+          required:
+            - decision
+          properties:
+            decision:
+              type: string
+              enum:
+                - decline
+            comment:
+              type: string
+          additionalProperties: false
+    steps:
+      - stepId: startJourney
+        description: Start a new mortgage-repricing-rate-lock journey instance.
+        operationId: mortgageRepricingRateLock_start
+        x-source: mortgageRepricingRateLock
+        requestBody:
+          contentType: application/json
+          payload: $inputs.startRequest
+        outputs:
+          journeyId: $response.body.journeyId
+      - stepId: getStatusWhilePricing
+        description: Poll journey status while the engine is requesting a repricing offer.
+        operationId: mortgageRepricingRateLock_getStatus
+        x-source: mortgageRepricingRateLock
+        parameters:
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId
+        outputs:
+          phase: $response.body.phase
+      - stepId: submitCustomerDecline
+        description: Provide the customer's decline decision for the repricing offer.
+        operationId: mortgageRepricingRateLock_customerAcceptance
+        x-source: mortgageRepricingRateLock
+        parameters:
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId
+        requestBody:
+          contentType: application/json
+          payload: $inputs.customerDecline
+        outputs:
+          phase: $response.body.phase
+      - stepId: getResult
+        description: Retrieve the final rejected outcome after the customer decline has been processed.
+        operationId: mortgageRepricingRateLock_getResult
+        x-source: mortgageRepricingRateLock
+        parameters:
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId

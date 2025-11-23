@@ -2,6 +2,12 @@
 
 Status: Draft | Last updated: 2025-11-20
 
+## Where to start
+
+For the full pattern and example journey, see:
+
+- Technical pattern: `docs/3-reference/examples/technical/http-header-interpolation/http-header-interpolation.md`
+
 ## Problem
 
 Propagate inbound tracing or correlation headers (for example W3C / OpenTelemetry `traceparent`) to all downstream HTTP calls without rewriting every `task.headers` block.

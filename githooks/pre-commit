@@ -39,7 +39,7 @@ enforce_staged_file_guards() {
 
 run_gradle() {
   log "Running spotlessApply + check"
-  "$ROOT_DIR"/gradlew --no-daemon --no-configuration-cache spotlessApply check
+  "$ROOT_DIR"/gradlew --no-daemon --no-configuration-cache spotlessApply qualityGate
 }
 
 run_gitleaks() {

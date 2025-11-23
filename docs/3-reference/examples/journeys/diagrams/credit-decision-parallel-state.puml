@@ -1,0 +1,17 @@
+@startuml
+!include journey-diagram-theme.puml
+title credit-decision-parallel – high-level state phases
+
+[*] --> Running
+
+state Running
+state Succeeded
+state Failed
+
+Running --> Succeeded : phase = Succeeded
+Running --> Failed : phase = Failed
+
+Succeeded --> [*]
+Failed --> [*]
+
+@enduml

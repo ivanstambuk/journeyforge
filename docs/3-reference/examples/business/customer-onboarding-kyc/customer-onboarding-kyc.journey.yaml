@@ -1,0 +1,424 @@
+# Design note: see Q-019 in docs/4-architecture/open-questions.md for scope and multi-party check structure.
+apiVersion: v1
+kind: Journey
+metadata:
+  name: customer-onboarding-kyc
+  version: 0.1.0
+  description: Customer onboarding journey for individual KYC with external checks and account provisioning.
+spec:
+  apis:
+    kycChecks: { openApiRef: apis/kyc-checks.openapi.yaml }
+    amlScreening: { openApiRef: apis/aml-screening.openapi.yaml }
+    customers: { openApiRef: apis/customers.openapi.yaml }
+    accounts: { openApiRef: apis/accounts.openapi.yaml }
+  input:
+    schema:
+      title: CustomerOnboardingKycStartRequest
+      type: object
+      required:
+        - customerId
+        - fullName
+        - email
+      properties:
+        customerId:
+          type: string
+        fullName:
+          type: string
+        email:
+          type: string
+        dateOfBirth:
+          type: string
+          format: date
+        nationality:
+          type: string
+        channel:
+          type: string
+      additionalProperties: true
+  output:
+    schema:
+      title: CustomerOnboardingKycOutcome
+      type: object
+      required:
+        - customerId
+        - finalStatus
+      properties:
+        customerId:
+          type: string
+        finalStatus:
+          type: string
+          enum:
+            - APPROVED
+            - REJECTED
+        kycResult:
+          type: object
+        amlResult:
+          type: object
+        riskDecision:
+          type: object
+        customerRecord:
+          type: object
+        account:
+          type: object
+        rejectionReason:
+          type: string
+      additionalProperties: true
+  start: createProspect
+  states:
+    createProspect:
+      type: task
+      task:
+        kind: httpCall
+        operationRef: customers.createCustomer
+        params:
+          headers:
+            Accept: application/json
+        body:
+          mapper:
+            lang: dataweave
+            expr: |
+              {
+                customerId: context.customerId,
+                fullName: context.fullName,
+                email: context.email
+              }
+        timeoutMs: 3000
+        resultVar: prospect
+      next: waitForKycDocuments
+
+    waitForKycDocuments:
+      type: wait
+      wait:
+        channel: manual
+        input:
+          schema:
+            description: Customer document upload and additional KYC details.
+            type: object
+            required:
+              - decision
+            properties:
+              decision:
+                type: string
+                enum:
+                  - submit
+              documents:
+                type: array
+                items:
+                  type: object
+              notes:
+                type: string
+            additionalProperties: false
+        response:
+          outputVar: kycDocumentsResponse
+          schema:
+            title: KycDocumentsProjection
+            type: object
+            description: Additional top-level fields returned from the submitKycDocuments step.
+            properties:
+              decision:
+                type: string
+                enum:
+                  - submit
+              documents:
+                type: array
+                items:
+                  type: object
+              notes:
+                type: string
+            additionalProperties: true
+        apply:
+          mapper:
+            lang: dataweave
+            expr: |
+              context ++ {
+                kycDocuments: payload,
+                kycDocumentsResponse: {
+                  decision: payload.decision,
+                  documents: payload.documents,
+                  notes: payload.notes
+                }
+              }
+        on:
+          - when:
+              predicate:
+                lang: dataweave
+                expr: |
+                  payload.decision == "submit"
+            next: triggerChecks
+        default: rejected
+
+    triggerChecks:
+      type: parallel
+      parallel:
+        branches:
+          - name: kyc
+            start: startKyc
+            states:
+              startKyc:
+                type: task
+                task:
+                  kind: httpCall
+                  operationRef: kycChecks.startKycCheck
+                  params:
+                    headers:
+                      Accept: application/json
+                  body:
+                    mapper:
+                      lang: dataweave
+                      expr: |
+                        {
+                          customerId: context.customerId,
+                          fullName: context.fullName,
+                          dateOfBirth: context.dateOfBirth,
+                          nationality: context.nationality
+                        }
+                  timeoutMs: 3000
+                  resultVar: result
+                next: done
+              done:
+                type: succeed
+          - name: aml
+            start: startAml
+            states:
+              startAml:
+                type: task
+                task:
+                  kind: httpCall
+                  operationRef: amlScreening.startAmlScreening
+                  params:
+                    headers:
+                      Accept: application/json
+                  body:
+                    mapper:
+                      lang: dataweave
+                      expr: |
+                        {
+                          customerId: context.customerId,
+                          fullName: context.fullName
+                        }
+                  timeoutMs: 3000
+                  resultVar: result
+                next: done
+              done:
+                type: succeed
+        join:
+          strategy: allOf
+          errorPolicy: collectAll
+      next: waitForKycResult
+
+    waitForKycResult:
+      type: webhook
+      webhook:
+        input:
+          schema:
+            title: KYC result callback input
+            type: object
+            required:
+              - customerId
+              - status
+            properties:
+              customerId:
+                type: string
+              status:
+                type: string
+                enum:
+                  - APPROVED
+                  - REFERRED
+                  - REJECTED
+              reasons:
+                type: array
+                items:
+                  type: string
+            additionalProperties: true
+        response:
+          outputVar: kycResultResponse
+          schema:
+            title: KycResultProjection
+            type: object
+            description: Additional top-level fields returned from the submitKycResult webhook step.
+            properties:
+              status:
+                type: string
+              reasons:
+                type: array
+                items:
+                  type: string
+            additionalProperties: true
+        security:
+          kind: sharedSecretHeader
+          header: X-Kyc-Result-Secret
+          secretRef: secret://webhook/customer-onboarding-kyc-kyc
+        apply:
+          mapper:
+            lang: dataweave
+            expr: |
+              context ++ {
+                kycResult: payload,
+                kycResultResponse: {
+                  status: payload.status,
+                  reasons: payload.reasons
+                }
+              }
+        on:
+          - when:
+              predicate:
+                lang: dataweave
+                expr: |
+                  payload.status == "APPROVED"
+                    or payload.status == "REFERRED"
+            next: waitForAmlResult
+        default: rejected
+
+    waitForAmlResult:
+      type: webhook
+      webhook:
+        input:
+          schema:
+            title: AML result callback input
+            type: object
+            required:
+              - customerId
+              - status
+            properties:
+              customerId:
+                type: string
+              status:
+                type: string
+                enum:
+                  - CLEAR
+                  - REFERRED
+                  - REJECTED
+              reasons:
+                type: array
+                items:
+                  type: string
+            additionalProperties: true
+        response:
+          outputVar: amlResultResponse
+          schema:
+            title: AmlResultProjection
+            type: object
+            description: Additional top-level fields returned from the submitAmlResult webhook step.
+            properties:
+              status:
+                type: string
+              reasons:
+                type: array
+                items:
+                  type: string
+            additionalProperties: true
+        security:
+          kind: sharedSecretHeader
+          header: X-Aml-Result-Secret
+          secretRef: secret://webhook/customer-onboarding-kyc-aml
+        apply:
+          mapper:
+            lang: dataweave
+            expr: |
+              context ++ {
+                amlResult: payload,
+                amlResultResponse: {
+                  status: payload.status,
+                  reasons: payload.reasons
+                }
+              }
+        on:
+          - when:
+              predicate:
+                lang: dataweave
+                expr: |
+                  payload.status == "CLEAR"
+                    or payload.status == "REFERRED"
+            next: waitForRiskDecision
+        default: rejected
+
+    waitForRiskDecision:
+      type: webhook
+      webhook:
+        input:
+          schema:
+            title: Risk decision callback input
+            type: object
+            required:
+              - customerId
+              - decision
+            properties:
+              customerId:
+                type: string
+              decision:
+                type: string
+                enum:
+                  - APPROVE
+                  - REJECT
+              riskRating:
+                type: string
+              reason:
+                type: string
+            additionalProperties: true
+        response:
+          outputVar: riskDecisionResponse
+          schema:
+            title: RiskDecisionProjection
+            type: object
+            description: Additional top-level fields returned from the submitRiskDecision webhook step.
+            properties:
+              decision:
+                type: string
+              riskRating:
+                type: string
+              reason:
+                type: string
+            additionalProperties: true
+        security:
+          kind: sharedSecretHeader
+          header: X-Risk-Decision-Secret
+          secretRef: secret://webhook/customer-onboarding-kyc-risk
+        apply:
+          mapper:
+            lang: dataweave
+            expr: |
+              context ++ {
+                riskDecision: payload,
+                riskDecisionResponse: {
+                  decision: payload.decision,
+                  riskRating: payload.riskRating,
+                  reason: payload.reason
+                }
+              }
+        on:
+          - when:
+              predicate:
+                lang: dataweave
+                expr: |
+                  payload.decision == "APPROVE"
+            next: createAccount
+        default: rejected
+
+    createAccount:
+      type: task
+      task:
+        kind: httpCall
+        operationRef: accounts.createAccount
+        params:
+          headers:
+            Accept: application/json
+        body:
+          mapper:
+            lang: dataweave
+            expr: |
+              {
+                ownerId: context.customerId,
+                email: context.email
+              }
+        timeoutMs: 3000
+        resultVar: accountCreation
+      next: completeApproved
+
+    completeApproved:
+      type: succeed
+      outputVar: riskDecision
+
+    rejected:
+      type: fail
+      errorCode: ONBOARDING_REJECTED
+      reason: "Customer onboarding rejected based on KYC/AML checks, missing documents, or risk decision"
+

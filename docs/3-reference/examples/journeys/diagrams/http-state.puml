@@ -1,0 +1,12 @@
+@startuml
+!include journey-diagram-theme.puml
+title http – step-oriented states
+
+[*] --> startJourney
+
+state startJourney
+state getResult
+startJourney --> getResult : journeyId issued\nGET /journeys/{journeyId}/result
+getResult --> [*]
+
+@enduml

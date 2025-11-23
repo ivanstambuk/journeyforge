@@ -1,0 +1,57 @@
+@startuml
+!include journey-diagram-theme.puml
+title insurance-claim-fnol-to-settlement – internal DSL state graph
+
+[*] --> createClaim
+
+state createClaim
+state waitForFnolDetails
+state assessmentParallel
+state evaluateAssessment
+state waitForSettlementApproval
+state recordSettlement
+state initiatePayment
+state completeSettled
+state denied
+
+createClaim --> waitForFnolDetails : claims.createClaim
+
+waitForFnolDetails --> assessmentParallel : payload.decision == "submit"
+waitForFnolDetails --> denied : default (no FNOL details)
+
+assessmentParallel --> evaluateAssessment : adjuster & provider assessments
+
+evaluateAssessment --> waitForSettlementApproval : both decisions == "approve"
+evaluateAssessment --> denied : default (adjuster or provider denied)
+
+waitForSettlementApproval --> recordSettlement : payload.decision == "approve"
+waitForSettlementApproval --> denied : decision == "deny"
+
+recordSettlement --> initiatePayment : claims.recordSettlementDecision
+initiatePayment --> completeSettled : payments.authorizePayment
+
+completeSettled --> [*]
+denied --> [*]
+
+note right of waitForFnolDetails
+  type: wait (manual channel)
+  step id: submitFnolDetails
+  input: FnolDetailsInput
+end note
+
+note right of assessmentParallel
+  type: parallel
+  branches: adjuster, provider
+  each branch uses wait state:
+    - submitAdjusterReport
+    - submitProviderEstimate
+end note
+
+note right of waitForSettlementApproval
+  type: wait (manual channel)
+  step id: confirmSettlement
+  input: SettlementApprovalInput
+end note
+
+@enduml
+

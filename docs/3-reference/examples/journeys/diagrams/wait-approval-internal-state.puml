@@ -1,0 +1,28 @@
+@startuml
+!include journey-diagram-theme.puml
+' Internal DSL state graph for wait-approval (Q-008)
+title wait-approval – internal DSL state graph
+
+[*] --> submit
+
+state submit
+state waitForApproval
+state finish
+state rejected
+
+submit --> waitForApproval : task httpCall\noperationRef items.createItem
+
+waitForApproval --> finish : payload.decision == 'approved'
+waitForApproval --> rejected : default (decision == 'rejected')
+
+finish --> [*]
+rejected --> [*]
+
+note right of waitForApproval
+  type: wait (manual channel)
+  input: approval payload { decision, comment }
+  response.outputVar: stepResponse
+  apply.mapper: context ++ { approval, stepResponse }
+end note
+
+@enduml

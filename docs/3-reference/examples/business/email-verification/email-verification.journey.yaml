@@ -1,0 +1,183 @@
+apiVersion: v1
+kind: Journey
+metadata:
+  name: email-verification
+  version: 0.1.0
+  description: Email verification journey with a timer-based expiry window using parallel + timer.
+spec:
+  input:
+    schema:
+      title: EmailVerificationStartRequest
+      type: object
+      required:
+        - userId
+        - email
+      properties:
+        userId:
+          type: string
+        email:
+          type: string
+          format: email
+        channel:
+          type: string
+      additionalProperties: true
+  output:
+    schema:
+      title: EmailVerificationOutcome
+      type: object
+      required:
+        - status
+      properties:
+        status:
+          type: string
+          enum:
+            - VERIFIED
+            - EXPIRED
+        userId:
+          type: string
+        email:
+          type: string
+          format: email
+        verifiedAt:
+          type: string
+          format: date-time
+      additionalProperties: true
+  start: generateVerificationCode
+  states:
+    generateVerificationCode:
+      type: transform
+      transform:
+        mapper:
+          lang: dataweave
+          expr: |
+            context ++ {
+              verificationCode: uuid()
+            }
+        target:
+          kind: context
+          path: ""
+      next: sendVerificationEmail
+
+    sendVerificationEmail:
+      type: task
+      task:
+        kind: httpCall
+        method: POST
+        url: https://notifications.example.com/email/verification
+        params:
+          headers:
+            Accept: application/json
+        body:
+          mapper:
+            lang: dataweave
+            expr: |
+              {
+                userId: context.userId,
+                email: context.email,
+                verificationCode: context.verificationCode
+              }
+        timeoutMs: 2000
+        resultVar: sendResult
+      next: waitOrExpire
+
+    waitOrExpire:
+      type: parallel
+      parallel:
+        branches:
+          - name: waitBranch
+            start: waitForVerification
+            states:
+              waitForVerification:
+                type: wait
+                wait:
+                  channel: manual
+                  input:
+                    schema:
+                      title: EmailVerificationStepInput
+                      type: object
+                      required: [code]
+                      properties:
+                        code:
+                          type: string
+                      additionalProperties: true
+                  apply:
+                    mapper:
+                      lang: dataweave
+                      expr: |
+                        context ++ {
+                          verificationAttempt: {
+                            code: payload.code,
+                            isValid: payload.code == context.verificationCode
+                          }
+                        }
+                  on:
+                    - when:
+                        predicate:
+                          lang: dataweave
+                          expr: |
+                            payload.code == context.verificationCode
+                      next: markVerified
+                  default: invalidCode
+
+              markVerified:
+                type: transform
+                transform:
+                  mapper:
+                    lang: dataweave
+                    expr: |
+                      context ++ {
+                        outcome: {
+                          status: "VERIFIED",
+                          userId: context.userId,
+                          email: context.email,
+                          verifiedAt: now()
+                        }
+                      }
+                  target:
+                    kind: context
+                    path: ""
+                next: journeyDoneVerified
+
+              journeyDoneVerified:
+                type: succeed
+                outputVar: outcome
+
+              invalidCode:
+                type: fail
+                errorCode: INVALID_VERIFICATION_CODE
+                reason: "The verification link is invalid or has already been used"
+
+          - name: expiryBranch
+            start: verificationTimer
+            states:
+              verificationTimer:
+                type: timer
+                timer:
+                  duration: "P7D"
+                next: markExpired
+
+              markExpired:
+                type: transform
+                transform:
+                  mapper:
+                    lang: dataweave
+                    expr: |
+                      context ++ {
+                        outcome: {
+                          status: "EXPIRED",
+                          userId: context.userId,
+                          email: context.email
+                        }
+                      }
+                  target:
+                    kind: context
+                    path: ""
+                next: journeyDoneExpired
+
+              journeyDoneExpired:
+                type: succeed
+                outputVar: outcome
+
+        join:
+          strategy: anyOf
+          errorPolicy: collectAll

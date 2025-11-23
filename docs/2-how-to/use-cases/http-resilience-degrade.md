@@ -2,6 +2,12 @@
 
 Status: Draft | Last updated: 2025-11-20
 
+## Where to start
+
+For the full pattern and example journey, see:
+
+- Technical pattern: `docs/3-reference/examples/technical/http-resilience-degrade/http-resilience-degrade.md`
+
 ## Problem
 
 Wrap an unstable upstream HTTP call with resilience policies:

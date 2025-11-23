@@ -1,0 +1,446 @@
+# Design note: see Q-017 in docs/4-architecture/open-questions.md for scope and provider structure.
+apiVersion: v1
+kind: Journey
+metadata:
+  name: travel-booking-bundle
+  version: 0.1.0
+  description: Travel booking journey for flight, hotel, and car bundle with post-booking change/cancel.
+spec:
+  apis:
+    flights: { openApiRef: apis/flights.openapi.yaml }
+    hotels: { openApiRef: apis/hotels.openapi.yaml }
+    cars: { openApiRef: apis/cars.openapi.yaml }
+    payments: { openApiRef: apis/payments.openapi.yaml }
+    providers: { openApiRef: apis/providers.openapi.yaml }
+  input:
+    schema:
+      title: TravelBookingStartRequest
+      type: object
+      required:
+        - tripId
+        - travelerId
+      properties:
+        tripId:
+          type: string
+        travelerId:
+          type: string
+        flightOption:
+          type: object
+        hotelOption:
+          type: object
+        carOption:
+          type: object
+        totalAmount:
+          type: number
+        currency:
+          type: string
+        channel:
+          type: string
+      additionalProperties: true
+  output:
+    schema:
+      title: TravelBookingOutcome
+      type: object
+      required:
+        - tripId
+        - overallStatus
+      properties:
+        tripId:
+          type: string
+        overallStatus:
+          type: string
+          enum:
+            - CONFIRMED
+            - PARTIALLY_CONFIRMED
+            - CANCELLED
+            - FAILED
+        flightBooking:
+          type: object
+        hotelBooking:
+          type: object
+        carBooking:
+          type: object
+        change:
+          type: object
+        notes:
+          type: string
+      additionalProperties: true
+  compensation:
+    mode: async
+    start: waitBeforeCleanup
+    alsoFor:
+      - when:
+          predicate:
+            lang: dataweave
+            expr: |
+              output.overallStatus == "PARTIALLY_CONFIRMED"
+    states:
+      waitBeforeCleanup:
+        type: timer
+        timer:
+          duration: "P3D"
+        next: cleanupPartialSegments
+
+      cleanupPartialSegments:
+        type: task
+        task:
+          kind: httpCall
+          operationRef: providers.releaseUnconfirmedSegments
+          resultVar: cleanupResult
+        next: done
+
+      done:
+        type: succeed
+  start: reserveBundle
+  states:
+    reserveBundle:
+      type: parallel
+      parallel:
+        branches:
+          - name: flight
+            start: bookFlight
+            states:
+              bookFlight:
+                type: task
+                task:
+                  kind: httpCall
+                  operationRef: flights.createFlightBooking
+                  params:
+                    headers:
+                      Accept: application/json
+                  body:
+                    mapper:
+                      lang: dataweave
+                      expr: |
+                        {
+                          tripId: context.tripId,
+                          travelerId: context.travelerId,
+                          flightOption: context.flightOption
+                        }
+                  timeoutMs: 3000
+                  resultVar: result
+                next: done
+              done:
+                type: succeed
+          - name: hotel
+            start: bookHotel
+            states:
+              bookHotel:
+                type: task
+                task:
+                  kind: httpCall
+                  operationRef: hotels.createHotelBooking
+                  params:
+                    headers:
+                      Accept: application/json
+                  body:
+                    mapper:
+                      lang: dataweave
+                      expr: |
+                        {
+                          tripId: context.tripId,
+                          travelerId: context.travelerId,
+                          hotelOption: context.hotelOption
+                        }
+                  timeoutMs: 3000
+                  resultVar: result
+                next: done
+              done:
+                type: succeed
+          - name: car
+            start: bookCar
+            states:
+              bookCar:
+                type: task
+                task:
+                  kind: httpCall
+                  operationRef: cars.createCarBooking
+                  params:
+                    headers:
+                      Accept: application/json
+                  body:
+                    mapper:
+                      lang: dataweave
+                      expr: |
+                        {
+                          tripId: context.tripId,
+                          travelerId: context.travelerId,
+                          carOption: context.carOption
+                        }
+                  timeoutMs: 3000
+                  resultVar: result
+                next: done
+              done:
+                type: succeed
+        join:
+          strategy: allOf
+          errorPolicy: collectAll
+          mapper:
+            lang: dataweave
+            expr: |
+              {
+                flight: branches.flight.result,
+                hotel: branches.hotel.result,
+                car: branches.car.result
+              }
+          resultVar: reservations
+      next: evaluateReservations
+
+    evaluateReservations:
+      type: choice
+      choices:
+        - when:
+            predicate:
+              lang: dataweave
+              expr: |
+                (reservations.flight.ok default false)
+                  or (reservations.hotel.ok default false)
+                  or (reservations.car.ok default false)
+          next: waitForTravelerConfirmation
+      default: bookingFailed
+
+    waitForTravelerConfirmation:
+      type: wait
+      wait:
+        channel: manual
+        input:
+          schema:
+            description: Traveler decision to confirm or cancel the initial bundle reservation.
+            type: object
+            required:
+              - decision
+            properties:
+              decision:
+                type: string
+                enum:
+                  - confirm
+                  - cancel
+              notes:
+                type: string
+            additionalProperties: false
+        response:
+          outputVar: travelerConfirmationResponse
+          schema:
+            title: TravelerConfirmationProjection
+            type: object
+            description: Additional top-level fields returned from the confirmBundle step.
+            properties:
+              decision:
+                type: string
+                enum:
+                  - confirm
+                  - cancel
+              notes:
+                type: string
+            additionalProperties: true
+        apply:
+          mapper:
+            lang: dataweave
+            expr: |
+              context ++ {
+                travelerConfirmation: payload,
+                travelerConfirmationResponse: {
+                  decision: payload.decision,
+                  notes: payload.notes
+                }
+              }
+        on:
+          - when:
+              predicate:
+                lang: dataweave
+                expr: |
+                  payload.decision == "confirm"
+            next: initiatePayment
+        default: completeCancelled
+
+    initiatePayment:
+      type: task
+      task:
+        kind: httpCall
+        operationRef: payments.authorizePayment
+        params:
+          path:
+            paymentId: "${context.tripId}"
+          headers:
+            Accept: application/json
+        body:
+          mapper:
+            lang: dataweave
+            expr: |
+              {
+                amount: context.totalAmount default 0,
+                currency: context.currency
+              }
+        timeoutMs: 3000
+        resultVar: paymentAuthorization
+      next: waitForTripUpdates
+
+    waitForTripUpdates:
+      type: webhook
+      webhook:
+        input:
+          schema:
+            title: Trip status callback input
+            type: object
+            required:
+              - tripId
+              - status
+            properties:
+              tripId:
+                type: string
+              status:
+                type: string
+                enum:
+                  - CONFIRMED
+                  - PARTIALLY_CONFIRMED
+                  - CANCELLED
+                  - FAILED
+              flightBooking:
+                type: object
+              hotelBooking:
+                type: object
+              carBooking:
+                type: object
+              notes:
+                type: string
+            additionalProperties: true
+        response:
+          outputVar: tripStatusResponse
+          schema:
+            title: TripStatusProjection
+            type: object
+            description: Additional top-level fields returned from the waitForTripUpdates webhook step.
+            properties:
+              status:
+                type: string
+              notes:
+                type: string
+            additionalProperties: true
+        security:
+          kind: sharedSecretHeader
+          header: X-Trip-Update-Secret
+          secretRef: secret://webhook/travel-booking-bundle
+        apply:
+          mapper:
+            lang: dataweave
+            expr: |
+              context ++ {
+                tripStatusUpdate: payload,
+                tripStatusResponse: {
+                  status: payload.status,
+                  notes: payload.notes
+                }
+              }
+        on:
+          - when:
+              predicate:
+                lang: dataweave
+                expr: |
+                  payload.status == "CONFIRMED"
+                    or payload.status == "PARTIALLY_CONFIRMED"
+            next: waitForChangeOrCancel
+          - when:
+              predicate:
+                lang: dataweave
+                expr: |
+                  payload.status == "CANCELLED"
+            next: prepareOutcome
+        default: failed
+
+    waitForChangeOrCancel:
+      type: wait
+      wait:
+        channel: manual
+        input:
+          schema:
+            description: Post-booking change or cancel request from the traveler or agent.
+            type: object
+            required:
+              - action
+            properties:
+              action:
+                type: string
+                enum:
+                  - complete
+                  - change
+                  - cancel
+              notes:
+                type: string
+            additionalProperties: false
+        response:
+          outputVar: changeOrCancelResponse
+          schema:
+            title: ChangeOrCancelProjection
+            type: object
+            description: Additional top-level fields returned from the changeOrCancel step.
+            properties:
+              action:
+                type: string
+                enum:
+                  - complete
+                  - change
+                  - cancel
+              notes:
+                type: string
+            additionalProperties: true
+        apply:
+          mapper:
+            lang: dataweave
+            expr: |
+              context ++ {
+                changeRequest: payload,
+                overrideStatus: if (payload.action == "cancel") "CANCELLED" else null,
+                changeOrCancelResponse: {
+                  action: payload.action,
+                  notes: payload.notes
+                }
+              }
+        on:
+          - when:
+              predicate:
+                lang: dataweave
+                expr: |
+                  payload.action == "cancel"
+            next: prepareOutcome
+        default: prepareOutcome
+
+    prepareOutcome:
+      type: transform
+      transform:
+        mapper:
+          lang: dataweave
+          expr: |
+            {
+              tripId: context.tripId,
+              overallStatus: if ((context.overrideStatus default null) != null)
+                               context.overrideStatus
+                             else
+                               (context.tripStatusUpdate.status default "FAILED"),
+              flightBooking: context.tripStatusUpdate.flightBooking,
+              hotelBooking: context.tripStatusUpdate.hotelBooking,
+              carBooking: context.tripStatusUpdate.carBooking,
+              change: context.changeRequest,
+              notes: context.tripStatusUpdate.notes
+            }
+        target:
+          kind: var
+      resultVar: bookingOutcome
+      next: completeTrip
+
+    completeTrip:
+      type: succeed
+      outputVar: bookingOutcome
+
+    completeCancelled:
+      type: succeed
+      outputVar: travelerConfirmation
+
+    bookingFailed:
+      type: fail
+      errorCode: TRIP_BOOKING_FAILED
+      reason: "Travel booking bundle could not be reserved for any segment"
+
+    failed:
+      type: fail
+      errorCode: TRIP_FAILED
+      reason: "Travel booking bundle failed during confirmation or provider callbacks"

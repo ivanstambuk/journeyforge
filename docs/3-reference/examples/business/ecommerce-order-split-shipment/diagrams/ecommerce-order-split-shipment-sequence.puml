@@ -1,0 +1,32 @@
+@startuml
+!include journey-diagram-theme.puml
+title ecommerce-order-split-shipment – reservation, confirmation, fulfillment sequence
+
+actor "Client" as Client
+actor "Storefront UI" as Storefront
+actor "Fulfillment system" as Fulfillment
+participant "Journeys API" as Journeys
+
+Client -> Journeys: POST /api/v1/journeys/ecommerce-order-split-shipment/start\nEcommerceOrderStartRequest
+Journeys --> Client: 202 Accepted\nJourneyStartResponse (journeyId, ...)
+
+Client -> Journeys: GET /api/v1/journeys/{journeyId}\n(getStatusAfterReservation)
+Journeys --> Client: 200 OK\nJourneyStatus (reservation evaluated)
+
+Client -> Journeys: GET /api/v1/journeys/{journeyId}\n(getStatusAwaitingConfirmation)
+Journeys --> Client: 200 OK\nJourneyStatus (currentState == waitForConfirmation)
+
+Storefront -> Journeys: POST /api/v1/journeys/{journeyId}/steps/confirmOrder\nConfirmOrderInput
+Journeys --> Storefront: 200 OK\nConfirmOrderStepResponse
+
+Client -> Journeys: GET /api/v1/journeys/{journeyId}\n(getStatusDuringFulfillment)
+Journeys --> Client: 200 OK\nJourneyStatus (waiting for fulfillment)
+
+Fulfillment -> Journeys: POST /api/v1/journeys/{journeyId}/steps/waitForFulfillment\n(secured with X-Fulfillment-Secret)
+Journeys --> Fulfillment: 200 OK\n(fulfillment callback accepted)
+
+Client -> Journeys: GET /api/v1/journeys/{journeyId}/result\n(getResult)
+Journeys --> Client: 200 OK\nJourneyOutcome (FULFILLED, PARTIALLY_FULFILLED, CANCELLED, or FAILED)
+
+@enduml
+

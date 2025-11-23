@@ -1,0 +1,63 @@
+@startuml
+!include journey-diagram-theme.puml
+title customer-onboarding-kyc – internal DSL state graph
+
+[*] --> createProspect
+
+state createProspect
+state waitForKycDocuments
+state triggerChecks
+state waitForKycResult
+state waitForAmlResult
+state waitForRiskDecision
+state createAccount
+state completeApproved
+state rejected
+
+createProspect --> waitForKycDocuments : customers.createCustomer
+
+waitForKycDocuments --> triggerChecks : payload.decision == "submit"
+waitForKycDocuments --> rejected : default (no documents)
+
+triggerChecks --> waitForKycResult : startKycCheck + startAmlScreening
+
+waitForKycResult --> waitForAmlResult : status == APPROVED or REFERRED
+waitForKycResult --> rejected : status == REJECTED
+
+waitForAmlResult --> waitForRiskDecision : status == CLEAR or REFERRED
+waitForAmlResult --> rejected : status == REJECTED
+
+waitForRiskDecision --> createAccount : decision == APPROVE
+waitForRiskDecision --> rejected : decision == REJECT
+
+createAccount --> completeApproved : accounts.createAccount
+
+completeApproved --> [*]
+rejected --> [*]
+
+note right of waitForKycDocuments
+  type: wait (manual channel)
+  step id: submitKycDocuments
+  input: KycDocumentsInput
+end note
+
+note right of waitForKycResult
+  type: webhook
+  step id: waitForKycResult
+  security: X-Kyc-Result-Secret
+end note
+
+note right of waitForAmlResult
+  type: webhook
+  step id: waitForAmlResult
+  security: X-Aml-Result-Secret
+end note
+
+note right of waitForRiskDecision
+  type: webhook
+  step id: waitForRiskDecision
+  security: X-Risk-Decision-Secret
+end note
+
+@enduml
+

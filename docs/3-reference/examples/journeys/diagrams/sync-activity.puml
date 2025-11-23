@@ -1,0 +1,22 @@
+@startuml
+!include journey-diagram-theme.puml
+title sync – activity flow
+
+start
+
+:Client sends\nPOST /api/v1/journeys/sync/start;
+
+repeat
+  :Client calls\nGET /api/v1/journeys/{journeyId}/result;
+  :Journeys API returns\nJourneyOutcome with phase/output;
+repeat while (phase == "Running") is (still running)
+
+if (phase == "Succeeded"?) then (yes)
+  :Client processes successful\nJourneyOutcome.output;
+  stop
+else (no)
+  :Client handles failure via\nJourneyOutcome.error;
+  stop
+endif
+
+@enduml

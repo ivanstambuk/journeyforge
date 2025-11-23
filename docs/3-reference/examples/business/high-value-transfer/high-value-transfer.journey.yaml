@@ -1,0 +1,333 @@
+apiVersion: v1
+kind: Journey
+metadata:
+  name: high-value-transfer
+  version: 0.1.0
+  description: High-value transfer with fraud and sanctions checks, manual approval, and settlement callback.
+spec:
+  apis:
+    fraud: { openApiRef: apis/fraud.openapi.yaml }
+    sanctions: { openApiRef: apis/sanctions.openapi.yaml }
+    transfers: { openApiRef: apis/transfers.openapi.yaml }
+  input:
+    schema:
+      title: HighValueTransferStartRequest
+      type: object
+      required:
+        - transferId
+        - customerId
+        - sourceAccountId
+        - destinationAccountId
+        - amount
+        - currency
+      properties:
+        transferId:
+          type: string
+        customerId:
+          type: string
+        sourceAccountId:
+          type: string
+        destinationAccountId:
+          type: string
+        amount:
+          type: number
+        currency:
+          type: string
+        channel:
+          type: string
+      additionalProperties: true
+  output:
+    schema:
+      title: HighValueTransferOutcome
+      type: object
+      required:
+        - decision
+      properties:
+        decision:
+          type: string
+          enum:
+            - SETTLED
+            - FAILED
+            - REJECTED
+        transferId:
+          type: string
+        amount:
+          type: number
+        currency:
+          type: string
+        settlementTime:
+          type: string
+          format: date-time
+        failureReason:
+          type: string
+        rejectionReason:
+          type: string
+        riskSummary:
+          type: object
+      additionalProperties: true
+  start: runChecks
+  states:
+    runChecks:
+      type: parallel
+      parallel:
+        branches:
+          - name: fraud
+            start: fraudCall
+            states:
+              fraudCall:
+                type: task
+                task:
+                  kind: httpCall
+                  operationRef: fraud.checkTransfer
+                  params:
+                    headers:
+                      Accept: application/json
+                  body:
+                    mapper:
+                      lang: dataweave
+                      expr: |
+                        {
+                          transferId: context.transferId,
+                          customerId: context.customerId,
+                          amount: context.amount,
+                          currency: context.currency
+                        }
+                  timeoutMs: 3000
+                  resultVar: result
+                next: done
+              done:
+                type: succeed
+          - name: sanctions
+            start: sanctionsCall
+            states:
+              sanctionsCall:
+                type: task
+                task:
+                  kind: httpCall
+                  operationRef: sanctions.screenTransfer
+                  params:
+                    headers:
+                      Accept: application/json
+                  body:
+                    mapper:
+                      lang: dataweave
+                      expr: |
+                        {
+                          transferId: context.transferId,
+                          customerId: context.customerId,
+                          sourceAccountId: context.sourceAccountId,
+                          destinationAccountId: context.destinationAccountId
+                        }
+                  timeoutMs: 3000
+                  resultVar: result
+                next: done
+              done:
+                type: succeed
+        join:
+          strategy: allOf
+          errorPolicy: collectAll
+          mapper:
+            lang: dataweave
+            expr: |
+              {
+                fraud: branches.fraud.result,
+                sanctions: branches.sanctions.result
+              }
+          resultVar: checks
+      next: evaluateChecks
+
+    evaluateChecks:
+      type: choice
+      choices:
+        - when:
+            predicate:
+              lang: dataweave
+              expr: |
+                checks.fraud.ok == true
+                  and checks.sanctions.ok == true
+          next: waitForApproval
+      default: rejected
+
+    waitForApproval:
+      type: wait
+      wait:
+        channel: manual
+        input:
+          schema:
+            description: Operator approval or rejection for the high-value transfer.
+            type: object
+            required:
+              - decision
+            properties:
+              decision:
+                type: string
+                enum:
+                  - approve
+                  - reject
+              comment:
+                type: string
+            additionalProperties: false
+        response:
+          outputVar: approvalResponse
+          schema:
+            title: ApprovalProjection
+            type: object
+            description: Additional top-level fields returned from the approveTransfer step.
+            properties:
+              decision:
+                type: string
+                enum:
+                  - approve
+                  - reject
+              comment:
+                type: string
+            additionalProperties: true
+        apply:
+          mapper:
+            lang: dataweave
+            expr: |
+              context ++ {
+                approval: payload,
+                approvalResponse: {
+                  decision: payload.decision,
+                  comment: payload.comment
+                }
+              }
+        on:
+          - when:
+              predicate:
+                lang: dataweave
+                expr: |
+                  payload.decision == "approve"
+            next: initiateTransfer
+        default: rejected
+
+    initiateTransfer:
+      type: task
+      task:
+        kind: httpCall
+        operationRef: transfers.initiateHighValueTransfer
+        params:
+          path:
+            transferId: "${context.transferId}"
+          headers:
+            Accept: application/json
+        body:
+          mapper:
+            lang: dataweave
+            expr: |
+              {
+                amount: context.amount,
+                currency: context.currency,
+                sourceAccountId: context.sourceAccountId,
+                destinationAccountId: context.destinationAccountId
+              }
+        timeoutMs: 5000
+        resultVar: transferRequest
+      next: awaitSettlementOrTimeout
+
+    awaitSettlementOrTimeout:
+      type: parallel
+      parallel:
+        branches:
+          - name: settlementBranch
+            start: waitForSettlement
+            states:
+              waitForSettlement:
+                type: webhook
+                webhook:
+                  input:
+                    schema:
+                      title: Settlement callback input
+                      type: object
+                      required:
+                        - transferId
+                        - status
+                      properties:
+                        transferId:
+                          type: string
+                        status:
+                          type: string
+                          enum:
+                            - SETTLED
+                            - FAILED
+                        settlementTime:
+                          type: string
+                          format: date-time
+                        reason:
+                          type: string
+                      additionalProperties: true
+                  response:
+                    outputVar: settlementResponse
+                    schema:
+                      title: Settlement step response
+                      type: object
+                      description: Additional top-level fields returned from the settlementCallback step.
+                      properties:
+                        status:
+                          type: string
+                          enum:
+                            - SETTLED
+                            - FAILED
+                        settlementTime:
+                          type: string
+                          format: date-time
+                        reason:
+                          type: string
+                      additionalProperties: true
+                  security:
+                    kind: sharedSecretHeader
+                    header: X-Settlement-Secret
+                    secretRef: secret://webhook/high-value-transfer-settlement
+                  apply:
+                    mapper:
+                      lang: dataweave
+                      expr: |
+                        context ++ {
+                          settlementCallback: payload,
+                          settlementResponse: {
+                            status: payload.status,
+                            settlementTime: payload.settlementTime,
+                            reason: payload.reason
+                          }
+                        }
+                  on:
+                    - when:
+                        predicate:
+                          lang: dataweave
+                          expr: |
+                            payload.status == "SETTLED"
+                      next: settlementSucceeded
+                  default: settlementFailed
+
+              settlementSucceeded:
+                type: succeed
+                outputVar: settlementCallback
+
+              settlementFailed:
+                type: fail
+                errorCode: HIGH_VALUE_TRANSFER_FAILED
+                reason: "High-value transfer settlement failed as reported by provider"
+
+          - name: timeoutBranch
+            start: settlementTimer
+            states:
+              settlementTimer:
+                type: timer
+                timer:
+                  duration: "PT30M"
+                next: settlementTimedOut
+
+              settlementTimedOut:
+                type: fail
+                errorCode: HIGH_VALUE_TRANSFER_SETTLEMENT_TIMEOUT
+                reason: "High-value transfer settlement did not complete within 30 minutes"
+
+        join:
+          strategy: anyOf
+          errorPolicy: collectAll
+
+    rejected:
+      type: fail
+      errorCode: HIGH_VALUE_TRANSFER_REJECTED
+      reason: "High-value transfer rejected by fraud/sanctions checks or manual approval"

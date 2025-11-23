@@ -1,0 +1,269 @@
+apiVersion: v1
+kind: Journey
+metadata:
+  name: loan-application
+  version: 0.1.0
+  description: Long-lived loan application with multi-bureau checks and optional manual underwriting.
+spec:
+  apis:
+    bureauA: { openApiRef: apis/serviceA.openapi.yaml }
+    bureauB: { openApiRef: apis/serviceB.openapi.yaml }
+    kyc: { openApiRef: apis/users.openapi.yaml }
+    accounts: { openApiRef: apis/accounts.openapi.yaml }
+  input:
+    schema:
+      title: LoanApplicationStartRequest
+      type: object
+      required:
+        - applicantId
+        - requestedAmount
+        - currency
+        - termMonths
+      properties:
+        applicantId:
+          type: string
+        requestedAmount:
+          type: number
+        currency:
+          type: string
+        termMonths:
+          type: integer
+        productCode:
+          type: string
+        channel:
+          type: string
+      additionalProperties: true
+  output:
+    schema:
+      title: LoanApplicationOutcome
+      type: object
+      required:
+        - decision
+      properties:
+        decision:
+          type: string
+          enum:
+            - APPROVED
+            - REJECTED
+            - ERROR
+        approvedAmount:
+          type: number
+        interestRate:
+          type: number
+        termMonths:
+          type: integer
+        offerId:
+          type: string
+        riskSummary:
+          type: object
+        rejectionReason:
+          type: string
+      additionalProperties: true
+  start: runChecks
+  states:
+    runChecks:
+      type: parallel
+      parallel:
+        branches:
+          - name: bureauA
+            start: callBureauA
+            states:
+              callBureauA:
+                type: task
+                task:
+                  kind: httpCall
+                  operationRef: bureauA.getServiceAById
+                  params:
+                    path:
+                      id: "${context.applicantId}"
+                    headers:
+                      Accept: application/json
+                  timeoutMs: 2000
+                  resultVar: result
+                next: done
+              done:
+                type: succeed
+          - name: bureauB
+            start: callBureauB
+            states:
+              callBureauB:
+                type: task
+                task:
+                  kind: httpCall
+                  operationRef: bureauB.getServiceBById
+                  params:
+                    path:
+                      id: "${context.applicantId}"
+                    headers:
+                      Accept: application/json
+                  timeoutMs: 2000
+                  resultVar: result
+                next: done
+              done:
+                type: succeed
+          - name: kyc
+            start: callKyc
+            states:
+              callKyc:
+                type: task
+                task:
+                  kind: httpCall
+                  operationRef: kyc.getUserById
+                  params:
+                    path:
+                      userId: "${context.applicantId}"
+                    headers:
+                      Accept: application/json
+                  timeoutMs: 2000
+                  resultVar: result
+                next: done
+              done:
+                type: succeed
+        join:
+          strategy: allOf
+          errorPolicy: collectAll
+          mapper:
+            lang: dataweave
+            expr: |
+              {
+                bureauA: branches.bureauA.result,
+                bureauB: branches.bureauB.result,
+                kyc: branches.kyc.result
+              }
+          resultVar: checks
+      next: scoreAndRoute
+
+    scoreAndRoute:
+      type: choice
+      choices:
+        - when:
+            predicate:
+              lang: dataweave
+              expr: |
+                checks.bureauA.ok == true
+                  and checks.bureauB.ok == true
+                  and checks.kyc.ok == true
+                  and context.requestedAmount <= 25000
+          next: autoApprove
+        - when:
+            predicate:
+              lang: dataweave
+              expr: |
+                checks.bureauA.ok == true
+                  and checks.bureauB.ok == true
+                  and checks.kyc.ok == true
+          next: waitForUnderwriter
+      default: rejected
+
+    autoApprove:
+      type: task
+      task:
+        kind: httpCall
+        operationRef: accounts.createAccount
+        params:
+          headers:
+            Accept: application/json
+        body:
+          mapper:
+            lang: dataweave
+            expr: |
+              {
+                ownerId: context.applicantId,
+                email: checks.kyc.body.email
+              }
+        timeoutMs: 3000
+        resultVar: offer
+      next: approved
+
+    waitForUnderwriter:
+      type: wait
+      wait:
+        channel: manual
+        input:
+          schema:
+            description: Manual underwriting decision and adjusted terms.
+            type: object
+            required:
+              - decision
+            properties:
+              decision:
+                type: string
+                enum:
+                  - approved
+                  - rejected
+              approvedAmount:
+                type: number
+              interestRate:
+                type: number
+              comment:
+                type: string
+            additionalProperties: false
+        response:
+          outputVar: underwriterResponse
+          schema:
+            title: UnderwriterDecisionProjection
+            type: object
+            description: Additional top-level fields returned from the underwriterApproval step.
+            properties:
+              decision:
+                type: string
+                enum:
+                  - approved
+                  - rejected
+              approvedAmount:
+                type: number
+              interestRate:
+                type: number
+              comment:
+                type: string
+            additionalProperties: true
+        apply:
+          mapper:
+            lang: dataweave
+            expr: |
+              context ++ {
+                underwriterDecision: payload,
+                underwriterResponse: {
+                  decision: payload.decision,
+                  approvedAmount: payload.approvedAmount,
+                  interestRate: payload.interestRate,
+                  comment: payload.comment
+                }
+              }
+        on:
+          - when:
+              predicate:
+                lang: dataweave
+                expr: |
+                  payload.decision == "approved"
+            next: issueApprovedLoan
+        default: rejected
+
+    issueApprovedLoan:
+      type: task
+      task:
+        kind: httpCall
+        operationRef: accounts.createAccount
+        params:
+          headers:
+            Accept: application/json
+        body:
+          mapper:
+            lang: dataweave
+            expr: |
+              {
+                ownerId: context.applicantId,
+                email: checks.kyc.body.email
+              }
+        timeoutMs: 3000
+        resultVar: offer
+      next: approved
+
+    approved:
+      type: succeed
+      outputVar: offer
+
+    rejected:
+      type: fail
+      errorCode: LOAN_REJECTED
+      reason: "One or more checks failed or the underwriter rejected the application"

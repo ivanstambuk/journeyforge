@@ -1,0 +1,22 @@
+@startuml
+!include journey-diagram-theme.puml
+title subscription-lifecycle – HTTP-visible states
+
+[*] --> startJourney
+
+state startJourney
+state getStatusDuringTrial
+state submitUpgrade
+state getStatusAfterUpgrade
+state submitCancel
+state getResult
+
+startJourney --> getStatusDuringTrial : GET /journeys/{journeyId}\n(trial running – upgrade OR timer expiry)
+getStatusDuringTrial --> submitUpgrade : POST /steps/upgradeSubscription\n(optional; timer may expire trial without this)
+submitUpgrade --> getStatusAfterUpgrade : GET /journeys/{journeyId}\n(subscription active)
+getStatusAfterUpgrade --> submitCancel : POST /steps/changeSubscriptionStatus\n(action=cancel)
+submitCancel --> getResult : GET /journeys/{journeyId}/result
+
+getResult --> [*]
+
+@enduml

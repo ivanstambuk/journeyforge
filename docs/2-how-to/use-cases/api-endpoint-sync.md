@@ -2,6 +2,12 @@
 
 Status: Draft | Last updated: 2025-11-20
 
+## Where to start
+
+For the full pattern and example journey, see:
+
+- Technical pattern: `docs/3-reference/examples/technical/http-chained-calls-api/http-chained-calls-api.md`
+
 ## Problem
 
 Expose a fully RESTful API that:

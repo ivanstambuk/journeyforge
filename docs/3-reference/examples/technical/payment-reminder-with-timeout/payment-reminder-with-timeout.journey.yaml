@@ -1,0 +1,169 @@
+apiVersion: v1
+kind: Journey
+metadata:
+  name: payment-reminder-with-timeout
+  version: 0.1.0
+  description: One-shot payment reminder with 24h timeout using wait + timer in parallel.
+spec:
+  apis:
+    payments: { openApiRef: apis/payments.openapi.yaml }
+  input:
+    schema:
+      title: PaymentReminderStartRequest
+      type: object
+      required:
+        - userId
+        - paymentId
+        - amount
+        - currency
+      properties:
+        userId:
+          type: string
+        paymentId:
+          type: string
+        amount:
+          type: number
+        currency:
+          type: string
+      additionalProperties: true
+  output:
+    schema:
+      title: PaymentReminderOutcome
+      type: object
+      required:
+        - status
+      properties:
+        status:
+          type: string
+          enum: [PAID, TIMED_OUT]
+        userId:
+          type: string
+        paymentId:
+          type: string
+        amount:
+          type: number
+        currency:
+          type: string
+      additionalProperties: true
+  start: sendReminder
+  states:
+    sendReminder:
+      type: task
+      task:
+        kind: httpCall
+        operationRef: payments.sendPaymentReminder
+        params:
+          path:
+            userId: "${context.userId}"
+            paymentId: "${context.paymentId}"
+        resultVar: reminder
+      next: waitOrTimeout
+
+    waitOrTimeout:
+      type: parallel
+      parallel:
+        branches:
+          - name: waitBranch
+            start: waitForPayment
+            states:
+              waitForPayment:
+                type: wait
+                wait:
+                  channel: manual
+                  input:
+                    schema:
+                      title: PaymentConfirmationInput
+                      type: object
+                      required: [paymentStatus]
+                      properties:
+                        paymentStatus:
+                          type: string
+                          enum: [PAID]
+                      additionalProperties: true
+                  apply:
+                    mapper:
+                      lang: dataweave
+                      expr: |
+                        context ++ {
+                          paymentStatus: payload.paymentStatus
+                        }
+                  on:
+                    - when:
+                        predicate:
+                          lang: dataweave
+                          expr: |
+                            payload.paymentStatus == "PAID"
+                      next: paymentReceived
+                  default: paymentNotCompleted
+
+              paymentReceived:
+                type: transform
+                transform:
+                  mapper:
+                    lang: dataweave
+                    expr: |
+                      context ++ {
+                        outcome: {
+                          status: "PAID",
+                          userId: context.userId,
+                          paymentId: context.paymentId,
+                          amount: context.amount,
+                          currency: context.currency
+                        }
+                      }
+                  target:
+                    kind: context
+                    path: ""
+                next: journeyDonePaid
+
+              paymentNotCompleted:
+                type: transform
+                transform:
+                  mapper:
+                    lang: dataweave
+                    expr: context
+                  target:
+                    kind: context
+                    path: ""
+                next: journeyDonePaid
+
+              journeyDonePaid:
+                type: succeed
+                outputVar: outcome
+
+          - name: timeoutBranch
+            start: paymentTimer
+            states:
+              paymentTimer:
+                type: timer
+                timer:
+                  duration: "PT24H"
+                next: timeoutFired
+
+              timeoutFired:
+                type: transform
+                transform:
+                  mapper:
+                    lang: dataweave
+                    expr: |
+                      context ++ {
+                        outcome: {
+                          status: "TIMED_OUT",
+                          userId: context.userId,
+                          paymentId: context.paymentId,
+                          amount: context.amount,
+                          currency: context.currency
+                        }
+                      }
+                  target:
+                    kind: context
+                    path: ""
+                next: journeyDoneTimeout
+
+              journeyDoneTimeout:
+                type: succeed
+                outputVar: outcome
+
+        join:
+          strategy: anyOf
+          errorPolicy: collectAll

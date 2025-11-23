@@ -1,0 +1,18 @@
+@startuml
+!include journey-diagram-theme.puml
+title email-verification – HTTP-visible states
+
+[*] --> startJourney
+
+state startJourney
+state getStatusAfterStart
+state verifyViaLink
+state getResult
+
+startJourney --> getStatusAfterStart : POST /journeys/email-verification/start\n(email sent)
+getStatusAfterStart --> verifyViaLink : GET /journeys/{journeyId}\n(waiting for verification)
+verifyViaLink --> getResult : GET /journeys/{journeyId}/result\n(after verification or expiry)
+
+getResult --> [*]
+
+@enduml

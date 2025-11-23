@@ -1,0 +1,28 @@
+@startuml
+!include journey-diagram-theme.puml
+title ecommerce-order-split-shipment – client activity flow
+
+start
+
+:Client sends\nPOST /api/v1/journeys/ecommerce-order-split-shipment/start\nwith EcommerceOrderStartRequest;
+
+repeat
+  :Client calls\nGET /api/v1/journeys/{journeyId}/result;
+  :Journeys API returns\nJourneyOutcome with phase/output;
+repeat while (phase == "Running" and\ncurrentState != "waitForConfirmation") is (reservation running)
+
+if (currentState == "waitForConfirmation"?) then (yes)
+  :Storefront captures customer decision\nand calls POST /api/v1/journeys/{journeyId}/steps/confirmOrder;
+  :Client resumes polling\nGET /api/v1/journeys/{journeyId}/result;
+endif
+
+if (phase == "Succeeded" and overallStatus == "FULFILLED"?) then (fulfilled)
+  :Client confirms fulfillment and updates\norder history or UI;
+  stop
+else (partial/cancelled/failed)
+  :Client handles PARTIALLY_FULFILLED, CANCELLED,\nor FAILED based on shipments and unavailableItems;
+  stop
+endif
+
+@enduml
+

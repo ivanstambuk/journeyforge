@@ -1,0 +1,240 @@
+arazzo: 1.0.1
+info:
+  title: JourneyForge – ecommerce-order-split-shipment workflows
+  version: 0.1.0
+  summary: Workflows for e-commerce orders with inventory checks and split shipments.
+  description: Workflows for orchestrating e-commerce orders with inventory reservation, customer confirmation, split shipments, and fulfillment callbacks. See Q-013 in docs/4-architecture/open-questions.md for design context.
+sourceDescriptions:
+  - name: ecommerceOrder
+    type: openapi
+    url: ecommerce-order-split-shipment.openapi.yaml
+workflows:
+  - workflowId: ecommerce-order-split-shipment-fulfilled
+    summary: Start an order journey, confirm split shipments, and read the fulfilled outcome.
+    description: Start an ecommerce-order-split-shipment journey, let the engine reserve inventory and plan split shipments, confirm the order, and then read the final fulfilled outcome.
+    inputs:
+      type: object
+      properties:
+        startRequest:
+          description: Initial e-commerce order request.
+          type: object
+          required:
+            - orderId
+            - customerId
+            - items
+            - shippingAddress
+          properties:
+            orderId:
+              type: string
+            customerId:
+              type: string
+            items:
+              type: array
+              items:
+                type: object
+                required:
+                  - sku
+                  - quantity
+                properties:
+                  sku:
+                    type: string
+                  quantity:
+                    type: integer
+            shippingAddress:
+              type: object
+              properties:
+                line1:
+                  type: string
+                line2:
+                  type: string
+                city:
+                  type: string
+                country:
+                  type: string
+                postalCode:
+                  type: string
+          additionalProperties: true
+        confirmationInput:
+          description: Customer decision to proceed with the order given proposed split shipments.
+          type: object
+          required:
+            - decision
+          properties:
+            decision:
+              type: string
+              enum:
+                - proceed
+            notes:
+              type: string
+          additionalProperties: false
+    steps:
+      - stepId: startJourney
+        description: Start a new ecommerce-order-split-shipment journey instance.
+        operationId: ecommerceOrderSplitShipment_start
+        x-source: ecommerceOrder
+        requestBody:
+          contentType: application/json
+          payload: $inputs.startRequest
+        outputs:
+          journeyId: $response.body.journeyId
+      - stepId: getStatusAfterReservation
+        description: Poll journey status until inventory reservation has completed.
+        operationId: ecommerceOrderSplitShipment_getStatus
+        x-source: ecommerceOrder
+        parameters:
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId
+        outputs:
+          phase: $response.body.phase
+      - stepId: getStatusAwaitingConfirmation
+        description: Poll journey status until the order is waiting for customer confirmation.
+        operationId: ecommerceOrderSplitShipment_getStatus
+        x-source: ecommerceOrder
+        parameters:
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId
+        outputs:
+          phase: $response.body.phase
+      - stepId: confirmOrder
+        description: Provide the customer's decision to proceed with the order.
+        operationId: ecommerceOrderSplitShipment_confirmOrder
+        x-source: ecommerceOrder
+        parameters:
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId
+        requestBody:
+          contentType: application/json
+          payload: $inputs.confirmationInput
+        outputs:
+          phase: $response.body.phase
+      - stepId: getStatusDuringFulfillment
+        description: Poll journey status while shipments are being prepared and fulfilled.
+        operationId: ecommerceOrderSplitShipment_getStatus
+        x-source: ecommerceOrder
+        parameters:
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId
+        outputs:
+          phase: $response.body.phase
+      - stepId: getResult
+        description: Retrieve the final fulfilled outcome once shipments have completed.
+        operationId: ecommerceOrderSplitShipment_getResult
+        x-source: ecommerceOrder
+        parameters:
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId
+
+  - workflowId: ecommerce-order-split-shipment-partial-or-cancelled
+    summary: Start an order journey that is either partially fulfilled or cancelled after reservation.
+    description: Start an ecommerce-order-split-shipment journey where inventory is only partially available, then either proceed with partial shipments or cancel the order and inspect the outcome.
+    inputs:
+      type: object
+      properties:
+        startRequest:
+          description: Initial e-commerce order request likely to trigger partial availability.
+          type: object
+          required:
+            - orderId
+            - customerId
+            - items
+            - shippingAddress
+          properties:
+            orderId:
+              type: string
+            customerId:
+              type: string
+            items:
+              type: array
+              items:
+                type: object
+                required:
+                  - sku
+                  - quantity
+                properties:
+                  sku:
+                    type: string
+                  quantity:
+                    type: integer
+            shippingAddress:
+              type: object
+              properties:
+                line1:
+                  type: string
+                line2:
+                  type: string
+                city:
+                  type: string
+                country:
+                  type: string
+                postalCode:
+                  type: string
+          additionalProperties: true
+        confirmationInput:
+          description: Customer decision to cancel the order instead of proceeding with partial fulfillment.
+          type: object
+          required:
+            - decision
+          properties:
+            decision:
+              type: string
+              enum:
+                - cancel
+            notes:
+              type: string
+          additionalProperties: false
+    steps:
+      - stepId: startJourney
+        description: Start a new ecommerce-order-split-shipment journey instance.
+        operationId: ecommerceOrderSplitShipment_start
+        x-source: ecommerceOrder
+        requestBody:
+          contentType: application/json
+          payload: $inputs.startRequest
+        outputs:
+          journeyId: $response.body.journeyId
+      - stepId: getStatusAfterReservation
+        description: Poll journey status until inventory reservation has completed.
+        operationId: ecommerceOrderSplitShipment_getStatus
+        x-source: ecommerceOrder
+        parameters:
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId
+        outputs:
+          phase: $response.body.phase
+      - stepId: getStatusAwaitingConfirmation
+        description: Poll journey status until the order is waiting for customer confirmation.
+        operationId: ecommerceOrderSplitShipment_getStatus
+        x-source: ecommerceOrder
+        parameters:
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId
+        outputs:
+          phase: $response.body.phase
+      - stepId: cancelOrder
+        description: Provide the customer's decision to cancel the order.
+        operationId: ecommerceOrderSplitShipment_confirmOrder
+        x-source: ecommerceOrder
+        parameters:
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId
+        requestBody:
+          contentType: application/json
+          payload: $inputs.confirmationInput
+        outputs:
+          phase: $response.body.phase
+      - stepId: getResult
+        description: Retrieve the final outcome, which may be CANCELLED or PARTIALLY_FULFILLED depending on callbacks and configuration.
+        operationId: ecommerceOrderSplitShipment_getResult
+        x-source: ecommerceOrder
+        parameters:
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId

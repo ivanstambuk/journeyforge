@@ -16,7 +16,7 @@ Project TL;DR: Spec‑first API journey orchestrator in Java 25. DSL and specs l
   - `.github/workflows/ci.yml` – Java 25 minimal quality gate (spotless + check, gitlint, gitleaks).
 
 ## Before You Code (SDD Workflow)
-1) Clarify ambiguity first. Log questions in `docs/4-architecture/open-questions.md` (IDs like Q-001) and reference the ID in chat/commits.
+1) Clarify ambiguity first. Log open questions in `docs/4-architecture/open-questions.md` (IDs like Q-001) and reference the ID in chat.
 2) Update/create the feature spec at `docs/4-architecture/features/<NNN>/spec.md` using templates under `docs/templates/`.
 3) Only after the spec is current, create `plan.md` and `tasks.md` for the feature.
 4) Implement in small, verifiable increments (≤90 minutes), running `./gradlew spotlessApply check` per slice.
@@ -41,6 +41,7 @@ This workflow applies to all architecturally significant work, including ADRs, D
 - DSL Reference: `docs/3-reference/dsl.md`
 - DSL Style Guide: `docs/4-architecture/spec-guidelines/dsl-style.md`
 - Spec Format & Snapshots: `docs/4-architecture/spec-guidelines/spec-format.md`
+- Docs Style Guide: `docs/4-architecture/spec-guidelines/docs-style.md`
 
 DataWeave: JourneyForge uses DataWeave 2.x as the canonical expression language (predicates now; transforms later).
 

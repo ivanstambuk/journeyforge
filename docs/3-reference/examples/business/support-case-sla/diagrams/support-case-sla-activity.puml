@@ -1,0 +1,31 @@
+@startuml
+!include journey-diagram-theme.puml
+title support-case-sla – client activity flow
+
+start
+
+:Client sends\nPOST /api/v1/journeys/support-case-sla/start\nwith SupportCaseStartRequest;
+
+repeat
+  :Client polls\nGET /journeys/{journeyId}\nfor intermediate status;
+  :Journeys API returns\nJourneyStatus with phase/currentState;
+repeat while (phase == "Running" and\ncurrentState != "waitForAgentUpdate") is (awaiting assignment or routing)
+
+if (currentState == "waitForAgentUpdate"?) then (waiting for agent)
+  :Agent resolves case\nvia POST /steps/waitForAgentUpdate\nwith status RESOLVED;
+endif
+
+repeat
+  :Client polls\nGET /journeys/{journeyId}/result;
+  :Journeys API returns\nJourneyOutcome with phase/output;
+repeat while (phase == "Running") is (case still open)
+
+if (output.status == "RESOLVED"?) then (resolved)
+  :Client treats the case as resolved\nand updates local case view;
+  stop
+else (escalated)
+  :Client routes the case to an\nescalation queue or supervisor\nbased on ESCALATED outcome;
+  stop
+endif
+
+@enduml

@@ -1,0 +1,43 @@
+openapi: 3.1.0
+info:
+  title: AML Screening API
+  version: 1.0.0
+  description: AML screening API for starting AML checks on individuals. See Q-019 in docs/4-architecture/open-questions.md for journey design context.
+  contact:
+    name: JourneyForge
+servers:
+  - url: https://aml.example.com
+paths:
+  /aml/screenings:
+    post:
+      operationId: startAmlScreening
+      summary: Start an AML screening for an individual
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - customerId
+              properties:
+                customerId:
+                  type: string
+                fullName:
+                  type: string
+              additionalProperties: true
+      responses:
+        "202":
+          description: AML screening accepted and will complete asynchronously
+          content:
+            application/json:
+              schema:
+                type: object
+        "400":
+          description: Invalid AML request
+      tags:
+        - aml
+      description: Start an asynchronous AML screening; results are delivered via webhook.
+tags:
+  - name: aml
+

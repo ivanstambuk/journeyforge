@@ -1,0 +1,15 @@
+@startuml
+!include journey-diagram-theme.puml
+title credit – main workflow sequence
+
+actor "API client" as Client
+participant "Journeys API" as Journeys
+
+Client -> Journeys: POST /api/v1/journeys/credit/start
+Journeys --> Client: 202 Accepted\nJourneyStartResponse (journeyId, ...)
+
+Client -> Journeys: GET /api/v1/journeys/{journeyId}/result
+Journeys -> Journeys: Run credit journey to completion
+Journeys --> Client: 200 OK\nJourneyOutcome (phase, output, error)
+
+@enduml

@@ -1,0 +1,33 @@
+@startuml
+!include journey-diagram-theme.puml
+title subscription-lifecycle – trial, upgrade, cancel sequence
+
+actor "Client" as Client
+participant "Journeys API" as Journeys
+
+Client -> Journeys: POST /api/v1/journeys/subscription-lifecycle/start\nSubscriptionLifecycleStartRequest
+Journeys --> Client: 202 Accepted\nJourneyStartResponse (journeyId, ...)
+
+Client -> Journeys: GET /api/v1/journeys/{journeyId}\n(getStatusDuringTrial)
+Journeys --> Client: 200 OK\nJourneyStatus (trial running, waiting for upgrade or expiry)
+
+note over Client
+  Customer sees the trial in the UI and may
+  choose to upgrade during the trial window;
+  if they do nothing, the timer will expire
+  the trial automatically.
+end note
+
+Client -> Journeys: POST /api/v1/journeys/{journeyId}/steps/upgradeSubscription\nUpgradeSubscriptionInput
+Journeys --> Client: 200 OK\nUpgradeSubscriptionStepResponse
+
+Client -> Journeys: GET /api/v1/journeys/{journeyId}\n(getStatusAfterUpgrade)
+Journeys --> Client: 200 OK\nJourneyStatus (state == waitForStatusChange)
+
+Client -> Journeys: POST /api/v1/journeys/{journeyId}/steps/changeSubscriptionStatus\nChangeSubscriptionStatusInput (cancel)
+Journeys --> Client: 200 OK\nChangeSubscriptionStatusStepResponse
+
+Client -> Journeys: GET /api/v1/journeys/{journeyId}/result\n(getResult)
+Journeys --> Client: 200 OK\nJourneyOutcome (finalStatus)
+
+@enduml

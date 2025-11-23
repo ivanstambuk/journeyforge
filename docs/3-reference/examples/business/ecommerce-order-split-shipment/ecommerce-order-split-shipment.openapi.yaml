@@ -1,0 +1,309 @@
+openapi: 3.1.0
+info:
+  title: "JourneyForge – ecommerce-order-split-shipment"
+  version: 0.1.0
+  description: "JourneyForge – ecommerce-order-split-shipment"
+  contact:
+    name: JourneyForge
+servers:
+  - url: /api/v1
+tags:
+  - name: ecommerce-order-split-shipment
+paths:
+  /journeys/ecommerce-order-split-shipment/start:
+    post:
+      summary: Start ecommerce-order-split-shipment journey
+      operationId: ecommerceOrderSplitShipment_start
+      tags:
+        - ecommerce-order-split-shipment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EcommerceOrderStartRequest"
+      responses:
+        "202":
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JourneyStartResponse"
+      description: Start ecommerce-order-split-shipment journey
+  /journeys/{journeyId}:
+    get:
+      summary: Get journey status
+      operationId: ecommerceOrderSplitShipment_getStatus
+      tags:
+        - ecommerce-order-split-shipment
+      parameters:
+        - in: path
+          name: journeyId
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JourneyStatus"
+      description: Get journey status
+  /journeys/{journeyId}/steps/confirmOrder:
+    post:
+      summary: Provide the customer's decision to proceed with or cancel the order given proposed split shipments
+      operationId: ecommerceOrderSplitShipment_confirmOrder
+      tags:
+        - ecommerce-order-split-shipment
+      parameters:
+        - in: path
+          name: journeyId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ConfirmOrderInput"
+      responses:
+        "200":
+          description: Updated status after processing confirmation decision
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConfirmOrderStepResponse"
+      description: Provide proceed/cancel decision for the order based on the proposed split shipments.
+  /journeys/{journeyId}/result:
+    get:
+      summary: Retrieve final outcome
+      operationId: ecommerceOrderSplitShipment_getResult
+      tags:
+        - ecommerce-order-split-shipment
+      parameters:
+        - in: path
+          name: journeyId
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Final outcome
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JourneyOutcome"
+        "409":
+          description: Journey not terminal yet
+      description: Retrieve final outcome
+components:
+  schemas:
+    EcommerceOrderStartRequest:
+      type: object
+      required:
+        - orderId
+        - customerId
+        - items
+        - shippingAddress
+      properties:
+        orderId:
+          type: string
+        customerId:
+          type: string
+        items:
+          type: array
+          items:
+            type: object
+            required:
+              - sku
+              - quantity
+            properties:
+              sku:
+                type: string
+              quantity:
+                type: integer
+              warehousePreference:
+                type: string
+            additionalProperties: true
+        shippingAddress:
+          type: object
+          properties:
+            line1:
+              type: string
+            line2:
+              type: string
+            city:
+              type: string
+            country:
+              type: string
+            postalCode:
+              type: string
+        channel:
+          type: string
+      additionalProperties: true
+    ConfirmOrderInput:
+      type: object
+      description: Customer decision to proceed with the order given proposed split shipments, or cancel.
+      required:
+        - decision
+      properties:
+        decision:
+          type: string
+          enum:
+            - proceed
+            - cancel
+        notes:
+          type: string
+      additionalProperties: false
+    JourneyStartResponse:
+      type: object
+      required:
+        - journeyId
+        - journeyName
+        - statusUrl
+      properties:
+        journeyId:
+          type: string
+        journeyName:
+          type: string
+        statusUrl:
+          type: string
+          format: uri
+        _links:
+          description: "Optional hypermedia links (HAL-style) describing related resources and next actions.\n\nPresence is controlled per-journey via spec.httpSurface.links.enabled; when enabled, the engine typically includes at least `self` and `result` links.\n"
+          type: object
+          additionalProperties:
+            $ref: "#/components/schemas/Link"
+    JourneyStatus:
+      type: object
+      required:
+        - journeyId
+        - journeyName
+        - phase
+        - currentState
+        - updatedAt
+      properties:
+        journeyId:
+          type: string
+        journeyName:
+          type: string
+        phase:
+          type: string
+          enum:
+            - Running
+            - Succeeded
+            - Failed
+        currentState:
+          type: string
+        updatedAt:
+          type: string
+          format: date-time
+        tags:
+          type: array
+          description: "Effective tags for this journey instance, derived from the journey's metadata.tags and any instance tag sourcing rules. Tags are non-sensitive, short identifiers intended for filtering and grouping.\n"
+          items:
+            type: string
+        attributes:
+          type: object
+          description: "Lightweight metadata for this journey instance, such as subjectId, tenantId, channel, and correlation ids (orderId, paymentIntentId, crmCaseId). Values are strings and MUST respect the limits configured via MetadataLimits.\n"
+          additionalProperties:
+            type: string
+        _links:
+          description: "Optional hypermedia links (HAL-style) describing related resources and next actions.\n\nWhen links are enabled for a journey, the engine SHOULD include at least `self` and `result`, and MAY include links for active step endpoints. For step links, the relation name MUST equal the external-input state id (for example `waitForApproval`, `confirm`). When the journey is Running and user-cancellable, the engine SHOULD also expose a `cancel` link pointing to the canonical cancellation step `/api/v1/journeys/{journeyId}/steps/cancel` with method POST.\n"
+          type: object
+          additionalProperties:
+            $ref: "#/components/schemas/Link"
+    JourneyOutcome:
+      allOf:
+        - type: object
+          required:
+            - journeyId
+            - journeyName
+            - phase
+          properties:
+            journeyId:
+              type: string
+            journeyName:
+              type: string
+            phase:
+              type: string
+              enum:
+                - Succeeded
+                - Failed
+            output: {}
+            error:
+              type: object
+              properties:
+                code:
+                  type: string
+                reason:
+                  type: string
+            tags:
+              type: array
+              description: "Effective tags for this journey instance, repeated here for convenience when reading final outcomes.\n"
+              items:
+                type: string
+            attributes:
+              type: object
+              description: "Instance attributes such as subjectId, tenantId, channel, and correlation ids, repeated here for convenience when reading final outcomes.\n"
+              additionalProperties:
+                type: string
+            _links:
+              description: "Optional hypermedia links (HAL-style) describing related resources (for example `self`) when a journey is terminal. Presence is controlled per-journey via spec.httpSurface.links.enabled.\n"
+              type: object
+              additionalProperties:
+                $ref: "#/components/schemas/Link"
+        - type: object
+          properties:
+            output:
+              type: object
+              required:
+                - orderId
+                - overallStatus
+              properties:
+                orderId:
+                  type: string
+                overallStatus:
+                  type: string
+                  enum:
+                    - FULFILLED
+                    - PARTIALLY_FULFILLED
+                    - CANCELLED
+                    - FAILED
+                shipments:
+                  type: array
+                  items:
+                    type: object
+                unavailableItems:
+                  type: array
+                  items:
+                    type: object
+              additionalProperties: true
+    ConfirmOrderStepResponse:
+      allOf:
+        - $ref: "#/components/schemas/JourneyStatus"
+        - type: object
+          description: Additional top-level fields returned from the confirmOrder step.
+          properties:
+            decision:
+              type: string
+              enum:
+                - proceed
+                - cancel
+            notes:
+              type: string
+          additionalProperties: true
+    Link:
+      type: object
+      required:
+        - href
+      properties:
+        href:
+          type: string
+          description: Target URI for this link
+        method:
+          type: string
+          description: HTTP method to use when following this link (for example GET, POST, DELETE)
+

@@ -1,0 +1,43 @@
+openapi: 3.1.0
+info:
+  title: Fraud Scoring API
+  version: 1.0.0
+  description: Fraud scoring API for high-value transfers.
+  contact:
+    name: JourneyForge
+servers:
+  - url: https://fraud.example.com
+paths:
+  /fraud/check-transfer:
+    post:
+      operationId: checkTransfer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                transferId:
+                  type: string
+                customerId:
+                  type: string
+                amount:
+                  type: number
+                currency:
+                  type: string
+      responses:
+        "200":
+          description: Fraud decision returned
+          content:
+            application/json:
+              schema:
+                type: object
+        "500":
+          description: Error
+      description: Evaluate fraud risk for a high-value transfer.
+      tags:
+        - fraud
+tags:
+  - name: fraud
+

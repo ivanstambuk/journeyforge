@@ -1,0 +1,39 @@
+arazzo: 1.0.1
+info:
+  title: JourneyForge – http-problem-details workflows
+  version: 0.1.0
+  summary: Workflows for normalising downstream errors into canonical RFC 9457 Problem Details and exposing a single Problem Details error envelope per journey.
+  description: Workflows for normalising downstream errors into canonical RFC 9457 Problem Details and exposing a single Problem Details error envelope per journey.
+sourceDescriptions:
+  - name: httpProblemDetails
+    type: openapi
+    url: http-problem-details.openapi.yaml
+workflows:
+  - workflowId: http-problem-details-happy-path
+    summary: Start an http-problem-details journey and retrieve the final outcome.
+    description: Start an http-problem-details journey and retrieve the final outcome.
+    inputs:
+      type: object
+      properties:
+        startRequest:
+          description: Initial payload for the http-problem-details journey.
+          type: object
+          additionalProperties: true
+    steps:
+      - stepId: startJourney
+        description: Start a new http-problem-details journey instance.
+        operationId: httpProblemDetails_start
+        x-source: httpProblemDetails
+        requestBody:
+          contentType: application/json
+          payload: $inputs.startRequest
+        outputs:
+          journeyId: $response.body.journeyId
+      - stepId: getResult
+        description: Retrieve the final outcome, including the canonical Problem Details error document when the journey fails.
+        operationId: httpProblemDetails_getResult
+        x-source: httpProblemDetails
+        parameters:
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId

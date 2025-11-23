@@ -2,6 +2,12 @@
 
 Status: Draft | Last updated: 2025-11-20
 
+## Where to start
+
+For the full pattern and example journey, see:
+
+- Technical pattern: `docs/3-reference/examples/technical/approval-loop/approval-loop.md`
+
 ## Problem
 
 Model business flows that need to repeat a step several times (approvals, document uploads, status checks, notifications) without risking unbounded loops that hang API calls or journeys indefinitely.

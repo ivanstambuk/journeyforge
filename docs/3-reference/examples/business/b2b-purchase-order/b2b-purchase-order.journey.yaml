@@ -1,0 +1,383 @@
+# Design note: see Q-014 in docs/4-architecture/open-questions.md for scope and approval structure.
+apiVersion: v1
+kind: Journey
+metadata:
+  name: b2b-purchase-order
+  version: 0.1.0
+  description: B2B purchase order with multi-level approvals (manager, parallel department+finance, procurement board).
+spec:
+  apis:
+    purchaseOrders: { openApiRef: apis/purchase-orders.openapi.yaml }
+  input:
+    schema:
+      title: B2bPurchaseOrderStartRequest
+      type: object
+      required:
+        - purchaseOrderId
+        - buyerId
+        - supplierId
+        - lineItems
+      properties:
+        purchaseOrderId:
+          type: string
+        buyerId:
+          type: string
+        supplierId:
+          type: string
+        lineItems:
+          type: array
+          items:
+            type: object
+            required:
+              - sku
+              - quantity
+              - unitPrice
+            properties:
+              sku:
+                type: string
+              quantity:
+                type: integer
+              unitPrice:
+                type: number
+            additionalProperties: true
+        currency:
+          type: string
+        requestedDeliveryDate:
+          type: string
+          format: date
+        notes:
+          type: string
+        channel:
+          type: string
+      additionalProperties: true
+  output:
+    schema:
+      title: B2bPurchaseOrderOutcome
+      type: object
+      required:
+        - purchaseOrderId
+        - finalStatus
+      properties:
+        purchaseOrderId:
+          type: string
+        finalStatus:
+          type: string
+          enum:
+            - APPROVED
+            - REJECTED
+        approvals:
+          type: object
+          properties:
+            level1:
+              type: object
+            level2:
+              type: object
+            level3:
+              type: object
+        rejectionCode:
+          type: string
+        rejectionReason:
+          type: string
+      additionalProperties: true
+  start: createPurchaseOrder
+  states:
+    createPurchaseOrder:
+      type: task
+      task:
+        kind: httpCall
+        operationRef: purchaseOrders.createPurchaseOrder
+        params:
+          headers:
+            Accept: application/json
+        body:
+          mapper:
+            lang: dataweave
+            expr: |
+              {
+                purchaseOrderId: context.purchaseOrderId,
+                buyerId: context.buyerId,
+                supplierId: context.supplierId,
+                lineItems: context.lineItems,
+                currency: context.currency,
+                requestedDeliveryDate: context.requestedDeliveryDate,
+                notes: context.notes,
+                channel: context.channel
+              }
+        timeoutMs: 3000
+        resultVar: po
+      next: waitForLevel1Approval
+
+    waitForLevel1Approval:
+      type: wait
+      wait:
+        channel: manual
+        input:
+          schema:
+            description: Manager approval or rejection of the purchase order.
+            type: object
+            required:
+              - decision
+            properties:
+              decision:
+                type: string
+                enum:
+                  - approve
+                  - reject
+              comment:
+                type: string
+            additionalProperties: false
+        response:
+          outputVar: level1ApprovalResponse
+          schema:
+            title: Level1ApprovalProjection
+            type: object
+            description: Additional top-level fields returned from the approveLevel1 step.
+            properties:
+              decision:
+                type: string
+                enum:
+                  - approve
+                  - reject
+              comment:
+                type: string
+            additionalProperties: true
+        apply:
+          mapper:
+            lang: dataweave
+            expr: |
+              context ++ {
+                approvals: (context.approvals default {}) ++ {
+                  level1: {
+                    decision: payload.decision,
+                    comment: payload.comment
+                  }
+                },
+                level1ApprovalResponse: {
+                  decision: payload.decision,
+                  comment: payload.comment
+                }
+              }
+        on:
+          - when:
+              predicate:
+                lang: dataweave
+                expr: |
+                  payload.decision == "approve"
+            next: level2ParallelApprovals
+        default: rejectedLevel1
+
+    level2ParallelApprovals:
+      type: parallel
+      parallel:
+        branches:
+          - name: department
+            start: waitForDepartmentApproval
+            states:
+              waitForDepartmentApproval:
+                type: wait
+                wait:
+                  channel: manual
+                  input:
+                    schema:
+                      description: Department head approval or rejection of the purchase order.
+                      type: object
+                      required:
+                        - decision
+                      properties:
+                        decision:
+                          type: string
+                          enum:
+                            - approve
+                            - reject
+                        comment:
+                          type: string
+                      additionalProperties: false
+                  response:
+                    outputVar: departmentApprovalResponse
+                    schema:
+                      title: DepartmentApprovalProjection
+                      type: object
+                      description: Additional top-level fields returned from the approveLevel2Department step.
+                      properties:
+                        decision:
+                          type: string
+                          enum:
+                            - approve
+                            - reject
+                        comment:
+                          type: string
+                      additionalProperties: true
+                  apply:
+                    mapper:
+                      lang: dataweave
+                      expr: |
+                        context ++ {
+                          approvals: (context.approvals default {}) ++ {
+                            level2: (context.approvals.level2 default {}) ++ {
+                              department: {
+                                decision: payload.decision,
+                                comment: payload.comment
+                              }
+                            }
+                          },
+                          departmentApprovalResponse: {
+                            decision: payload.decision,
+                            comment: payload.comment
+                          }
+                        }
+                next: done
+              done:
+                type: succeed
+          - name: finance
+            start: waitForFinanceApproval
+            states:
+              waitForFinanceApproval:
+                type: wait
+                wait:
+                  channel: manual
+                  input:
+                    schema:
+                      description: Finance approval or rejection of the purchase order budget.
+                      type: object
+                      required:
+                        - decision
+                      properties:
+                        decision:
+                          type: string
+                          enum:
+                            - approve
+                            - reject
+                        comment:
+                          type: string
+                      additionalProperties: false
+                  response:
+                    outputVar: financeApprovalResponse
+                    schema:
+                      title: FinanceApprovalProjection
+                      type: object
+                      description: Additional top-level fields returned from the approveLevel2Finance step.
+                      properties:
+                        decision:
+                          type: string
+                          enum:
+                            - approve
+                            - reject
+                        comment:
+                          type: string
+                      additionalProperties: true
+                  apply:
+                    mapper:
+                      lang: dataweave
+                      expr: |
+                        context ++ {
+                          approvals: (context.approvals default {}) ++ {
+                            level2: (context.approvals.level2 default {}) ++ {
+                              finance: {
+                                decision: payload.decision,
+                                comment: payload.comment
+                              }
+                            }
+                          },
+                          financeApprovalResponse: {
+                            decision: payload.decision,
+                            comment: payload.comment
+                          }
+                        }
+                next: done
+              done:
+                type: succeed
+        join:
+          strategy: allOf
+          errorPolicy: collectAll
+      next: evaluateLevel2Approvals
+
+    evaluateLevel2Approvals:
+      type: choice
+      choices:
+        - when:
+            predicate:
+              lang: dataweave
+              expr: |
+                (context.approvals.level2.department.decision default "reject") == "approve"
+                  and (context.approvals.level2.finance.decision default "reject") == "approve"
+          next: waitForLevel3Approval
+      default: rejectedLevel2
+
+    waitForLevel3Approval:
+      type: wait
+      wait:
+        channel: manual
+        input:
+          schema:
+            description: Procurement board approval or rejection of the purchase order.
+            type: object
+            required:
+              - decision
+            properties:
+              decision:
+                type: string
+                enum:
+                  - approve
+                  - reject
+              comment:
+                type: string
+            additionalProperties: false
+        response:
+          outputVar: level3ApprovalResponse
+          schema:
+            title: Level3ApprovalProjection
+            type: object
+            description: Additional top-level fields returned from the approveLevel3 step.
+            properties:
+              decision:
+                type: string
+                enum:
+                  - approve
+                  - reject
+              comment:
+                type: string
+            additionalProperties: true
+        apply:
+          mapper:
+            lang: dataweave
+            expr: |
+              context ++ {
+                approvals: (context.approvals default {}) ++ {
+                  level3: {
+                    decision: payload.decision,
+                    comment: payload.comment
+                  }
+                },
+                level3ApprovalResponse: {
+                  decision: payload.decision,
+                  comment: payload.comment
+                }
+              }
+        on:
+          - when:
+              predicate:
+                lang: dataweave
+                expr: |
+                  payload.decision == "approve"
+            next: completeApproved
+        default: rejectedLevel3
+
+    completeApproved:
+      type: succeed
+      outputVar: approvals
+
+    rejectedLevel1:
+      type: fail
+      errorCode: PO_REJECTED_LEVEL1
+      reason: "Purchase order rejected at manager approval (level 1)"
+
+    rejectedLevel2:
+      type: fail
+      errorCode: PO_REJECTED_LEVEL2
+      reason: "Purchase order rejected at department or finance approval (level 2)"
+
+    rejectedLevel3:
+      type: fail
+      errorCode: PO_REJECTED_LEVEL3
+      reason: "Purchase order rejected at procurement board approval (level 3)"
+

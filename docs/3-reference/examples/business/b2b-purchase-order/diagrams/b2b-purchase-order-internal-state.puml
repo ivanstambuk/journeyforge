@@ -1,0 +1,56 @@
+@startuml
+!include journey-diagram-theme.puml
+title b2b-purchase-order – internal DSL state graph
+
+[*] --> createPurchaseOrder
+
+state createPurchaseOrder
+state waitForLevel1Approval
+state level2ParallelApprovals
+state evaluateLevel2Approvals
+state waitForLevel3Approval
+state completeApproved
+state rejectedLevel1
+state rejectedLevel2
+state rejectedLevel3
+
+createPurchaseOrder --> waitForLevel1Approval : purchaseOrders.createPurchaseOrder
+
+waitForLevel1Approval --> level2ParallelApprovals : payload.decision == "approve"
+waitForLevel1Approval --> rejectedLevel1 : decision == "reject"
+
+level2ParallelApprovals --> evaluateLevel2Approvals : department & finance approvals
+
+evaluateLevel2Approvals --> waitForLevel3Approval : both approvals == "approve"
+evaluateLevel2Approvals --> rejectedLevel2 : default (department or finance rejected)
+
+waitForLevel3Approval --> completeApproved : payload.decision == "approve"
+waitForLevel3Approval --> rejectedLevel3 : decision == "reject"
+
+completeApproved --> [*]
+rejectedLevel1 --> [*]
+rejectedLevel2 --> [*]
+rejectedLevel3 --> [*]
+
+note right of waitForLevel1Approval
+  type: wait (manual channel)
+  step id: approveLevel1
+  input: Level1ApprovalInput
+end note
+
+note right of level2ParallelApprovals
+  type: parallel
+  branches: department, finance
+  each branch uses wait state:
+    - approveLevel2Department
+    - approveLevel2Finance
+end note
+
+note right of waitForLevel3Approval
+  type: wait (manual channel)
+  step id: approveLevel3
+  input: Level3ApprovalInput
+end note
+
+@enduml
+

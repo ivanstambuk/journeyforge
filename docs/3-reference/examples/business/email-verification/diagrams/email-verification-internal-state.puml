@@ -1,0 +1,50 @@
+@startuml
+!include journey-diagram-theme.puml
+title email-verification – internal DSL state graph
+
+[*] --> generateVerificationCode
+
+state generateVerificationCode
+state sendVerificationEmail
+state waitOrExpire
+state waitForVerification
+state markVerified
+state invalidCode
+state verificationTimer
+state markExpired
+state journeyDoneVerified
+state journeyDoneExpired
+
+generateVerificationCode --> sendVerificationEmail : uuid() -> context.verificationCode
+sendVerificationEmail --> waitOrExpire : notifications.email/verification\n(userId, email, verificationCode)
+
+waitOrExpire --> waitForVerification : branch waitBranch\n(wait step)
+waitOrExpire --> verificationTimer : branch expiryBranch\n(timer P7D)
+
+waitForVerification --> markVerified : payload.code == context.verificationCode
+waitForVerification --> invalidCode : default
+
+markVerified --> journeyDoneVerified
+journeyDoneVerified --> [*]
+
+verificationTimer --> markExpired
+markExpired --> journeyDoneExpired
+journeyDoneExpired --> [*]
+
+invalidCode --> [*]
+
+note right of waitForVerification
+  type: wait (manual channel)
+  step id: waitForVerification
+  input: { code: string }
+  compares code to context.verificationCode
+end note
+
+note right of verificationTimer
+  type: timer
+  duration: P7D
+  branch forms the EXPIRED outcome
+end note
+
+@enduml
+

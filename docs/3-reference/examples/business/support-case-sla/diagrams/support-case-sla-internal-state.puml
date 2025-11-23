@@ -1,0 +1,50 @@
+@startuml
+!include journey-diagram-theme.puml
+title support-case-sla – internal DSL state graph
+
+[*] --> classifyPriority
+
+state classifyPriority
+state notifyAssignment
+state waitOrEscalate
+state waitForAgentUpdate
+state ignoreUpdate
+state markResolved
+state caseResolved
+state slaTimer
+state markEscalated
+state notifyEscalation
+state caseEscalated
+
+classifyPriority --> notifyAssignment : compute slaDuration from priority
+notifyAssignment --> waitOrEscalate : POST support.example.com/cases/assign
+
+waitOrEscalate --> waitForAgentUpdate : branch caseWorkBranch
+waitOrEscalate --> slaTimer : branch slaBranch
+
+waitForAgentUpdate --> markResolved : payload.status == "RESOLVED"
+waitForAgentUpdate --> ignoreUpdate : default (non-resolving update)
+
+ignoreUpdate --> waitForAgentUpdate
+
+markResolved --> caseResolved
+caseResolved --> [*]
+
+slaTimer --> markEscalated
+markEscalated --> notifyEscalation
+notifyEscalation --> caseEscalated
+caseEscalated --> [*]
+
+note right of waitForAgentUpdate
+  type: wait (manual channel)
+  step id: waitForAgentUpdate
+  input: SupportCaseAgentUpdateInput
+end note
+
+note right of slaTimer
+  type: timer
+  duration: context.slaDuration
+  represents the SLA window based on priority
+end note
+
+@enduml

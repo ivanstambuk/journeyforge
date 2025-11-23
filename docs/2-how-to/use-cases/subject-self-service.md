@@ -2,6 +2,12 @@
 
 Status: Draft | Last updated: 2025-11-20
 
+## Where to start
+
+For the full pattern and example journey, see:
+
+- Technical pattern: `docs/3-reference/examples/technical/subject-step-guard/subject-step-guard.md`
+
 ## Problem
 
 Design self-service journeys where:

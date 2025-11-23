@@ -1,48 +1,30 @@
 # Open Questions
 
-Status: Active only (do not list resolved entries)
+Use this file **only** to capture currently open medium‑ or high‑impact architecture/design questions before starting work. It is a **temporary scratchpad for open questions**, not a permanent record of decisions.
+
+Hard rules:
+- This table may only contain rows whose status is `Open`.
+- When a question is resolved, its outcome **must be captured in an ADR, spec, or other authoritative doc**, and the corresponding row **must be deleted** from this table.
+- Resolved questions **must not be archived** in the “Question Details” section; any details for a question must be removed when its row is removed.
+- Question IDs (for example `Q-016`) are **local to this file and chat transcripts** and **must never be referenced from ADRs, specs, examples, or README/docs**. Authoritative documents must stand on their own without pointing back here.
+- This file is **never** a source of truth; once a question is resolved, this file should contain no remaining record of it.
+
+<!-- Add new rows below with Status set to Open only. Remove the row once resolved and documented elsewhere. -->
 
 | ID | Owner | Question | Options (A preferred) | Status | Asked | Notes |
 |----|-------|----------|------------------------|--------|-------|-------|
-| Q-002 | LLM | How rich should DSL-level `choice` predicates be beyond raw DataWeave? | A) DW-only with sugar; B) Lightweight predicate DSL; C) Keep DW-only | Closed | 2025-11-22 | Resolved 2025-11-22 – keep DataWeave-only predicates; clarify internal-error semantics and validation; no new predicate syntax. |
-| Q-003 | LLM | What YAML style and enforcement should we adopt for journey specs and other YAML artefacts? | A) 2-space indent, no tabs, quoting guidance in spec + Spotless enforcement for whitespace; B) Prettier-based YAML formatting for full structural/quoting normalisation; C) Treat indent/quoting as guidance only | Closed | 2025-11-22 | Resolved 2025-11-22 – adopt 2-space indent, no tabs, and quoting guidance for all YAML; enforce whitespace and “no tabs” via Spotless, with the option to introduce a dedicated YAML formatter later if needed. |
-| Q-004 | LLM | How should the DSL reference separate normative language semantics from engine implementation status and where should status be tracked? | A) Keep DSL docs purely normative and track implementation status in feature/status docs; B) Keep a small, structured “Implementation status” appendix in the DSL doc; C) Maintain a separate DSL feature matrix doc and link from the DSL reference | Closed | 2025-11-22 | Resolved 2025-11-22 – treat `docs/3-reference/dsl.md` as strictly normative; track implementation status per feature (for example Feature 001 under `docs/4-architecture/features/001/`) and use a hard note in the DSL reference to point readers at feature docs for engine readiness. |
-| Q-005 | LLM | How should OAS and Arazzo linting be integrated into the toolchain (Spectral config, scope, and CI wiring)? | A) Spectral-driven linting via Gradle tasks for both OAS and Arazzo; B) Local Node tooling under `docs/` with `npm` scripts only; C) Minimal standalone Spectral invocation script without Gradle integration | Closed | 2025-11-22 | Resolved 2025-11-22 – Adopt Option A with two Gradle tasks: `lintOas` (lint all `docs/3-reference/**/*.openapi.yaml` using `.spectral.yaml` extending `spectral:oas`) and `lintArazzo` (lint all `docs/3-reference/examples/arazzo/*.arazzo.yaml` using `.spectral-arazzo.yaml` extending the built-in `spectral:arazzo` ruleset plus a hard array-type check for `workflows`); wire both tasks into the `qualityGate` so they run alongside `spotlessCheck` and `check`. |
+| Q-016 | LLM | How should journey example diagrams be generated, stored, and referenced so that VS Code Markdown previews and static docs always have up-to-date images? | A) Generate PNG diagrams from PlantUML sources under tools/PlantUML and commit them to docs/3-reference/examples/journeys/diagrams; B) Generate diagrams on the fly as part of a docs build without committing PNGs; C) Rely on an external docs site that renders PlantUML directly from .puml files | Open | 2025-11-22 | Seeded while fixing missing diagrams for b2b-purchase-order and aligning journey documentation with the repo’s PlantUML tooling. |
+| Q-021 | LLM | How should we partition and template JourneyForge examples between technical feature building blocks and higher-level business journeys so that future examples are consistent and easy to generate? | A) Keep all specs in docs/3-reference/examples but split human docs into separate technical-pattern and business-journey catalogs under docs/2-how-to; B) Move all business-journey specs and docs into a dedicated docs/3-reference/business-journeys area while keeping technical examples in docs/3-reference/examples; C) Collapse to a single unified examples catalog with tags for “technical” vs “business” and derive both indexes from it. | Open | 2025-11-23 | Seeded while analysing current examples in docs/2-how-to and docs/3-reference and planning templates for future technical and business examples. |
+| Q-022 | LLM | How should we design and enforce a DSL-aware YAML linter for .journey.yaml files that aligns with docs/3-reference/dsl.md and ADRs while providing both IDE feedback and CI enforcement? | A) Hybrid approach: JSON Schema + YAML LS/Spectral for editor feedback plus a Java-based `journeyforge-lint` CLI in this repo for deeper graph/semantics; B) Rely solely on external schema/Spectral tooling for both IDE and CI; C) Build only an internal Java linter that handles both structure and semantics without external schema tooling. | Open | 2025-11-23 | Seeded while exploring options for JourneyForge DSL linting across editors and CI and balancing external tooling with repo-internal validation. |
+| Q-023 | LLM | Which existing business journey should we extend first with a timer-based “X OR timeout after N” pattern, and what should the primary semantics be (hard error vs SLA/escalation vs soft outcome) for that example? | A) Extend `high-value-transfer` with a settlement timeout in parallel with the settlement webhook and treat expiry as a dedicated failure outcome; B) Extend `subscription-lifecycle` with a post-cancel grace period timer in parallel with reactivation so that cancellation becomes permanent after N days; C) Extend `travel-booking-bundle` with a post-trip feedback or compensation timer while keeping the main outcome Succeeded. | Open | 2025-11-23 | Seeded while planning timer extensions for existing journeys to illustrate different timeout semantics (hard failure vs SLA vs soft follow-up) using a single primary example. |
 
 ## Question Details
 
-### Q-002 – How rich should DSL-level `choice` predicates be beyond raw DataWeave?
-- Context: `choice` currently requires full DataWeave predicates; `spec-format.md` calls out “Richer expressions for `choice`” as future work.
-- Question: Should the DSL introduce additional predicate surfaces (syntax sugar or a small expression language) on top of DataWeave, and if so, how far should it go?
+### Q-020 – Data pipeline – ETL for daily orders
+- Context: We want a business journey that models a daily orders ETL pipeline (extract, transform, load) as a long-lived JourneyForge journey, reusing the existing transform-pipeline example and business-journey patterns while keeping the external API surface small and focused.
+- Question: How should we structure the daily orders ETL journey across extract, transform, and load phases (including optional upstream file drops or downstream completion notifications) while keeping it aligned with the “single long-lived journey with a small set of steps” pattern?
 - Options:
-  - A) Keep DataWeave as the only language but add small, well-scoped syntax sugar (e.g., simple comparisons or `in` operators) that compiles to DW.
-  - B) Introduce a lightweight, journey-specific predicate DSL that still compiles to DataWeave but hides DW syntax for most authors.
-  - C) Keep the current “DataWeave-only” surface and treat “richer expressions” as documentation/examples only (no new syntax).
- - Resolution (2025-11-22): For Feature 001, keep `choice` predicates as DataWeave-only without additional predicate syntax. Clarify that non-boolean results are a compile-time validation error, and that DataWeave runtime errors in predicates are treated as internal engine errors with a generic internal error identifier and HTTP 500 surfaced to callers. Tooling should focus on stronger static validation rather than expanding the predicate language.
-
-### Q-003 – YAML style rules and enforcement
-- Context: `spec-format.md` currently calls out “YAML style rules (indent=2, no tabs, quoted scalars policy)” as future work, and the project relies on YAML as the primary authored form for journeys, examples, and OpenAPI files.
-- Question: How strict and tool-enforced should the YAML style be across the repo, and which formatter (if any) should be treated as the canonical style authority?
-- Options:
-  - A) Define a clear house style in `spec-format.md` (2-space indent, no tabs, safe quoting rules, block scalars for DataWeave) and enforce whitespace/no-tabs via Spotless for all YAML/JSON/Markdown, keeping formatter choice minimal for now.
-  - B) Integrate a dedicated YAML formatter (for example, Prettier via Spotless) to fully normalise indentation, quoting, and wrapping for all YAML artefacts, accepting a stronger tooling dependency.
-  - C) Document YAML style as guidance only, relying on schema validation and canonical JSON snapshots for correctness, with no automated enforcement beyond basic whitespace trimming.
-- Resolution (2025-11-22): Adopt Option A for Feature 001 – YAML style is normatively defined in `spec-format.md` (2-space indent, no tabs, conservative quoting, block scalars for DataWeave), and Spotless enforces whitespace + “no tabs” on all YAML-related files. The team may revisit Option B later if a stronger YAML formatter becomes desirable.
-
-### Q-004 – Where to track DSL implementation status
-- Context: The DSL reference (`docs/3-reference/dsl.md`) currently mixes normative language semantics with engine readiness notes such as “impl TBD” in the overview table, which can blur the contract for authors.
-- Question: How should we separate the normative definition of the DSL surface from the evolving implementation status, and which artefact should own the status view?
-- Options:
-  - A) Keep the DSL reference strictly normative (semantics only) and track implementation status per feature (for example Feature 001) and/or in a small shared “DSL implementation status” doc under `docs/4-architecture/features/`.
-  - B) Keep a compact, clearly labelled “Implementation status (non-normative)” appendix in the DSL reference that summarises engine coverage, with details still owned by feature specs.
- - C) Create a separate “DSL feature matrix / implementation status” document that the DSL reference links to, keeping status out of the reference itself but still in one obvious place for readers.
- - Resolution (2025-11-22): Adopt Option A – `docs/3-reference/dsl.md` remains purely normative; engine implementation status is tracked per feature (for example Feature 001 under `docs/4-architecture/features/001/`), and the DSL reference carries a hard non-normative note at the top directing readers to feature docs for current coverage.
-
-### Q-005 – OAS and Arazzo linting with Spectral
-- Context: OpenAPI and Arazzo specs live under `docs/3-reference/examples/oas/`, `docs/3-reference/apis/`, and `docs/3-reference/examples/arazzo/`. YAML style is already enforced via Spotless, but there was no dedicated linter for OAS/Arazzo documents.
-- Question: Where should Spectral configuration live, and how should OAS + Arazzo linting be wired into the existing Gradle/CI toolchain?
-- Options:
-  - A) Spectral-driven linting via Gradle tasks for both OAS and Arazzo.
-  - B) Local Node tooling under `docs/` with `npm` scripts only.
-  - C) Minimal standalone Spectral invocation script without Gradle integration.
- - Resolution (2025-11-22): Adopt Option A with two explicit Gradle tasks – `lintOas` lints all `docs/3-reference/**/*.openapi.yaml` files using `.spectral.yaml` (which extends `spectral:oas`), and `lintArazzo` lints all `docs/3-reference/examples/arazzo/*.arazzo.yaml` files using `.spectral-arazzo.yaml` wired to the official Arazzo 1.0.x JSON Schema. Both tasks are part of the `qualityGate` so that OpenAPI and Arazzo specs are linted alongside formatting and tests.
+  - A) Simple single-run daily ETL journey with `start` triggering extract+transform+load as mostly internal `task`/`transform` states, plus `getStatus`/`getResult` and an optional `retriggerDay` step to re-run a specific date.
+  - B) Long-lived ETL journey that models both scheduled runs and manual re-runs within the same instance, including a `wait` state for upstream file availability and optional webhook for downstream completion, with explicit history in the outcome.
+  - C) Split journeys for “daily extract+transform+load” and “ad-hoc reprocessing” that share backend APIs but remain separate journey definitions, each with its own start/status/result surface.
+- Resolution: Pending – to be decided as we add the `data-pipeline-daily-orders` journey example and its per-journey OpenAPI and Arazzo specs.

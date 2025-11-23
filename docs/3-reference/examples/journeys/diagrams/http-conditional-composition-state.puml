@@ -1,0 +1,17 @@
+@startuml
+!include journey-diagram-theme.puml
+title http-conditional-composition – high-level state phases
+
+[*] --> Running
+
+state Running
+state Succeeded
+state Failed
+
+Running --> Succeeded : phase = Succeeded
+Running --> Failed : phase = Failed
+
+Succeeded --> [*]
+Failed --> [*]
+
+@enduml

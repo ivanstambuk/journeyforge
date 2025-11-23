@@ -1,0 +1,53 @@
+arazzo: 1.0.1
+info:
+  title: JourneyForge – payment-reminder-with-timeout workflows
+  version: 0.1.0
+  summary: Workflow for sending a payment reminder and handling confirmation or timeout.
+  description: Workflow for starting a payment-reminder-with-timeout journey and reading the final outcome, which indicates whether the payment was confirmed or timed out.
+sourceDescriptions:
+  - name: paymentReminder
+    type: openapi
+    url: payment-reminder-with-timeout.openapi.yaml
+workflows:
+  - workflowId: payment-reminder-with-timeout-main
+    summary: Start a payment reminder journey and read the final outcome.
+    description: Start a payment-reminder-with-timeout journey instance with payment details, then poll for the final outcome indicating PAID or TIMED_OUT.
+    inputs:
+      type: object
+      properties:
+        startRequest:
+          description: Initial payment reminder configuration.
+          type: object
+          required:
+            - userId
+            - paymentId
+            - amount
+            - currency
+          properties:
+            userId:
+              type: string
+            paymentId:
+              type: string
+            amount:
+              type: number
+            currency:
+              type: string
+          additionalProperties: true
+    steps:
+      - stepId: startJourney
+        description: Start a new payment-reminder-with-timeout journey instance.
+        operationId: paymentReminderWithTimeout_start
+        x-source: paymentReminder
+        requestBody:
+          contentType: application/json
+          payload: $inputs.startRequest
+        outputs:
+          journeyId: $response.body.journeyId
+      - stepId: getResult
+        description: Retrieve the final outcome, which indicates whether the payment was confirmed or timed out.
+        operationId: paymentReminderWithTimeout_getResult
+        x-source: paymentReminder
+        parameters:
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId

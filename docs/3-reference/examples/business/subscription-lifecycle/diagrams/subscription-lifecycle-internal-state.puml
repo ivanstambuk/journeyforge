@@ -1,0 +1,43 @@
+@startuml
+!include journey-diagram-theme.puml
+title subscription-lifecycle – internal DSL state graph
+
+[*] --> createTrial
+
+state createTrial
+state waitForUpgrade
+state activatePaid
+state waitForStatusChange
+state trialExpired
+state completeActive
+state completeCancelled
+state completeReactivated
+
+createTrial --> waitForUpgrade : createTrialSubscription\nresultVar: trial
+
+waitForUpgrade --> activatePaid : payload.decision == "upgrade"
+waitForUpgrade --> trialExpired : decision == "expire"
+
+activatePaid --> waitForStatusChange : activateSubscription
+
+waitForStatusChange --> completeCancelled : action == "cancel"
+waitForStatusChange --> completeReactivated : action == "reactivate"
+waitForStatusChange --> completeActive : default (no further change)
+
+trialExpired --> [*]
+completeActive --> [*]
+completeCancelled --> [*]
+completeReactivated --> [*]
+
+note right of waitForUpgrade
+  type: wait (manual channel)
+  step id: upgradeSubscription
+end note
+
+note right of waitForStatusChange
+  type: wait (manual channel)
+  step id: changeSubscriptionStatus
+end note
+
+@enduml
+

@@ -1,0 +1,184 @@
+arazzo: 1.0.1
+info:
+  title: JourneyForge – support-case-sla workflows
+  version: 0.1.0
+  summary: Workflows for support cases with SLA-based escalation.
+  description: Workflows for starting a support-case-sla journey, providing agent updates, and reading the final RESOLVED or ESCALATED outcome based on an SLA timer.
+sourceDescriptions:
+  - name: supportCaseSla
+    type: openapi
+    url: support-case-sla.openapi.yaml
+workflows:
+  - workflowId: support-case-sla-resolved-within-sla
+    summary: Start a support-case-sla journey, resolve the case within the SLA window, and read the RESOLVED outcome.
+    description: Start a support-case-sla journey instance, call the waitForAgentUpdate step with status RESOLVED before the SLA timer fires, and then retrieve the RESOLVED outcome.
+    inputs:
+      type: object
+      properties:
+        startRequest:
+          description: Initial support case request.
+          type: object
+          required:
+            - caseId
+            - customerId
+            - priority
+            - summary
+          properties:
+            caseId:
+              type: string
+            customerId:
+              type: string
+            priority:
+              type: string
+              enum:
+                - P1
+                - P2
+                - P3
+            summary:
+              type: string
+            channel:
+              type: string
+          additionalProperties: true
+        agentUpdate:
+          description: Agent update that resolves the case.
+          type: object
+          required:
+            - status
+          properties:
+            status:
+              type: string
+              enum:
+                - RESOLVED
+            resolutionSummary:
+              type: string
+          additionalProperties: true
+    steps:
+      - stepId: startJourney
+        description: Start a new support-case-sla journey instance.
+        operationId: supportCaseSla_start
+        x-source: supportCaseSla
+        requestBody:
+          contentType: application/json
+          payload: $inputs.startRequest
+        outputs:
+          journeyId: $response.body.journeyId
+      - stepId: getStatusAssigned
+        description: Check status after initial assignment and priority classification.
+        operationId: supportCaseSla_getStatus
+        x-source: supportCaseSla
+        parameters:
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId
+        outputs:
+          phase: $response.body.phase
+      - stepId: getStatusInProgress
+        description: Poll status while the case is in progress and waiting for agent updates.
+        operationId: supportCaseSla_getStatus
+        x-source: supportCaseSla
+        parameters:
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId
+        outputs:
+          phase: $response.body.phase
+      - stepId: agentResolves
+        description: Provide an agent update that resolves the case within the SLA window.
+        operationId: supportCaseSla_waitForAgentUpdate
+        x-source: supportCaseSla
+        parameters:
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId
+        requestBody:
+          contentType: application/json
+          payload: $inputs.agentUpdate
+        outputs:
+          phase: $response.body.phase
+      - stepId: getStatusAfterResolution
+        description: Check status after the resolving agent update has been processed.
+        operationId: supportCaseSla_getStatus
+        x-source: supportCaseSla
+        parameters:
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId
+        outputs:
+          phase: $response.body.phase
+      - stepId: getResult
+        description: Retrieve the final RESOLVED outcome after the agent update.
+        operationId: supportCaseSla_getResult
+        x-source: supportCaseSla
+        parameters:
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId
+
+  - workflowId: support-case-sla-escalated
+    summary: Start a support-case-sla journey and observe an ESCALATED outcome when the SLA timer fires first.
+    description: Start a support-case-sla journey instance and, after the SLA window elapses without a resolving agent update, retrieve the ESCALATED outcome.
+    inputs:
+      type: object
+      properties:
+        startRequest:
+          description: Initial support case request.
+          type: object
+          required:
+            - caseId
+            - customerId
+            - priority
+            - summary
+          properties:
+            caseId:
+              type: string
+            customerId:
+              type: string
+            priority:
+              type: string
+              enum:
+                - P1
+                - P2
+                - P3
+            summary:
+              type: string
+            channel:
+              type: string
+          additionalProperties: true
+    steps:
+      - stepId: startJourney
+        description: Start a new support-case-sla journey instance.
+        operationId: supportCaseSla_start
+        x-source: supportCaseSla
+        requestBody:
+          contentType: application/json
+          payload: $inputs.startRequest
+        outputs:
+          journeyId: $response.body.journeyId
+      - stepId: getStatusAssigned
+        description: Check status after initial assignment and priority classification.
+        operationId: supportCaseSla_getStatus
+        x-source: supportCaseSla
+        parameters:
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId
+        outputs:
+          phase: $response.body.phase
+      - stepId: getStatusBeforeSla
+        description: Optional status check while the case is still within the SLA window.
+        operationId: supportCaseSla_getStatus
+        x-source: supportCaseSla
+        parameters:
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId
+        outputs:
+          phase: $response.body.phase
+      - stepId: getResult
+        description: Retrieve the ESCALATED outcome after the SLA window elapses without a resolving agent update.
+        operationId: supportCaseSla_getResult
+        x-source: supportCaseSla
+        parameters:
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId

@@ -1,0 +1,29 @@
+@startuml
+!include journey-diagram-theme.puml
+title mortgage-repricing-rate-lock – client activity flow
+
+start
+
+:Client sends\nPOST /api/v1/journeys/mortgage-repricing-rate-lock/start\nwith MortgageRepricingStartRequest;
+
+repeat
+  :Client calls\nGET /api/v1/journeys/{journeyId}/result;
+  :Journeys API returns\nJourneyOutcome with phase/output;
+repeat while (phase == "Running" and\ncurrentState != "waitForCustomerAcceptance") is (engine still preparing offer)
+
+if (currentState == "waitForCustomerAcceptance"?) then (yes)
+  :Client submits acceptance/decline\nPOST /api/v1/journeys/{journeyId}/steps/customerAcceptance;
+  :Client resumes polling\nGET /api/v1/journeys/{journeyId}/result;
+  :Journeys API returns\nJourneyOutcome once rate lock confirmed or failed;
+endif
+
+if (phase == "Succeeded" and decision == "LOCKED"?) then (locked)
+  :Client applies locked rate terms\n(lockedRate, lockExpiry, lockId);
+  stop
+else (expired/rejected)
+  :Client handles EXPIRED or REJECTED\nbased on rejectionReason;
+  stop
+endif
+
+@enduml
+

@@ -1,0 +1,25 @@
+@startuml
+!include journey-diagram-theme.puml
+title customer-onboarding-kyc – HTTP-visible states
+
+[*] --> startJourney
+
+state startJourney
+state getStatusAfterProspect
+state submitKycDocuments
+state submitKycResult
+state submitAmlResult
+state submitRiskDecision
+state getResult
+
+startJourney --> getStatusAfterProspect : GET /journeys/{journeyId}\n(waiting for KYC documents)
+getStatusAfterProspect --> submitKycDocuments : POST /steps/submitKycDocuments
+submitKycDocuments --> submitKycResult : POST /steps/waitForKycResult
+submitKycResult --> submitAmlResult : POST /steps/waitForAmlResult
+submitAmlResult --> submitRiskDecision : POST /steps/waitForRiskDecision
+submitRiskDecision --> getResult : GET /journeys/{journeyId}/result
+
+getResult --> [*]
+
+@enduml
+

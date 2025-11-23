@@ -1,0 +1,418 @@
+# Design note: see Q-015 in docs/4-architecture/open-questions.md for scope and multi-party assessment structure.
+apiVersion: v1
+kind: Journey
+metadata:
+  name: insurance-claim-fnol-to-settlement
+  version: 0.1.0
+  description: Insurance claim journey from FNOL through multi-party assessment to settlement and payment.
+spec:
+  apis:
+    claims: { openApiRef: apis/claims.openapi.yaml }
+    payments: { openApiRef: apis/payments.openapi.yaml }
+  input:
+    schema:
+      title: InsuranceClaimStartRequest
+      type: object
+      required:
+        - claimId
+        - policyId
+        - claimantId
+        - lossDate
+      properties:
+        claimId:
+          type: string
+        policyId:
+          type: string
+        claimantId:
+          type: string
+        lossDate:
+          type: string
+          format: date
+        lossType:
+          type: string
+        description:
+          type: string
+        estimatedLossAmount:
+          type: number
+        currency:
+          type: string
+        channel:
+          type: string
+      additionalProperties: true
+  output:
+    schema:
+      title: InsuranceClaimOutcome
+      type: object
+      required:
+        - claimId
+        - finalStatus
+      properties:
+        claimId:
+          type: string
+        finalStatus:
+          type: string
+          enum:
+            - SETTLED
+            - DENIED
+        settlementAmount:
+          type: number
+        currency:
+          type: string
+        assessment:
+          type: object
+          properties:
+            adjuster:
+              type: object
+            provider:
+              type: object
+        settlementCode:
+          type: string
+        settlementReason:
+          type: string
+      additionalProperties: true
+  start: createClaim
+  states:
+    createClaim:
+      type: task
+      task:
+        kind: httpCall
+        operationRef: claims.createClaim
+        params:
+          headers:
+            Accept: application/json
+        body:
+          mapper:
+            lang: dataweave
+            expr: |
+              {
+                claimId: context.claimId,
+                policyId: context.policyId,
+                claimantId: context.claimantId,
+                lossDate: context.lossDate,
+                lossType: context.lossType,
+                description: context.description
+              }
+        timeoutMs: 3000
+        resultVar: claim
+      next: waitForFnolDetails
+
+    waitForFnolDetails:
+      type: wait
+      wait:
+        channel: manual
+        input:
+          schema:
+            description: Additional FNOL details from the claimant (documents, photos, updated description).
+            type: object
+            required:
+              - decision
+            properties:
+              decision:
+                type: string
+                enum:
+                  - submit
+              documents:
+                type: array
+                items:
+                  type: object
+              notes:
+                type: string
+            additionalProperties: false
+        response:
+          outputVar: fnolDetailsResponse
+          schema:
+            title: FnolDetailsProjection
+            type: object
+            description: Additional top-level fields returned from the submitFnolDetails step.
+            properties:
+              decision:
+                type: string
+                enum:
+                  - submit
+              documents:
+                type: array
+                items:
+                  type: object
+              notes:
+                type: string
+            additionalProperties: true
+        apply:
+          mapper:
+            lang: dataweave
+            expr: |
+              context ++ {
+                fnolDetails: payload,
+                fnolDetailsResponse: {
+                  decision: payload.decision,
+                  documents: payload.documents,
+                  notes: payload.notes
+                }
+              }
+        on:
+          - when:
+              predicate:
+                lang: dataweave
+                expr: |
+                  payload.decision == "submit"
+            next: assessmentParallel
+        default: denied
+
+    assessmentParallel:
+      type: parallel
+      parallel:
+        branches:
+          - name: adjuster
+            start: waitForAdjusterReport
+            states:
+              waitForAdjusterReport:
+                type: wait
+                wait:
+                  channel: manual
+                  input:
+                    schema:
+                      description: Adjuster report with liability assessment and recommended reserve.
+                      type: object
+                      required:
+                        - decision
+                      properties:
+                        decision:
+                          type: string
+                          enum:
+                            - approve
+                            - deny
+                        recommendedAmount:
+                          type: number
+                        notes:
+                          type: string
+                      additionalProperties: false
+                  response:
+                    outputVar: adjusterReportResponse
+                    schema:
+                      title: AdjusterReportProjection
+                      type: object
+                      description: Additional top-level fields returned from the submitAdjusterReport step.
+                      properties:
+                        decision:
+                          type: string
+                          enum:
+                            - approve
+                            - deny
+                        recommendedAmount:
+                          type: number
+                        notes:
+                          type: string
+                      additionalProperties: true
+                  apply:
+                    mapper:
+                      lang: dataweave
+                      expr: |
+                        context ++ {
+                          assessment: (context.assessment default {}) ++ {
+                            adjuster: {
+                              decision: payload.decision,
+                              recommendedAmount: payload.recommendedAmount,
+                              notes: payload.notes
+                            }
+                          },
+                          adjusterReportResponse: {
+                            decision: payload.decision,
+                            recommendedAmount: payload.recommendedAmount,
+                            notes: payload.notes
+                          }
+                        }
+                next: done
+              done:
+                type: succeed
+          - name: provider
+            start: waitForProviderEstimate
+            states:
+              waitForProviderEstimate:
+                type: wait
+                wait:
+                  channel: manual
+                  input:
+                    schema:
+                      description: Repair shop or medical provider estimate for the loss.
+                      type: object
+                      required:
+                        - decision
+                      properties:
+                        decision:
+                          type: string
+                          enum:
+                            - approve
+                            - deny
+                        estimatedCost:
+                          type: number
+                        notes:
+                          type: string
+                      additionalProperties: false
+                  response:
+                    outputVar: providerEstimateResponse
+                    schema:
+                      title: ProviderEstimateProjection
+                      type: object
+                      description: Additional top-level fields returned from the submitProviderEstimate step.
+                      properties:
+                        decision:
+                          type: string
+                          enum:
+                            - approve
+                            - deny
+                        estimatedCost:
+                          type: number
+                        notes:
+                          type: string
+                      additionalProperties: true
+                  apply:
+                    mapper:
+                      lang: dataweave
+                      expr: |
+                        context ++ {
+                          assessment: (context.assessment default {}) ++ {
+                            provider: {
+                              decision: payload.decision,
+                              estimatedCost: payload.estimatedCost,
+                              notes: payload.notes
+                            }
+                          },
+                          providerEstimateResponse: {
+                            decision: payload.decision,
+                            estimatedCost: payload.estimatedCost,
+                            notes: payload.notes
+                          }
+                        }
+                next: done
+              done:
+                type: succeed
+        join:
+          strategy: allOf
+          errorPolicy: collectAll
+      next: evaluateAssessment
+
+    evaluateAssessment:
+      type: choice
+      choices:
+        - when:
+            predicate:
+              lang: dataweave
+              expr: |
+                (context.assessment.adjuster.decision default "deny") == "approve"
+                  and (context.assessment.provider.decision default "deny") == "approve"
+          next: waitForSettlementApproval
+      default: denied
+
+    waitForSettlementApproval:
+      type: wait
+      wait:
+        channel: manual
+        input:
+          schema:
+            description: Internal claims approval for settlement amount and decision.
+            type: object
+            required:
+              - decision
+            properties:
+              decision:
+                type: string
+                enum:
+                  - approve
+                  - deny
+              settlementAmount:
+                type: number
+              notes:
+                type: string
+            additionalProperties: false
+        response:
+          outputVar: settlementApprovalResponse
+          schema:
+            title: SettlementApprovalProjection
+            type: object
+            description: Additional top-level fields returned from the confirmSettlement step.
+            properties:
+              decision:
+                type: string
+                enum:
+                  - approve
+                  - deny
+              settlementAmount:
+                type: number
+              notes:
+                type: string
+            additionalProperties: true
+        apply:
+          mapper:
+            lang: dataweave
+            expr: |
+              context ++ {
+                settlementDecision: payload,
+                settlementApprovalResponse: {
+                  decision: payload.decision,
+                  settlementAmount: payload.settlementAmount,
+                  notes: payload.notes
+                }
+              }
+        on:
+          - when:
+              predicate:
+                lang: dataweave
+                expr: |
+                  payload.decision == "approve"
+            next: recordSettlement
+        default: denied
+
+    recordSettlement:
+      type: task
+      task:
+        kind: httpCall
+        operationRef: claims.recordSettlementDecision
+        params:
+          path:
+            claimId: "${context.claimId}"
+          headers:
+            Accept: application/json
+        body:
+          mapper:
+            lang: dataweave
+            expr: |
+              {
+                decision: "SETTLED",
+                settlementAmount: context.settlementDecision.settlementAmount,
+                currency: context.currency,
+                notes: context.settlementDecision.notes
+              }
+        timeoutMs: 3000
+        resultVar: settlementRecord
+      next: initiatePayment
+
+    initiatePayment:
+      type: task
+      task:
+        kind: httpCall
+        operationRef: payments.authorizePayment
+        params:
+          path:
+            paymentId: "${context.claimId}"
+          headers:
+            Accept: application/json
+        body:
+          mapper:
+            lang: dataweave
+            expr: |
+              {
+                amount: context.settlementDecision.settlementAmount,
+                currency: context.currency
+              }
+        timeoutMs: 3000
+        resultVar: paymentAuthorization
+      next: completeSettled
+
+    completeSettled:
+      type: succeed
+      outputVar: settlementDecision
+
+    denied:
+      type: fail
+      errorCode: CLAIM_DENIED
+      reason: "Insurance claim denied during FNOL or assessment/settlement review"
+

@@ -1,0 +1,23 @@
+@startuml
+!include journey-diagram-theme.puml
+title travel-booking-bundle – HTTP-visible states
+
+[*] --> startJourney
+
+state startJourney
+state getStatusAfterReservation
+state confirmBundle
+state getStatusBeforeChangeOrComplete
+state changeOrCancel
+state getResult
+
+startJourney --> getStatusAfterReservation : GET /journeys/{journeyId}\n(reservations running/completed)
+getStatusAfterReservation --> confirmBundle : POST /steps/confirmBundle
+confirmBundle --> getStatusBeforeChangeOrComplete : GET /journeys/{journeyId}\n(provider trip updates processed)
+getStatusBeforeChangeOrComplete --> changeOrCancel : POST /steps/changeOrCancel
+changeOrCancel --> getResult : GET /journeys/{journeyId}/result
+
+getResult --> [*]
+
+@enduml
+

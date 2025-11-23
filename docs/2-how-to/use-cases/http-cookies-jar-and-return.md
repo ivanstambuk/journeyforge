@@ -2,6 +2,12 @@
 
 Status: Draft | Last updated: 2025-11-21
 
+## Where to start
+
+For the full pattern and example journey, see:
+
+- Technical pattern: `docs/3-reference/examples/technical/http-cookie-jar/http-cookie-jar.md`
+
 ## Problem
 
 Maintain HTTP cookies set by downstream services during a journey and:
@@ -89,4 +95,3 @@ Notes:
 - The `login` call is expected to return a `Set-Cookie` for an allowed domain; the jar ingests it.
 - The `getProfile` call automatically attaches the relevant cookies from the jar because `useJar` is enabled and no explicit `Cookie` header is configured.
 - On successful completion (`done`), `returnToClient.mode: filtered` causes the engine to emit `Set-Cookie` for the `session` cookie (and any other cookies selected by name/regex) back to the caller.
-

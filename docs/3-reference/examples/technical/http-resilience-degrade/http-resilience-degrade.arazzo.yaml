@@ -1,0 +1,42 @@
+arazzo: 1.0.1
+info:
+  title: JourneyForge – http-resilience-degrade workflows
+  version: 0.1.0
+  summary: Workflows for resilience and degraded failure modes.
+  description: Workflows for resilience and degraded failure modes.
+sourceDescriptions:
+  - name: httpResilienceDegrade
+    type: openapi
+    url: http-resilience-degrade.openapi.yaml
+workflows:
+  - workflowId: http-resilience-degrade-happy-path
+    summary: Start an http-resilience-degrade journey and retrieve the final outcome.
+    description: Start an http-resilience-degrade journey and retrieve the final outcome.
+    inputs:
+      type: object
+      properties:
+        startRequest:
+          description: Initial payload for the http-resilience-degrade journey.
+          type: object
+          additionalProperties: true
+          properties:
+            id:
+              type: string
+    steps:
+      - stepId: startJourney
+        description: Start a new http-resilience-degrade journey instance.
+        operationId: httpResilienceDegrade_start
+        x-source: httpResilienceDegrade
+        requestBody:
+          contentType: application/json
+          payload: $inputs.startRequest
+        outputs:
+          journeyId: $response.body.journeyId
+      - stepId: getResult
+        description: Retrieve the final outcome with resilience behaviour applied.
+        operationId: httpResilienceDegrade_getResult
+        x-source: httpResilienceDegrade
+        parameters:
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId

@@ -1,0 +1,484 @@
+openapi: 3.1.0
+info:
+  title: "JourneyForge – customer-onboarding-kyc"
+  version: 0.1.0
+  description: "JourneyForge – customer-onboarding-kyc"
+  contact:
+    name: JourneyForge
+servers:
+  - url: /api/v1
+tags:
+  - name: customer-onboarding-kyc
+paths:
+  /journeys/customer-onboarding-kyc/start:
+    post:
+      summary: Start customer-onboarding-kyc journey
+      operationId: customerOnboardingKyc_start
+      tags:
+        - customer-onboarding-kyc
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CustomerOnboardingKycStartRequest"
+      responses:
+        "202":
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JourneyStartResponse"
+      description: Start customer-onboarding-kyc journey
+  /journeys/{journeyId}:
+    get:
+      summary: Get journey status
+      operationId: customerOnboardingKyc_getStatus
+      tags:
+        - customer-onboarding-kyc
+      parameters:
+        - in: path
+          name: journeyId
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JourneyStatus"
+      description: Get journey status
+  /journeys/{journeyId}/steps/submitKycDocuments:
+    post:
+      summary: Submit KYC documents and additional details for the customer
+      operationId: customerOnboardingKyc_submitKycDocuments
+      tags:
+        - customer-onboarding-kyc
+      parameters:
+        - in: path
+          name: journeyId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/KycDocumentsInput"
+      responses:
+        "200":
+          description: Updated status after processing KYC documents
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/KycDocumentsStepResponse"
+      description: Provide documents and additional details for KYC checks.
+  /journeys/{journeyId}/steps/waitForKycResult:
+    post:
+      summary: Webhook callback for KYC result
+      operationId: customerOnboardingKyc_waitForKycResult
+      tags:
+        - customer-onboarding-kyc
+      parameters:
+        - in: path
+          name: journeyId
+          required: true
+          schema:
+            type: string
+        - in: header
+          name: X-Kyc-Result-Secret
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - customerId
+                - status
+              properties:
+                customerId:
+                  type: string
+                status:
+                  type: string
+                  enum:
+                    - APPROVED
+                    - REFERRED
+                    - REJECTED
+                reasons:
+                  type: array
+                  items:
+                    type: string
+              additionalProperties: true
+      responses:
+        "200":
+          description: Updated status after processing KYC result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/KycResultStepResponse"
+      description: Webhook callback with KYC result for the customer.
+  /journeys/{journeyId}/steps/waitForAmlResult:
+    post:
+      summary: Webhook callback for AML screening result
+      operationId: customerOnboardingKyc_waitForAmlResult
+      tags:
+        - customer-onboarding-kyc
+      parameters:
+        - in: path
+          name: journeyId
+          required: true
+          schema:
+            type: string
+        - in: header
+          name: X-Aml-Result-Secret
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - customerId
+                - status
+              properties:
+                customerId:
+                  type: string
+                status:
+                  type: string
+                  enum:
+                    - CLEAR
+                    - REFERRED
+                    - REJECTED
+                reasons:
+                  type: array
+                  items:
+                    type: string
+              additionalProperties: true
+      responses:
+        "200":
+          description: Updated status after processing AML result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AmlResultStepResponse"
+      description: Webhook callback with AML screening result for the customer.
+  /journeys/{journeyId}/steps/waitForRiskDecision:
+    post:
+      summary: Webhook callback for risk/compliance decision
+      operationId: customerOnboardingKyc_waitForRiskDecision
+      tags:
+        - customer-onboarding-kyc
+      parameters:
+        - in: path
+          name: journeyId
+          required: true
+          schema:
+            type: string
+        - in: header
+          name: X-Risk-Decision-Secret
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - customerId
+                - decision
+              properties:
+                customerId:
+                  type: string
+                decision:
+                  type: string
+                  enum:
+                    - APPROVE
+                    - REJECT
+                riskRating:
+                  type: string
+                reason:
+                  type: string
+              additionalProperties: true
+      responses:
+        "200":
+          description: Updated status after processing risk decision
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RiskDecisionStepResponse"
+      description: Webhook callback with the risk/compliance decision for the customer.
+  /journeys/{journeyId}/result:
+    get:
+      summary: Retrieve final outcome
+      operationId: customerOnboardingKyc_getResult
+      tags:
+        - customer-onboarding-kyc
+      parameters:
+        - in: path
+          name: journeyId
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Final outcome
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JourneyOutcome"
+        "409":
+          description: Journey not terminal yet
+      description: Retrieve final outcome
+components:
+  schemas:
+    CustomerOnboardingKycStartRequest:
+      type: object
+      required:
+        - customerId
+        - fullName
+        - email
+      properties:
+        customerId:
+          type: string
+        fullName:
+          type: string
+        email:
+          type: string
+        dateOfBirth:
+          type: string
+          format: date
+        nationality:
+          type: string
+        channel:
+          type: string
+      additionalProperties: true
+    KycDocumentsInput:
+      type: object
+      description: Customer document upload and additional KYC details.
+      required:
+        - decision
+      properties:
+        decision:
+          type: string
+          enum:
+            - submit
+        documents:
+          type: array
+          items:
+            type: object
+        notes:
+          type: string
+      additionalProperties: false
+    JourneyStartResponse:
+      type: object
+      required:
+        - journeyId
+        - journeyName
+        - statusUrl
+      properties:
+        journeyId:
+          type: string
+        journeyName:
+          type: string
+        statusUrl:
+          type: string
+          format: uri
+        _links:
+          description: "Optional hypermedia links (HAL-style) describing related resources and next actions.\n\nPresence is controlled per-journey via spec.httpSurface.links.enabled; when enabled, the engine typically includes at least `self` and `result` links.\n"
+          type: object
+          additionalProperties:
+            $ref: "#/components/schemas/Link"
+    JourneyStatus:
+      type: object
+      required:
+        - journeyId
+        - journeyName
+        - phase
+        - currentState
+        - updatedAt
+      properties:
+        journeyId:
+          type: string
+        journeyName:
+          type: string
+        phase:
+          type: string
+          enum:
+            - Running
+            - Succeeded
+            - Failed
+        currentState:
+          type: string
+        updatedAt:
+          type: string
+          format: date-time
+        tags:
+          type: array
+          description: "Effective tags for this journey instance, derived from the journey's metadata.tags and any instance tag sourcing rules. Tags are non-sensitive, short identifiers intended for filtering and grouping.\n"
+          items:
+            type: string
+        attributes:
+          type: object
+          description: "Lightweight metadata for this journey instance, such as subjectId, tenantId, channel, and correlation ids (orderId, paymentIntentId, crmCaseId). Values are strings and MUST respect the limits configured via MetadataLimits.\n"
+          additionalProperties:
+            type: string
+        _links:
+          description: "Optional hypermedia links (HAL-style) describing related resources and next actions.\n\nWhen links are enabled for a journey, the engine SHOULD include at least `self` and `result`, and MAY include links for active step endpoints. For step links, the relation name MUST equal the external-input state id (for example `waitForApproval`, `confirm`). When the journey is Running and user-cancellable, the engine SHOULD also expose a `cancel` link pointing to the canonical cancellation step `/journeys/{journeyId}/steps/cancel` with method POST.\n"
+          type: object
+          additionalProperties:
+            $ref: "#/components/schemas/Link"
+    JourneyOutcome:
+      allOf:
+        - type: object
+          required:
+            - journeyId
+            - journeyName
+            - phase
+          properties:
+            journeyId:
+              type: string
+            journeyName:
+              type: string
+            phase:
+              type: string
+              enum:
+                - Succeeded
+                - Failed
+            output: {}
+            error:
+              type: object
+              properties:
+                code:
+                  type: string
+                reason:
+                  type: string
+            tags:
+              type: array
+              description: "Effective tags for this journey instance, repeated here for convenience when reading final outcomes.\n"
+              items:
+                type: string
+            attributes:
+              type: object
+              description: "Instance attributes such as subjectId, tenantId, channel, and correlation ids, repeated here for convenience when reading final outcomes.\n"
+              additionalProperties:
+                type: string
+            _links:
+              description: "Optional hypermedia links (HAL-style) describing related resources (for example `self`) when a journey is terminal. Presence is controlled per-journey via spec.httpSurface.links.enabled.\n"
+              type: object
+              additionalProperties:
+                $ref: "#/components/schemas/Link"
+        - type: object
+          properties:
+            output:
+              type: object
+              required:
+                - customerId
+                - finalStatus
+              properties:
+                customerId:
+                  type: string
+                finalStatus:
+                  type: string
+                  enum:
+                    - APPROVED
+                    - REJECTED
+                kycResult:
+                  type: object
+                amlResult:
+                  type: object
+                riskDecision:
+                  type: object
+                customerRecord:
+                  type: object
+                account:
+                  type: object
+                rejectionReason:
+                  type: string
+              additionalProperties: true
+    KycDocumentsStepResponse:
+      allOf:
+        - $ref: "#/components/schemas/JourneyStatus"
+        - type: object
+          description: Additional top-level fields returned from the submitKycDocuments step.
+          properties:
+            decision:
+              type: string
+              enum:
+                - submit
+            notes:
+              type: string
+          additionalProperties: true
+    KycResultStepResponse:
+      allOf:
+        - $ref: "#/components/schemas/JourneyStatus"
+        - type: object
+          description: Additional top-level fields returned from the submitKycResult webhook step.
+          properties:
+            status:
+              type: string
+              enum:
+                - APPROVED
+                - REFERRED
+                - REJECTED
+            reasons:
+              type: array
+              items:
+                type: string
+          additionalProperties: true
+    AmlResultStepResponse:
+      allOf:
+        - $ref: "#/components/schemas/JourneyStatus"
+        - type: object
+          description: Additional top-level fields returned from the submitAmlResult webhook step.
+          properties:
+            status:
+              type: string
+              enum:
+                - CLEAR
+                - REFERRED
+                - REJECTED
+            reasons:
+              type: array
+              items:
+                type: string
+          additionalProperties: true
+    RiskDecisionStepResponse:
+      allOf:
+        - $ref: "#/components/schemas/JourneyStatus"
+        - type: object
+          description: Additional top-level fields returned from the submitRiskDecision webhook step.
+          properties:
+            decision:
+              type: string
+              enum:
+                - APPROVE
+                - REJECT
+            riskRating:
+              type: string
+            reason:
+              type: string
+          additionalProperties: true
+    Link:
+      type: object
+      required:
+        - href
+      properties:
+        href:
+          type: string
+          description: Target URI for this link
+        method:
+          type: string
+          description: HTTP method to use when following this link (for example GET, POST, DELETE)
+

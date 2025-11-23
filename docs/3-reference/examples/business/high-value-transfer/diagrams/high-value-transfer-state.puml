@@ -1,0 +1,23 @@
+@startuml
+!include journey-diagram-theme.puml
+title high-value-transfer – HTTP-visible states
+
+[*] --> startJourney
+
+state startJourney
+state getStatusAfterChecks
+state getStatusAwaitingApproval
+state submitApproval
+state getStatusAwaitingSettlement
+state getResult
+
+startJourney --> getStatusAfterChecks : GET /journeys/{journeyId}\n(checks running/completed)
+getStatusAfterChecks --> getStatusAwaitingApproval : GET /journeys/{journeyId}\n(waiting for approval)
+getStatusAwaitingApproval --> submitApproval : POST /steps/approveTransfer
+submitApproval --> getStatusAwaitingSettlement : GET /journeys/{journeyId}\n(waiting for settlement)
+getStatusAwaitingSettlement --> getResult : GET /journeys/{journeyId}/result
+
+getResult --> [*]
+
+@enduml
+

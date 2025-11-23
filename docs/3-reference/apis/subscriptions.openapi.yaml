@@ -1,0 +1,125 @@
+openapi: 3.1.0
+info:
+  title: Subscriptions API
+  version: 1.0.0
+  description: Subscriptions API for trial, activation, cancellation, and reactivation.
+  contact:
+    name: JourneyForge
+servers:
+  - url: https://subscriptions.example.com
+paths:
+  /subscriptions:
+    post:
+      operationId: createTrialSubscription
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                customerId:
+                  type: string
+                planId:
+                  type: string
+                trialDays:
+                  type: integer
+                channel:
+                  type: string
+      responses:
+        "201":
+          description: Trial subscription created
+          content:
+            application/json:
+              schema:
+                type: object
+      description: Create a new trial subscription.
+      tags:
+        - subscriptions
+  /subscriptions/{subscriptionId}/activate:
+    post:
+      operationId: activateSubscription
+      parameters:
+        - in: path
+          name: subscriptionId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                planId:
+                  type: string
+      responses:
+        "200":
+          description: Subscription activated
+          content:
+            application/json:
+              schema:
+                type: object
+      description: Activate a trial subscription to a paid plan.
+      tags:
+        - subscriptions
+  /subscriptions/{subscriptionId}/cancel:
+    post:
+      operationId: cancelSubscription
+      parameters:
+        - in: path
+          name: subscriptionId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason:
+                  type: string
+      responses:
+        "200":
+          description: Subscription cancelled
+          content:
+            application/json:
+              schema:
+                type: object
+      description: Cancel a subscription.
+      tags:
+        - subscriptions
+  /subscriptions/{subscriptionId}/reactivate:
+    post:
+      operationId: reactivateSubscription
+      parameters:
+        - in: path
+          name: subscriptionId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                planId:
+                  type: string
+      responses:
+        "200":
+          description: Subscription reactivated
+          content:
+            application/json:
+              schema:
+                type: object
+      description: Reactivate a cancelled subscription.
+      tags:
+        - subscriptions
+tags:
+  - name: subscriptions
+

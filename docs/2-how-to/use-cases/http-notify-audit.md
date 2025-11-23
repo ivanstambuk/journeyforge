@@ -2,6 +2,12 @@
 
 Status: Draft | Last updated: 2025-11-20
 
+## Where to start
+
+For the full pattern and example journey, see:
+
+- Technical pattern: `docs/3-reference/examples/technical/http-notify-audit/http-notify-audit.md`
+
 ## Problem
 
 Emit an HTTP notification as a side effect without blocking on the response or branching on the outcome:

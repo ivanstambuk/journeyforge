@@ -1,0 +1,60 @@
+arazzo: 1.0.1
+info:
+  title: JourneyForge – recurring-payment workflows
+  version: 0.1.0
+  summary: Workflow for configuring a recurring payment and reading the schedule outcome.
+  description: Workflow for starting a recurring-payment journey to create a schedule and then reading the initial outcome.
+sourceDescriptions:
+  - name: recurringPayment
+    type: openapi
+    url: recurring-payment.openapi.yaml
+workflows:
+  - workflowId: recurring-payment-configure-and-read
+    summary: Start a recurring-payment journey, configure a schedule, and read the initial outcome.
+    description: Start a recurring-payment journey instance with schedule parameters and then read the outcome that confirms the schedule configuration.
+    inputs:
+      type: object
+      properties:
+        startRequest:
+          description: Initial recurring payment configuration.
+          type: object
+          required:
+            - userId
+            - paymentMethodRef
+            - amount
+            - currency
+            - interval
+            - maxRuns
+          properties:
+            userId:
+              type: string
+            paymentMethodRef:
+              type: string
+            amount:
+              type: number
+            currency:
+              type: string
+            interval:
+              type: string
+              description: ISO-8601 duration for the schedule cadence (for example P1M).
+            maxRuns:
+              type: integer
+          additionalProperties: true
+    steps:
+      - stepId: startJourney
+        description: Start a new recurring-payment journey instance and create or update the underlying schedule.
+        operationId: recurringPayment_start
+        x-source: recurringPayment
+        requestBody:
+          contentType: application/json
+          payload: $inputs.startRequest
+        outputs:
+          journeyId: $response.body.journeyId
+      - stepId: getResult
+        description: Retrieve the initial outcome that summarises the configured schedule.
+        operationId: recurringPayment_getResult
+        x-source: recurringPayment
+        parameters:
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId

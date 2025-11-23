@@ -1,0 +1,142 @@
+arazzo: 1.0.1
+info:
+  title: JourneyForge – email-verification workflows
+  version: 0.1.0
+  summary: Workflows for email verification with a timer-based expiry window.
+  description: Workflows for starting an email-verification journey, providing an email verification decision, and reading the final VERIFIED or EXPIRED outcome.
+sourceDescriptions:
+  - name: emailVerification
+    type: openapi
+    url: email-verification.openapi.yaml
+workflows:
+  - workflowId: email-verification-verified
+    summary: Start an email-verification journey, verify the email, and read the VERIFIED outcome.
+    description: Start an email-verification journey instance, call the waitForVerification step to mark the email as verified, and then retrieve the VERIFIED outcome.
+    inputs:
+      type: object
+      properties:
+        startRequest:
+          description: Initial email verification request.
+          type: object
+          required:
+            - userId
+            - email
+          properties:
+            userId:
+              type: string
+            email:
+              type: string
+              format: email
+            channel:
+              type: string
+          additionalProperties: true
+        verificationInput:
+          description: Email verification step input.
+          type: object
+          required:
+            - code
+          properties:
+            code:
+              type: string
+          additionalProperties: true
+    steps:
+      - stepId: startJourney
+        description: Start a new email-verification journey instance.
+        operationId: emailVerification_start
+        x-source: emailVerification
+        requestBody:
+          contentType: application/json
+          payload: $inputs.startRequest
+        outputs:
+          journeyId: $response.body.journeyId
+      - stepId: getStatusAfterStart
+        description: Optional status check after sending the verification email.
+        operationId: emailVerification_getStatus
+        x-source: emailVerification
+        parameters:
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId
+        outputs:
+          phase: $response.body.phase
+      - stepId: waitForVerification
+        description: Provide the verification code from the magic link to the waitForVerification step.
+        operationId: emailVerification_waitForVerification
+        x-source: emailVerification
+        parameters:
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId
+        requestBody:
+          contentType: application/json
+          payload: $inputs.verificationInput
+        outputs:
+          phase: $response.body.phase
+      - stepId: getStatusAfterVerification
+        description: Check status after the verification step has been processed.
+        operationId: emailVerification_getStatus
+        x-source: emailVerification
+        parameters:
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId
+        outputs:
+          phase: $response.body.phase
+      - stepId: getResult
+        description: Retrieve the final VERIFIED outcome after email verification.
+        operationId: emailVerification_getResult
+        x-source: emailVerification
+        parameters:
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId
+
+  - workflowId: email-verification-expired
+    summary: Start an email-verification journey and observe an EXPIRED outcome when no verification is provided.
+    description: Start an email-verification journey instance and, after the expiry window passes without any verification step call, retrieve the EXPIRED outcome.
+    inputs:
+      type: object
+      properties:
+        startRequest:
+          description: Initial email verification request.
+          type: object
+          required:
+            - userId
+            - email
+          properties:
+            userId:
+              type: string
+            email:
+              type: string
+              format: email
+            channel:
+              type: string
+          additionalProperties: true
+    steps:
+      - stepId: startJourney
+        description: Start a new email-verification journey instance.
+        operationId: emailVerification_start
+        x-source: emailVerification
+        requestBody:
+          contentType: application/json
+          payload: $inputs.startRequest
+        outputs:
+          journeyId: $response.body.journeyId
+      - stepId: getStatusAfterStart
+        description: Optional status check after sending the verification email.
+        operationId: emailVerification_getStatus
+        x-source: emailVerification
+        parameters:
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId
+        outputs:
+          phase: $response.body.phase
+      - stepId: getResult
+        description: Retrieve the EXPIRED outcome after the expiry window (for example 7 days) elapses without verification.
+        operationId: emailVerification_getResult
+        x-source: emailVerification
+        parameters:
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId

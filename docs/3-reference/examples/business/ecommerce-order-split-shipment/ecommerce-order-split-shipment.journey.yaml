@@ -1,0 +1,325 @@
+# Design note: see Q-013 in docs/4-architecture/open-questions.md for scope and backend choices.
+apiVersion: v1
+kind: Journey
+metadata:
+  name: ecommerce-order-split-shipment
+  version: 0.1.0
+  description: E-commerce order orchestration with inventory checks and split shipments.
+spec:
+  apis:
+    orders: { openApiRef: apis/orders.openapi.yaml }
+    inventory: { openApiRef: apis/inventory.openapi.yaml }
+    shipping: { openApiRef: apis/shipping.openapi.yaml }
+  input:
+    schema:
+      title: EcommerceOrderStartRequest
+      type: object
+      required:
+        - orderId
+        - customerId
+        - items
+        - shippingAddress
+      properties:
+        orderId:
+          type: string
+        customerId:
+          type: string
+        items:
+          type: array
+          items:
+            type: object
+            required:
+              - sku
+              - quantity
+            properties:
+              sku:
+                type: string
+              quantity:
+                type: integer
+              warehousePreference:
+                type: string
+            additionalProperties: true
+        shippingAddress:
+          type: object
+          properties:
+            line1:
+              type: string
+            line2:
+              type: string
+            city:
+              type: string
+            country:
+              type: string
+            postalCode:
+              type: string
+        channel:
+          type: string
+      additionalProperties: true
+  output:
+    schema:
+      title: EcommerceOrderOutcome
+      type: object
+      required:
+        - orderId
+        - overallStatus
+      properties:
+        orderId:
+          type: string
+        overallStatus:
+          type: string
+          enum:
+            - FULFILLED
+            - PARTIALLY_FULFILLED
+            - CANCELLED
+            - FAILED
+        shipments:
+          type: array
+          items:
+            type: object
+        unavailableItems:
+          type: array
+          items:
+            type: object
+      additionalProperties: true
+  start: createOrder
+  states:
+    createOrder:
+      type: task
+      task:
+        kind: httpCall
+        operationRef: orders.createOrder
+        params:
+          headers:
+            Accept: application/json
+        body:
+          mapper:
+            lang: dataweave
+            expr: |
+              {
+                orderId: context.orderId,
+                customerId: context.customerId,
+                items: context.items,
+                shippingAddress: context.shippingAddress,
+                channel: context.channel
+              }
+        timeoutMs: 3000
+        resultVar: order
+      next: reserveInventory
+
+    reserveInventory:
+      type: task
+      task:
+        kind: httpCall
+        operationRef: inventory.reserveItemsForOrder
+        params:
+          headers:
+            Accept: application/json
+        body:
+          mapper:
+            lang: dataweave
+            expr: |
+              {
+                orderId: order.body.orderId default context.orderId,
+                items: context.items
+              }
+        timeoutMs: 3000
+        resultVar: reservation
+      next: evaluateReservation
+
+    evaluateReservation:
+      type: choice
+      choices:
+        - when:
+            predicate:
+              lang: dataweave
+              expr: |
+                reservation.ok == true
+                  and (reservation.body.status == "RESERVED"
+                    or reservation.body.status == "PARTIAL")
+          next: waitForConfirmation
+      default: unfulfillable
+
+    waitForConfirmation:
+      type: wait
+      wait:
+        channel: manual
+        input:
+          schema:
+            description: Customer decision to proceed with the order given proposed split shipments, or cancel.
+            type: object
+            required:
+              - decision
+            properties:
+              decision:
+                type: string
+                enum:
+                  - proceed
+                  - cancel
+              notes:
+                type: string
+            additionalProperties: false
+        response:
+          outputVar: confirmationResponse
+          schema:
+            title: ConfirmOrderProjection
+            type: object
+            description: Additional top-level fields returned from the confirmOrder step.
+            properties:
+              decision:
+                type: string
+                enum:
+                  - proceed
+                  - cancel
+              notes:
+                type: string
+            additionalProperties: true
+        apply:
+          mapper:
+            lang: dataweave
+            expr: |
+              context ++ {
+                orderId: order.body.orderId default context.orderId,
+                reservation: reservation.body,
+                confirmation: payload,
+                confirmationResponse: {
+                  decision: payload.decision,
+                  notes: payload.notes
+                }
+              }
+        on:
+          - when:
+              predicate:
+                lang: dataweave
+                expr: |
+                  payload.decision == "proceed"
+            next: prepareShipments
+        default: completeCancelled
+
+    prepareShipments:
+      type: task
+      task:
+        kind: httpCall
+        operationRef: shipping.createShipmentsForOrder
+        params:
+          headers:
+            Accept: application/json
+        body:
+          mapper:
+            lang: dataweave
+            expr: |
+              {
+                orderId: context.orderId,
+                shipments: context.reservation.proposedShipments default []
+              }
+        timeoutMs: 5000
+        resultVar: shipmentRequest
+      next: waitForFulfillment
+
+    waitForFulfillment:
+      type: webhook
+      webhook:
+        input:
+          schema:
+            title: Fulfillment callback input
+            type: object
+            required:
+              - orderId
+              - overallStatus
+            properties:
+              orderId:
+                type: string
+              overallStatus:
+                type: string
+                enum:
+                  - FULFILLED
+                  - PARTIALLY_FULFILLED
+                  - CANCELLED
+                  - FAILED
+              shipments:
+                type: array
+                items:
+                  type: object
+              unavailableItems:
+                type: array
+                items:
+                  type: object
+            additionalProperties: true
+        response:
+          outputVar: fulfillmentResponse
+          schema:
+            title: FulfillmentStepResponse
+            type: object
+            description: Additional top-level fields returned from the waitForFulfillment step.
+            properties:
+              overallStatus:
+                type: string
+              shipments:
+                type: array
+                items:
+                  type: object
+              unavailableItems:
+                type: array
+                items:
+                  type: object
+            additionalProperties: true
+        security:
+          kind: sharedSecretHeader
+          header: X-Fulfillment-Secret
+          secretRef: secret://webhook/ecommerce-order-fulfillment
+        apply:
+          mapper:
+            lang: dataweave
+            expr: |
+              context ++ {
+                fulfillmentCallback: payload,
+                shipments: payload.shipments,
+                unavailableItems: payload.unavailableItems,
+                fulfillmentResponse: {
+                  overallStatus: payload.overallStatus,
+                  shipments: payload.shipments,
+                  unavailableItems: payload.unavailableItems
+                }
+              }
+        on:
+          - when:
+              predicate:
+                lang: dataweave
+                expr: |
+                  payload.overallStatus == "FULFILLED"
+            next: completeFulfilled
+          - when:
+              predicate:
+                lang: dataweave
+                expr: |
+                  payload.overallStatus == "PARTIALLY_FULFILLED"
+            next: completePartiallyFulfilled
+          - when:
+              predicate:
+                lang: dataweave
+                expr: |
+                  payload.overallStatus == "CANCELLED"
+            next: completeCancelled
+        default: failed
+
+    completeFulfilled:
+      type: succeed
+      outputVar: fulfillmentCallback
+
+    completePartiallyFulfilled:
+      type: succeed
+      outputVar: fulfillmentCallback
+
+    completeCancelled:
+      type: succeed
+      outputVar: fulfillmentCallback
+
+    unfulfillable:
+      type: fail
+      errorCode: ORDER_UNFULFILLABLE
+      reason: "Order could not be reserved due to unavailable inventory or upstream errors"
+
+    failed:
+      type: fail
+      errorCode: ORDER_FULFILLMENT_FAILED
+      reason: "Order fulfillment failed or did not complete as expected"
+

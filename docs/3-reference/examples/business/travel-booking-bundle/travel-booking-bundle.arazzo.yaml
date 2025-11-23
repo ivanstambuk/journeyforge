@@ -1,0 +1,203 @@
+arazzo: 1.0.1
+info:
+  title: JourneyForge – travel-booking-bundle workflows
+  version: 0.1.0
+  summary: Workflows for travel booking bundles with flight, hotel, and car.
+  description: Workflows for booking a travel bundle (flight, hotel, car), handling provider confirmations, and supporting post-booking change/cancel actions. See Q-017 in docs/4-architecture/open-questions.md for design context.
+sourceDescriptions:
+  - name: travelBooking
+    type: openapi
+    url: travel-booking-bundle.openapi.yaml
+workflows:
+  - workflowId: travel-booking-bundle-confirmed
+    summary: Start a travel-booking-bundle journey, confirm the bundle, and read the confirmed outcome.
+    description: Start a travel-booking-bundle journey, let the engine reserve flight, hotel, and car, confirm the bundle, accept provider trip status updates, optionally perform a post-booking change or simply complete, and then retrieve the CONFIRMED or PARTIALLY_CONFIRMED outcome.
+    inputs:
+      type: object
+      properties:
+        startRequest:
+          description: Initial travel booking request.
+          type: object
+          required:
+            - tripId
+            - travelerId
+          properties:
+            tripId:
+              type: string
+            travelerId:
+              type: string
+            flightOption:
+              type: object
+            hotelOption:
+              type: object
+            carOption:
+              type: object
+            totalAmount:
+              type: number
+            currency:
+              type: string
+          additionalProperties: true
+        confirmationInput:
+          description: Traveler decision to confirm the initial bundle.
+          type: object
+          required:
+            - decision
+          properties:
+            decision:
+              type: string
+              enum:
+                - confirm
+            notes:
+              type: string
+          additionalProperties: false
+        changeOrCompleteInput:
+          description: Post-booking action for the trip (complete or change).
+          type: object
+          required:
+            - action
+          properties:
+            action:
+              type: string
+              enum:
+                - complete
+                - change
+            notes:
+              type: string
+          additionalProperties: false
+    steps:
+      - stepId: startJourney
+        description: Start a new travel-booking-bundle journey instance.
+        operationId: travelBookingBundle_start
+        x-source: travelBooking
+        requestBody:
+          contentType: application/json
+          payload: $inputs.startRequest
+        outputs:
+          journeyId: $response.body.journeyId
+      - stepId: getStatusAfterReservation
+        description: Poll journey status until initial bundle reservations have completed.
+        operationId: travelBookingBundle_getStatus
+        x-source: travelBooking
+        parameters:
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId
+        outputs:
+          phase: $response.body.phase
+      - stepId: confirmBundle
+        description: Confirm the initial bundle reservation.
+        operationId: travelBookingBundle_confirmBundle
+        x-source: travelBooking
+        parameters:
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId
+        requestBody:
+          contentType: application/json
+          payload: $inputs.confirmationInput
+        outputs:
+          phase: $response.body.phase
+      - stepId: getStatusBeforeChangeOrComplete
+        description: Poll journey status until provider trip status updates have been processed.
+        operationId: travelBookingBundle_getStatus
+        x-source: travelBooking
+        parameters:
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId
+        outputs:
+          phase: $response.body.phase
+      - stepId: changeOrCancel
+        description: Perform a post-booking action (complete or change) for the trip.
+        operationId: travelBookingBundle_changeOrCancel
+        x-source: travelBooking
+        parameters:
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId
+        requestBody:
+          contentType: application/json
+          payload: $inputs.changeOrCompleteInput
+        outputs:
+          phase: $response.body.phase
+      - stepId: getResult
+        description: Retrieve the final bundle outcome once the trip is confirmed.
+        operationId: travelBookingBundle_getResult
+        x-source: travelBooking
+        parameters:
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId
+
+  - workflowId: travel-booking-bundle-cancelled
+    summary: Start a travel-booking-bundle journey and cancel the bundle before or after provider confirmations.
+    description: Start a travel-booking-bundle journey where the traveler cancels the bundle either during initial confirmation or via a post-booking change/cancel step, and then retrieve the CANCELLED outcome.
+    inputs:
+      type: object
+      properties:
+        startRequest:
+          description: Initial travel booking request.
+          type: object
+          required:
+            - tripId
+            - travelerId
+          properties:
+            tripId:
+              type: string
+            travelerId:
+              type: string
+          additionalProperties: true
+        cancellationInput:
+          description: Traveler decision to cancel the bundle.
+          type: object
+          required:
+            - decision
+          properties:
+            decision:
+              type: string
+              enum:
+                - cancel
+            notes:
+              type: string
+          additionalProperties: false
+    steps:
+      - stepId: startJourney
+        description: Start a new travel-booking-bundle journey instance.
+        operationId: travelBookingBundle_start
+        x-source: travelBooking
+        requestBody:
+          contentType: application/json
+          payload: $inputs.startRequest
+        outputs:
+          journeyId: $response.body.journeyId
+      - stepId: getStatusAfterReservation
+        description: Poll journey status until initial bundle reservations have completed.
+        operationId: travelBookingBundle_getStatus
+        x-source: travelBooking
+        parameters:
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId
+        outputs:
+          phase: $response.body.phase
+      - stepId: cancelBundle
+        description: Cancel the bundle during the traveler confirmation step.
+        operationId: travelBookingBundle_confirmBundle
+        x-source: travelBooking
+        parameters:
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId
+        requestBody:
+          contentType: application/json
+          payload: $inputs.cancellationInput
+        outputs:
+          phase: $response.body.phase
+      - stepId: getResult
+        description: Retrieve the final cancelled outcome.
+        operationId: travelBookingBundle_getResult
+        x-source: travelBooking
+        parameters:
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId
