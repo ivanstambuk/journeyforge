@@ -41,7 +41,7 @@ Here’s a breakdown of the main steps you’ll call over the Journeys API for t
 |---:|---------|-------------|--------------|------------|------------------|---------|
 | 1 | `startJourney` | Start a new `async-fire-and-observe` journey instance asynchronously. | `asyncFireAndObserve_start` | Body: `startRequest` with `jobType`, `correlationId`, optional `pollIntervalSeconds`. | `$statusCode == 202`; body is `JourneyStartResponse` with `journeyId`. | `journeyId` for the new instance. |
 | 2 | `getStatusRunning` | Optional status check while the background job is running. | `asyncFireAndObserve_getStatus` | Path: `journeyId` from step 1. | `$statusCode == 200`; `phase == "RUNNING"`. | `JourneyStatus` with `phase` and `currentState`. |
-| 3 | `getResult` | Retrieve the final outcome once the job is completed. | `asyncFireAndObserve_getResult` | Path: `journeyId` from step 1. | `$statusCode == 200`, `phase == "SUCCEEDED"` or `phase == "FAILED"`. | `JourneyOutcome` whose `output.status` is `JOB_COMPLETED` or `JOB_FAILED`. |
+| 3 | `getResult` | Retrieve the final outcome once the job is completed. | `asyncFireAndObserve_getResult` | Path: `journeyId` from step 1. | `$statusCode == 200`, `phase == "SUCCEEDED"` or `phase == "FAILED"`. | `JourneyOutcome` whose `status` (mirroring `output.status`) is `JOB_COMPLETED` or `JOB_FAILED`. |
 
 ## Graphical overview
 

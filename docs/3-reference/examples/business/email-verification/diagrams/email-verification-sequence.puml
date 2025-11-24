@@ -39,6 +39,6 @@ Client -> Journeys: GET /api/v1/journeys/{journeyId}\n(getStatusAfterVerificatio
 Journeys --> Client: 200 OK\nJourneyStatus (verification processed)
 
 Client -> Journeys: GET /api/v1/journeys/{journeyId}/result\n(getResult)
-Journeys --> Client: 200 OK\nJourneyOutcome\n(output.status == VERIFIED or EXPIRED)
+Journeys --> Client: 200 OK\nJourneyOutcome\n(status == VERIFIED or EXPIRED,\nmirroring output.status)
 
 @enduml

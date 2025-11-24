@@ -9,7 +9,7 @@ start
 repeat
   :Client polls\nGET /journeys/{journeyId}\nfor status;
   :Journeys API returns\nJourneyStatus with per-signer statuses;
-repeat while (phase == "Running") is (signatures or expiry pending)
+repeat while (phase == "RUNNING") is (signatures or expiry pending)
 
 if (output.status == "FULLY_SIGNED"?) then (fully signed)
   :Client releases the signed document\nand updates downstream systems;
@@ -22,4 +22,3 @@ endif
 stop
 
 @enduml
-

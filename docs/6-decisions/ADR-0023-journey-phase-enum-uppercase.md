@@ -1,6 +1,6 @@
 # ADR-0023 – Journey Phase Enum Uppercase
 
-Date: 2025-11-24 | Status: Proposed
+Date: 2025-11-24 | Status: Accepted
 
 ## Context
 

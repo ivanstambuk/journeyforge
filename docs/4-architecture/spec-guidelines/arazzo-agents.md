@@ -91,8 +91,8 @@ Relevant artefacts:
 - OpenAPI: `docs/3-reference/examples/oas/payment-callback.openapi.yaml`
 - Arazzo: `docs/3-reference/examples/arazzo/payment-callback.arazzo.yaml`
   - Workflows:
-    - `payment-callback-happy-path` – expects `output.status == "SUCCESS"`.
-    - `payment-callback-failed` – expects `output.status == "FAILED"`.
+    - `payment-callback-happy-path` – expects `status == "SUCCESS"` (mirroring `output.status`).
+    - `payment-callback-failed` – expects `status == "FAILED"` (mirroring `output.status`).
   - Inputs:
     - `startRequest` with schema `{ paymentId: string, amount: number, currency: string, ... }`
   - Steps (per workflow):
@@ -125,9 +125,9 @@ Agent reasoning and behaviour:
 
 4. **Interpret result with success criteria**
    - For `payment-callback-happy-path`, the workflow includes `successCriteria.paymentSucceeded` that asserts:
-     - `output.status == "SUCCESS"`.
+     - `status == "SUCCESS"` (which mirrors `output.status`).
    - For `payment-callback-failed`, the workflow includes `successCriteria.paymentFailed` that asserts:
-     - `output.status == "FAILED"`.
+     - `status == "FAILED"` (which mirrors `output.status`).
    - An agent MAY:
      - Use these criteria to decide whether the run matched the intended scenario.
      - Surface the outcome and status to the human or calling system.

@@ -8,4 +8,4 @@ docs/3-reference/dsl.md
 docs/4-architecture/spec-guidelines/dsl-style.md
 docs/4-architecture/spec-guidelines/spec-format.md
 docs/4-architecture/spec-guidelines/docs-style.md
-
+docs/6-decisions/ADR-0025-observability-and-telemetry-layers.md

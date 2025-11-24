@@ -6,7 +6,7 @@ start
 
 :Client sends\nPOST /api/v1/journeys/recurring-payment/start\nwith RecurringPaymentStartRequest\n(userId, paymentMethodRef,\namount, currency, interval, maxRuns);
 
-:Journeys API creates or updates\nschedule binding via task.kind: schedule\nand returns JourneyOutcome with\noutput.status == \"SCHEDULED\" and\nconfigured schedule fields;
+:Journeys API creates or updates\nschedule binding via task.kind: schedule\nand returns JourneyOutcome with\nstatus == \"SCHEDULED\" (mirroring output.status)\nand configured schedule fields;
 
 if (JourneyOutcome.phase == "SUCCEEDED"?) then (yes)
   :Client records schedule configuration\nfor the user;

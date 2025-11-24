@@ -13,7 +13,7 @@ repeat
 repeat while (phase == "RUNNING") is (report job still running)
 
 :Client calls\nGET /journeys/{journeyId}/result\n(getResult);
-:Journeys API returns\nJourneyOutcome with output.status\n(REPORT_COMPLETED or REPORT_FAILED)\nand downloadUrl when available;
+:Journeys API returns\nJourneyOutcome with status\n(REPORT_COMPLETED or REPORT_FAILED,\nmirroring output.status)\nand downloadUrl when available;
 
 stop
 

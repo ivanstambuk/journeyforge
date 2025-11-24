@@ -9,12 +9,12 @@ start
 :Journeys API enqueues async job\nwith Jobs API and returns\n202 Accepted + JourneyStartResponse\n(journeyId, statusUrl);
 
 repeat
-  :Client polls\nGET /journeys/{journeyId}\n(getStatusRunning);
+:Client polls\nGET /journeys/{journeyId}\n(getStatusRunning);
   :Journeys API returns\nJourneyStatus with phase/currentState;
 repeat while (phase == "RUNNING") is (job still in progress)
 
 :Client calls\nGET /journeys/{journeyId}/result\n(getResult) once phase is terminal;
-:Journeys API returns\nJourneyOutcome with output.status\n(JOB_COMPLETED or JOB_FAILED);
+:Journeys API returns\nJourneyOutcome with status\n(JOB_COMPLETED or JOB_FAILED,\nmirroring output.status);
 
 stop
 

@@ -174,51 +174,17 @@ components:
           additionalProperties:
             type: string
         _links:
-          description: "Optional hypermedia links (HAL-style) describing related resources and next actions.\n\nWhen links are enabled for a journey, the engine SHOULD include at least `self` and `result`, and MAY include links for active step endpoints. For step links, the relation name MUST equal the external-input state id (for example `waitForApproval`, `confirm`). When the journey is Running and user-cancellable, the engine SHOULD also expose a `cancel` link pointing to the canonical cancellation step `/journeys/{journeyId}/steps/cancel` with method POST.\n"
+          description: "Optional hypermedia links (HAL-style) describing related resources and next actions.\n\nWhen links are enabled for a journey, the engine SHOULD include at least `self` and `result`, and MAY include links for active step endpoints. For step links, the relation name MUST equal the external-input state id (for example `waitForApproval`, `confirm`). When the journey is RUNNING and user-cancellable, the engine SHOULD also expose a `cancel` link pointing to the canonical cancellation step `/journeys/{journeyId}/steps/cancel` with method POST.\n"
           type: object
           additionalProperties:
             $ref: "#/components/schemas/Link"
     JourneyOutcome:
       allOf:
+        - $ref: "../../../openapi/journeys.openapi.yaml#/components/schemas/JourneyOutcome"
         - type: object
-          required:
-            - journeyId
-            - journeyName
-            - phase
           properties:
-            journeyId:
-              type: string
-            journeyName:
-              type: string
-            phase:
-              type: string
-              enum:
-                - Succeeded
-                - Failed
             output:
               $ref: "#/components/schemas/AsyncReportGenerationOutcome"
-            error:
-              type: object
-              properties:
-                code:
-                  type: string
-                reason:
-                  type: string
-            tags:
-              type: array
-              description: "Effective tags for this journey instance, repeated here for convenience when reading final outcomes.\n"
-              items:
-                type: string
-            attributes:
-              type: object
-              description: "Instance attributes such as subjectId, tenantId, channel, and correlation ids, repeated here for convenience when reading final outcomes.\n"
-              additionalProperties:
-                type: string
-            _links:
-              description: "Optional hypermedia links (for example `self`) when a journey is terminal, controlled per-journey via spec.httpSurface.links.enabled.\n"
-              type: object
-              additionalProperties:
-                $ref: "#/components/schemas/Link"
     Link:
       type: object
       required:

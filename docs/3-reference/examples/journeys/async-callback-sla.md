@@ -46,7 +46,7 @@ Here’s a breakdown of the main steps you’ll call over the Journeys API for t
 |---:|---------|-------------|--------------|------------|------------------|---------|
 | 1 | `startJourney` | Start a new `async-callback-sla` journey instance asynchronously. | `asyncCallbackSla_start` | Body: `startRequest` with `requestId`, optional `slaSeconds`. | `$statusCode == 202`; body is `JourneyStartResponse` with `journeyId`. | `journeyId` for the new instance. |
 | 2 | `callback` | Provider posts the callback within the SLA window. | `asyncCallbackSla_waitForCallback` | Path: `journeyId`; body: `callbackInput` with `jobId`, `status`. | `$statusCode == 200`; `JourneyStatus.phase` moves towards terminal. | `ProviderCallbackStepResponse` extending `JourneyStatus`. |
-| 3 | `getResult` | Retrieve the final outcome. | `asyncCallbackSla_getResult` | Path: `journeyId` from step 1. | `$statusCode == 200`, `phase == "SUCCEEDED"` or `phase == "FAILED"`. | `JourneyOutcome` with `output.status == "COMPLETED_WITHIN_SLA"` or `"FAILED"`. |
+| 3 | `getResult` | Retrieve the final outcome. | `asyncCallbackSla_getResult` | Path: `journeyId` from step 1. | `$statusCode == 200`, `phase == "SUCCEEDED"` or `phase == "FAILED"`. | `JourneyOutcome` with `status == "COMPLETED_WITHIN_SLA"` or `"FAILED"` (mirroring `output.status`). |
 
 ### Callback does not arrive in time
 
@@ -54,7 +54,7 @@ Here’s a breakdown of the main steps you’ll call over the Journeys API for t
 |---:|---------|-------------|--------------|------------|------------------|---------|
 | 1 | `startJourney` | Start a new `async-callback-sla` journey instance asynchronously. | `asyncCallbackSla_start` | Body: `startRequest` with `requestId`, optional `slaSeconds`. | `$statusCode == 202`; body is `JourneyStartResponse` with `journeyId`. | `journeyId` for the new instance. |
 | 2 | `getStatusDuringSla` | Optional status checks while the SLA timer is running. | `asyncCallbackSla_getStatus` | Path: `journeyId` from step 1. | `$statusCode == 200`; `phase == "RUNNING"`. | `JourneyStatus` with `phase` and `currentState`. |
-| 3 | `getResult` | Retrieve the final outcome after the SLA timer fires. | `asyncCallbackSla_getResult` | Path: `journeyId` from step 1. | `$statusCode == 200`, `phase == "SUCCEEDED"` or `phase == "FAILED"`. | `JourneyOutcome` with `output.status == "TIMED_OUT"`. |
+| 3 | `getResult` | Retrieve the final outcome after the SLA timer fires. | `asyncCallbackSla_getResult` | Path: `journeyId` from step 1. | `$statusCode == 200`, `phase == "SUCCEEDED"` or `phase == "FAILED"`. | `JourneyOutcome` with `status == "TIMED_OUT"` (mirroring `output.status`). |
 
 ## Graphical overview
 

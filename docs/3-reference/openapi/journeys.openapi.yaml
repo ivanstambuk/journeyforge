@@ -320,6 +320,7 @@ components:
         - journeyId
         - journeyName
         - phase
+        - status
       properties:
         journeyId:
           type: string
@@ -330,6 +331,9 @@ components:
           enum:
             - SUCCEEDED
             - FAILED
+        status:
+          type: string
+          description: "Business outcome status code for this journey instance (for example JOB_COMPLETED, REPORT_FAILED). Mirrors JourneyOutcome.output.status when present."
         output: {}
         error:
           type: object

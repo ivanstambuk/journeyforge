@@ -40,7 +40,7 @@ Here’s a breakdown of the main steps you’ll call over the Journeys API for t
 |---:|---------|-------------|--------------|------------|------------------|---------|
 | 1 | `startJourney` | Start a new `async-report-generation` journey instance asynchronously. | `asyncReportGeneration_start` | Body: `startRequest` with report and tenant details. | `$statusCode == 202`; body is `JourneyStartResponse` with `journeyId`. | `journeyId` for the new instance. |
 | 2 | `getStatusRunning` | Optional status check while the report job is running. | `asyncReportGeneration_getStatus` | Path: `journeyId` from step 1. | `$statusCode == 200`; `phase == "RUNNING"`. | `JourneyStatus` with `phase` and `currentState`. |
-| 3 | `getResult` | Retrieve the final outcome once the report job has completed. | `asyncReportGeneration_getResult` | Path: `journeyId` from step 1. | `$statusCode == 200`, `phase == "SUCCEEDED"` or `phase == "FAILED"`. | `JourneyOutcome` whose `output.status` is `REPORT_COMPLETED` or `REPORT_FAILED`. |
+| 3 | `getResult` | Retrieve the final outcome once the report job has completed. | `asyncReportGeneration_getResult` | Path: `journeyId` from step 1. | `$statusCode == 200`, `phase == "SUCCEEDED"` or `phase == "FAILED"`. | `JourneyOutcome` whose `status` (mirroring `output.status`) is `REPORT_COMPLETED` or `REPORT_FAILED`. |
 
 ## Graphical overview
 

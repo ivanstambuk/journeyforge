@@ -8,8 +8,8 @@ start
 
 repeat
   :Onboarding app polls\nGET /journeys/{journeyId}\nfor status;
-  :Journeys API returns\nJourneyStatus (Running) while\nKYC/KYB/risk checks are in flight;
-repeat while (phase == "Running")
+  :Journeys API returns\nJourneyStatus (RUNNING) while\nKYC/KYB/risk checks are in flight;
+repeat while (phase == "RUNNING")
 
 if (output.finalStatus == "APPROVED"?) then (approved)
   :Onboarding app activates accounts\nand downstream products;
@@ -22,4 +22,3 @@ endif
 stop
 
 @enduml
-

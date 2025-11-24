@@ -18,7 +18,7 @@ endif
 repeat
   :Client calls\nGET /journeys/{journeyId}/result;
   :Journeys API returns\nJourneyOutcome with phase/output;
-repeat while (phase == "Running") is (still waiting)
+repeat while (phase == "RUNNING") is (still waiting)
 
 if (output.status == "VERIFIED"?) then (verified)
   :Client marks email as verified\nand updates local profile;

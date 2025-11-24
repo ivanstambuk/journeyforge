@@ -169,7 +169,7 @@ components:
           additionalProperties:
             type: string
         _links:
-          description: "Optional hypermedia links (HAL-style) describing related resources and next actions.\n\nWhen links are enabled for a journey, the engine SHOULD include at least `self` and `result`, and MAY include links for active step endpoints. For step links, the relation name MUST equal the external-input state id (for example `waitForApproval`, `confirm`). When the journey is Running and user-cancellable, the engine SHOULD also expose a `cancel` link pointing to the canonical cancellation step `/journeys/{journeyId}/steps/cancel` with method POST.\n"
+          description: "Optional hypermedia links (HAL-style) describing related resources and next actions.\n\nWhen links are enabled for a journey, the engine SHOULD include at least `self` and `result`, and MAY include links for active step endpoints. For step links, the relation name MUST equal the external-input state id (for example `waitForApproval`, `confirm`). When the journey is RUNNING and user-cancellable, the engine SHOULD also expose a `cancel` link pointing to the canonical cancellation step `/journeys/{journeyId}/steps/cancel` with method POST.\n"
           type: object
           additionalProperties:
             $ref: "#/components/schemas/Link"

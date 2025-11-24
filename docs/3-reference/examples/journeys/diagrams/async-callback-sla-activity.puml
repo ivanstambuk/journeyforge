@@ -20,7 +20,7 @@ else (no callback within SLA)
 endif
 
 :Client calls\nGET /journeys/{journeyId}/result\n(getResult);
-:Journeys API returns\nJourneyOutcome with output.status\n(COMPLETED_WITHIN_SLA, FAILED, or TIMED_OUT);
+:Journeys API returns\nJourneyOutcome with status\n(COMPLETED_WITHIN_SLA, FAILED,\nor TIMED_OUT, mirroring output.status);
 
 stop
 

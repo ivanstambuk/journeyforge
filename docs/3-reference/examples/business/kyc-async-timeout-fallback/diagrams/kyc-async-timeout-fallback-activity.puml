@@ -9,7 +9,7 @@ start
 repeat
   :Client polls\nGET /journeys/{journeyId}\nfor status;
   :Journeys API returns\nJourneyStatus with phase/currentState;
-repeat while (phase == "Running") is (primary KYC, SLA, recovery, or fallback in progress)
+repeat while (phase == "RUNNING") is (primary KYC, SLA, recovery, or fallback in progress)
 
 :Client calls\nGET /journeys/{journeyId}/result\nwhen phase is terminal;
 :Journeys API returns\nJourneyOutcome with final status\n(KYC_COMPLETED_PRIMARY, KYC_COMPLETED_FALLBACK,\nKYC_TIMED_OUT, or KYC_FAILED);
@@ -25,4 +25,3 @@ endif
 stop
 
 @enduml
-

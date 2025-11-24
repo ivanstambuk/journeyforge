@@ -61,7 +61,7 @@ Here’s a breakdown of the main steps you’ll call over the Journeys API for t
 | 1 | `startJourney` | Start a new `kyc-async-timeout-fallback` journey instance asynchronously. | `kycAsyncTimeoutFallback_start` | Body: `startRequest` with customer and provider details. | `$statusCode == 202`; body is `JourneyStartResponse` with `journeyId`. | `journeyId` for the new instance. |
 | 2 | `getStatusRunning` | Optional status check while the primary KYC check is in progress. | `kycAsyncTimeoutFallback_getStatus` | Path: `journeyId` from step 1 (or from `JourneyStatus.journeyId`). | `$statusCode == 200`; `phase == "RUNNING"`. | `JourneyStatus` with `phase` and `currentState`. |
 | 3 | `primaryCallback` | Primary provider posts the KYC result within the SLA. | `kycAsyncTimeoutFallback_waitForPrimaryKyc` | Path: `journeyId`; body: `primaryCallback` with `jobId`, `status`, optional `reasons`. | `$statusCode == 200`; `JourneyStatus.phase` is `Running` or already terminal depending on timing. | `PrimaryKycStepResponse` extending `JourneyStatus`. |
-| 4 | `getResult` | Retrieve the final outcome. | `kycAsyncTimeoutFallback_getResult` | Path: `journeyId` from step 1. | `$statusCode == 200`, `phase == "SUCCEEDED"` or `phase == "FAILED"`. | `JourneyOutcome` with `output.status == "KYC_COMPLETED_PRIMARY"` or `output.status == "KYC_FAILED"` (primary). |
+| 4 | `getResult` | Retrieve the final outcome. | `kycAsyncTimeoutFallback_getResult` | Path: `journeyId` from step 1. | `$statusCode == 200`, `phase == "SUCCEEDED"` or `phase == "FAILED"`. | `JourneyOutcome` with `status == "KYC_COMPLETED_PRIMARY"` or `"KYC_FAILED"` (mirroring `output.status` for the primary path). |
 
 ### Primary times out, fallback completes (async start)
 
@@ -70,7 +70,7 @@ Here’s a breakdown of the main steps you’ll call over the Journeys API for t
 | 1 | `startJourney` | Start a new `kyc-async-timeout-fallback` journey instance asynchronously. | `kycAsyncTimeoutFallback_start` | Body: `startRequest` with customer and provider details. | `$statusCode == 202`; body is `JourneyStartResponse` with `journeyId`. | `journeyId` for the new instance. |
 | 2 | `getStatusAfterTimeout` | Status check after the primary SLA window has elapsed and the journey has moved into recovery/fallback. | `kycAsyncTimeoutFallback_getStatus` | Path: `journeyId` from step 1. | `$statusCode == 200`; `phase == "RUNNING"` and `currentState` indicates a recovery or fallback step. | `JourneyStatus` with `phase` and `currentState`. |
 | 3 | `fallbackCallback` | Fallback provider posts the KYC result. | `kycAsyncTimeoutFallback_waitForFallbackResult` | Path: `journeyId`; body: `fallbackCallback` with `jobId`, `status`. | `$statusCode == 200`; `JourneyStatus.phase` may become terminal once processing finishes. | `FallbackKycStepResponse` extending `JourneyStatus`. |
-| 4 | `getResult` | Retrieve the final outcome. | `kycAsyncTimeoutFallback_getResult` | Path: `journeyId` from step 1. | `$statusCode == 200`, `phase == "SUCCEEDED"` or `phase == "FAILED"`. | `JourneyOutcome` with `output.status == "KYC_COMPLETED_FALLBACK"` or `output.status == "KYC_FAILED"` (fallback). |
+| 4 | `getResult` | Retrieve the final outcome. | `kycAsyncTimeoutFallback_getResult` | Path: `journeyId` from step 1. | `$statusCode == 200`, `phase == "SUCCEEDED"` or `phase == "FAILED"`. | `JourneyOutcome` with `status == "KYC_COMPLETED_FALLBACK"` or `"KYC_FAILED"` (mirroring `output.status` for the fallback path). |
 
 ## Graphical overview
 

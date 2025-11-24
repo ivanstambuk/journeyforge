@@ -5,7 +5,7 @@ title choice-multi-branch – client activity flow
 start
 
 :Client sends\nPOST /api/v1/journeys/choice-multi-branch/start;
-:Client polls\nGET /api/v1/journeys/{journeyId}/result\nuntil phase != "Running";
+:Client polls\nGET /api/v1/journeys/{journeyId}/result\nuntil phase != "RUNNING";
 
 if (phase == "SUCCEEDED"?) then (yes)
   :Client processes successful\nJourneyOutcome.output;

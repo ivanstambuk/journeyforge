@@ -1540,16 +1540,18 @@ Validation
 - `mapperRef` values must be non-empty strings that resolve to an existing entry in `spec.mappers`.
 
 <a id="dsl-11-schemas"></a>
-## 11. Schemas (optional)
+## 11. Schemas & Final Response (optional)
 - `spec.input.schema`: inline JSON Schema (2020-12) that validates the initial `context` provided at journey start.
 - `spec.output.schema`: inline JSON Schema for the terminal output returned by `succeed` (or the overall `context` if `outputVar` is omitted).
+- `spec.output.response`: optional block that controls how additional business fields are projected into the top-level `JourneyOutcome` alongside the standard envelope fields.
 - `spec.context.schema`: inline JSON Schema for the logical shape of `context` during journey execution (superset of fields that may appear over time).
 - Exporter behaviour:
   - When `spec.input.schema` is present, the OpenAPI exporter uses it as the request body schema in the per-journey OAS.
   - When `spec.output.schema` is present, the exporter specialises `JourneyOutcome.output` to that schema in the per-journey OAS (by inlining or via an internal component).
-  - `spec.context.schema` is primarily for tooling and validation; the exporter MAY expose it as an additional schema component, but it does not change the wire format of `JourneyStartRequest` or `JourneyOutcome`.
+  - When `spec.output.response` is present, the exporter projects the additional top-level fields into the per-journey `JourneyOutcome` schema via `allOf(JourneyOutcome, spec.output.response.schema)`.
+  - `spec.context.schema` is primarily for tooling and validation; the exporter MAY expose it as an additional schema component, but it does not change the wire format of `JourneyStartRequest` or `JourneyOutcome` beyond the `status` field and any explicit projections configured under `spec.output.response`.
 
-Example:
+Shape:
 
 ```yaml
 spec:
@@ -1565,15 +1567,47 @@ spec:
       required: [status]
       properties:
         status: { type: string }
+        reportId: { type: string }
+        # other business fields...
+    response:                         # optional – project extra fields into JourneyOutcome
+      outputVar: result               # context.result object is merged into the top-level JourneyOutcome
+      schema:                         # JSON Schema for the additional top-level fields
+        type: object
+        required: [status]
+        properties:
+          status:
+            type: string
+            description: "Business status code; MUST mirror JourneyOutcome.output.status."
+          reportId:
+            type: string
   context:
     schema:
       type: object
       additionalProperties: true
 ```
 
+Semantics
+- `JourneyOutcome.output`:
+  - As defined in sections 5.4–5.7, `succeed`/`fail` produce a terminal `JourneyOutcome` where `output` is taken from `context.<outputVar>` (when the `succeed` state declares an `outputVar`) or from the full `context`.
+  - Authors SHOULD declare `spec.output.schema` and include a `status` property; this `status` is the canonical business outcome code for the journey (for example `JOB_COMPLETED`, `REPORT_FAILED`).
+- Top-level `JourneyOutcome.status`:
+  - `JourneyOutcome` exposes a required top-level `status: string` field that represents the business outcome code for the run.
+  - Engines MUST ensure that, when `JourneyOutcome.output` is an object with a `status` property, `JourneyOutcome.status` has the same value (`status` mirrors `output.status`).
+  - When `output` is not an object or does not contain `status`, engines MUST still provide a non-empty `status` code; the mapping from the final context/output to this code is platform-specific but MUST be stable for a given journey definition.
+  - Consumers SHOULD treat:
+    - `phase` as the engine lifecycle (`RUNNING` / `SUCCEEDED` / `FAILED`).
+    - `status` as the primary business outcome code (`JOB_COMPLETED`, `REPORT_FAILED`, etc.).
+- `spec.output.response` (projection into `JourneyOutcome`):
+  - Optional block that mirrors the `wait.response` / `webhook.response` projection rules but applies to the final `JourneyOutcome` instead of `JourneyStatus`:
+    - When `spec.output.response.outputVar` is set and `context.<outputVar>` is an object, its properties are shallow-merged into the top level of the JSON `JourneyOutcome` alongside the standard fields.
+    - If `context.<outputVar>` is absent or not an object, the response is a plain `JourneyOutcome` without extra projected fields (other than the mandatory `status`).
+    - The following top-level properties are reserved and MUST NOT be overridden by projected fields: `journeyId`, `journeyName`, `phase`, `status`, `output`, `error`, `tags`, `attributes`, `_links`.
+  - `spec.output.response.schema` MUST be a JSON Schema object describing the additional top-level fields produced by the projection; exporters use it via `allOf(JourneyOutcome, schema)`.
+
 Usage notes
 - Use `spec.input.schema` for what callers must send at start.
-- Use `spec.output.schema` for what successful journeys return as `JourneyOutcome.output`.
+- Use `spec.output.schema` for what successful journeys return as `JourneyOutcome.output`, including the canonical business `status`.
+- Use `spec.output.response` when clients benefit from having selected business fields (for example `status`, `overallStatus`, `reportId`) available as top-level fields on `JourneyOutcome` in addition to the nested `output`.
 - Use `spec.context.schema` to describe the full, evolving shape of `context` (including internal fields like `remote`, `cachedUser`, `problem`), so linters and editors can validate `context.<path>` usage in DataWeave expressions.
 
 ### OpenAPI operation binding (operationRef)

@@ -141,6 +141,29 @@ spec:
 | NFR-001-05 | Schedules are always context-backed and time-bounded. | Avoid runaway jobs and surprise behaviour. | No schedule binding is accepted without initial context and `maxRuns`; attempts to create such schedules fail validation. | Engine scheduler implementation. | ADR‑0017 |
 | NFR-001-06 | Preserve DSL clarity and avoid surface creep. | Spec readability and maintainability. | `task.kind: schedule` is the only scheduling construct in DSL; there is no generic `spec.schedule` block, no scheduled APIs, and no new journey kinds. | DSL reference, linting. | ADR‑0017 |
 
+## Observability
+
+Observability for this feature follows the layered model in `docs/6-decisions/ADR-0025-observability-and-telemetry-layers.md` and is configured via engine/connector/CLI configuration (see `docs/5-operations/observability-telemetry.md`), not via the journey DSL.
+
+- **Core telemetry (required for Feature 001)**
+  - Journey lifecycle metrics:
+    - `journey_runs_started_total{journeyName, journeyVersion, kind}`.
+    - `journey_runs_completed_total{journeyName, journeyVersion, kind, phase}` where `phase ∈ {SUCCEEDED, FAILED}`.
+    - `journey_run_duration_seconds{journeyName, journeyVersion, kind, phase}`.
+  - A single span per journey/API execution with at least:
+    - `journey.name`, `journey.version`, `journey.kind`.
+    - `journey.phase` (per ADR‑0023) and `journey.status` (per ADR‑0024).
+    - `journey.error_code` when terminal outcome includes an error.
+  - Minimal structured logs for terminal journey events and major engine errors using the same bounded attribute set.
+
+- **Extension packs (optional for this feature)**
+  - Engine and connectors MAY provide additional HTTP, connector, schedule, and CLI telemetry packs as defined in ADR‑0025, but enabling them is an operational decision and MUST NOT change journey behaviour or DSL semantics.
+  - This feature does not require any specific pack to be on by default beyond the core layer; recommended defaults are described in the observability runbook.
+
+- **Privacy and DSL surface**
+  - Telemetry MUST obey the default‑deny and redaction rules from ADR‑0025: no payload bodies, header values, or arbitrary `context` fields in metrics, traces, or logs by default; deployments may use attribute allowlists in configuration to expose a small, explicit set of additional attributes.
+  - The DSL remains observability‑agnostic in this feature: there is no `spec.telemetry` block or per‑journey telemetry configuration; journeys are observed based on engine configuration and conventions only.
+
 ## UI / Interaction Mock‑ups
 
 ```yaml

@@ -90,6 +90,25 @@ Single-line `expr: "..."` is still valid but should be avoided in new specs and 
 - The human explicitly encourages long-running, self-directed work so they do not need to babysit. It is acceptable – and preferred – to run multiple commands, apply patches, and iterate deeply on a solution as long as you respect the guardrails in this document.
 - Always balance this persistence with the SDD workflow, the two-phase interaction protocol, and the project’s quality gates. When you must stop early due to platform limits or missing information, state clearly what blocked you and what you would do next.
 
+## Exhaustive Execution for Scoped Tasks
+
+- When the human describes a phase or task with an explicit scope (for example “all example OAS files”, “every journey spec”, “execute entire Phase X”), treat that scope as **exhaustive by default**, not “best‑effort”.
+- Do **not** silently narrow scope (for example, only updating “key” examples) unless the human explicitly approves a reduced scope in this session.
+- Before declaring a phase or task “complete”, you MUST:
+  - Define concrete acceptance conditions in your own reasoning (for example: “no inline JourneyOutcome schemas left in `docs/3-reference/examples/**/**/*.openapi.yaml`”, “no TitleCase phase enums”, “all responses expose `status` at the top level”).
+  - Use repo‑wide search commands (for example `rg`) to confirm there are **zero** remaining occurrences of the old pattern in the declared scope.
+  - Run the relevant quality gates (`qualityGate`, `lintOas`, `lintArazzo`, etc.) and treat any error as a blocker.
+- If you cannot finish the full scope (platform limits, time, or missing information), you MUST:
+  - Say explicitly that the task is **partial**, list which files or patterns remain, and stop without marking the phase as complete.
+- Do not summarise a phase as “done” or “complete” while you know of any remaining files in scope that still use the previous contract, even if they are lint‑clean or “low importance”.
+
+## No Silent Scope Narrowing
+
+- When the human asks to “execute Phase N” or similar, assume they mean “apply to **all artifacts covered by that phase**” unless they explicitly say otherwise.
+- If a strictly exhaustive pass would be unusually large, pause and ask the human whether to:
+  - A) still do the exhaustive pass; or
+  - B) explicitly limit the scope (for example to a subset of modules or examples), and then clearly record that agreed scope in your own reasoning before proceeding.
+
 ## Tracking & Documentation
 - For non-trivial, agent-assisted increments, add a brief “intent log” to the relevant feature `plan.md` or `_current-session.md`, capturing the key prompts/questions, chosen options (A/B/C, etc.) and decisions, and any important commands used to validate the slice (for example `./gradlew spotlessApply check`). Keep this log lightweight (a few bullets), but ensure each increment has a trace of how it was produced and validated.
 
