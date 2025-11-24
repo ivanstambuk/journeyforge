@@ -1,0 +1,38 @@
+@startuml
+!include journey-diagram-theme.puml
+title async-fire-and-observe – state transitions
+
+[*] --> enqueueJob
+
+state enqueueJob
+state recordJob
+state waitForNextPoll
+state fetchJobStatus
+state decideJobStatus
+state scheduleNextPoll
+state completeFromJob
+state done
+state failFromJob
+
+enqueueJob --> recordJob : POST async-jobs\nresultVar: jobStart
+recordJob --> waitForNextPoll : store jobId + poll settings
+waitForNextPoll --> fetchJobStatus : timer fires
+fetchJobStatus --> decideJobStatus : GET async-jobs/{jobId}
+
+decideJobStatus --> completeFromJob : jobStatus.body.state == "COMPLETED"
+decideJobStatus --> failFromJob : jobStatus.body.state == "FAILED"
+decideJobStatus --> scheduleNextPoll : default (still running)
+
+scheduleNextPoll --> waitForNextPoll : increment pollAttempts
+
+completeFromJob --> done
+done --> [*]
+
+failFromJob --> [*]
+
+note right of waitForNextPoll
+  Timer-based delay between
+  status polls using pollIntervalSeconds
+end note
+
+@enduml

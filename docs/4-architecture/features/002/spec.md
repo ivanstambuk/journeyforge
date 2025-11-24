@@ -66,11 +66,11 @@ Proposed pattern:
   - Sets `attributes.subjectId` to that value internally (not visible in the start request contract). When no valid, non-anonymous subject is available (for example, anonymous tokens with an all-zero UUID or no token in an `optional` policy), `attributes.subjectId` remains unset.
   - Optionally sets `attributes.initiatedBy = "user"` and adds a `self-service` tag.
 - The Journeys API exposes a query like:
-  - `GET /api/v1/journeys?subjectId=<sub>&phase=Running`
+- `GET /api/v1/journeys?subjectId=<sub>&phase=RUNNING`
 - Result items include:
   - `journeyId`
   - `journeyName`
-  - `phase` (Running)
+- `phase` (RUNNING)
   - optionally `tags` and selected `attributes`.
 
 This avoids searching inside arbitrary `context` payloads and gives a consistent, engine-level notion of “journeys owned by this subject”.
@@ -83,7 +83,7 @@ Problem:
 Proposed pattern:
 - Set `attributes.tenantId` and optional `attributes.region` at journey start, typically via the attribute sourcing rules (for example, from headers such as `X-Tenant-Id`, from a `region` baggage key, or from well-known payload fields).
 - Support queries like:
-  - `GET /api/v1/journeys?tenantId=<tenant>&phase=Running`
+- `GET /api/v1/journeys?tenantId=<tenant>&phase=RUNNING`
 - Use tags for high-level labels (`metadata.tags: [payments, kyc]`) and attributes for concrete IDs.
 
 ### Correlation With External Systems
@@ -117,12 +117,12 @@ Proposed pattern:
 ### Per-Subject Concurrency Limits (For Refinement)
 
 Problem:
-- Enforce limits like “at most 3 `loan-application` journeys in `Running` phase per subject”.
+- Enforce limits like “at most 3 `loan-application` journeys in `RUNNING` phase per subject”.
 
 Proposed pattern (conceptual):
 - Use `attributes.subjectId` as the canonical owner identifier.
 - Before starting a new journey, the engine (or a control-plane policy service) checks a query such as:
-  - `WHERE journeyName = 'loan-application' AND attributes.subjectId = <sub> AND phase = 'Running'`.
+  - `WHERE journeyName = 'loan-application' AND attributes.subjectId = <sub> AND phase = 'RUNNING'`.
 - If the count exceeds a configured threshold (for example, 3), the start request is rejected or redirected.
 
 This fits naturally with the attributes model; the exact enforcement mechanism (pre-start hook vs separate policy layer) is left for a future feature spec.
@@ -158,11 +158,11 @@ Directional proposal for the Journeys API:
   - `subjectId` – filters by `attributes.subjectId` (used for “my open journeys”).
   - `tenantId` – filters by `attributes.tenantId` (tenant-scoped dashboards).
   - `journeyName` – filters by `journeyName` (for example, `loan-application`).
-  - `phase` – filters by `phase` (`Running`, `Succeeded`, `Failed`).
+  - `phase` – filters by `phase` (`RUNNING`, `SUCCEEDED`, `FAILED`).
 
 - **Tag filters:**
   - `tag` – repeatable query parameter; when present multiple times, all specified tags MUST be present on the journey (AND semantics).
-  - Used for queries such as “all `self-service` journeys” or “all `kyc` journeys in `Running` phase”.
+- Used for queries such as “all `self-service` journeys” or “all `kyc` journeys in `RUNNING` phase”.
 
 - **Correlation filters (attribute-backed, optional but recommended):**
   - `orderId` – filters by `attributes.orderId`.
@@ -172,7 +172,7 @@ Directional proposal for the Journeys API:
 
 - **Semantics:**
   - All provided filters are combined with logical AND:
-    - for example, `subjectId=alice&phase=Running&journeyName=loan-application` filters to Alice’s running loan applications.
+    - for example, `subjectId=alice&phase=RUNNING&journeyName=loan-application` filters to Alice’s running loan applications.
   - Query parameters map directly to indices over `journeyName`, `phase`, `tags`, and selected attributes (`subjectId`, `tenantId`, and the correlation IDs above).
   - Pagination, sorting, and response shapes are defined in the Journeys API reference; this feature spec focuses on which dimensions are exposed, not on list mechanics.
 
@@ -187,7 +187,7 @@ Directional proposal for the Journeys API:
 
 ## UI / Interaction Mock-ups
 ```
-GET /api/v1/journeys?journeyName=loan-application&phase=Running&tenantId=tenant-001&tag=self-service
+GET /api/v1/journeys?journeyName=loan-application&phase=RUNNING&tenantId=tenant-001&tag=self-service
 
 Response:
 {
@@ -195,7 +195,7 @@ Response:
     {
       "journeyId": "93d7f7a4-7a77-4e7e-9f8e-1a2b3c4d5e6f",
       "journeyName": "loan-application",
-      "phase": "Running",
+      "phase": "RUNNING",
       "currentState": "waitForApproval",
       "updatedAt": "2025-11-20T10:15:30Z",
       "tags": ["self-service", "kyc"],

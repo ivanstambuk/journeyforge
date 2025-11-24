@@ -77,7 +77,7 @@ The engine’s journey model gains two metadata surfaces:
         JSON body. Tags are derived by the engine according to the spec.
 - Use cases:
   - Filter journeys by high-level labels (`self-service`, `kyc`, `onboarding`, etc.).
-  - Drive dashboards and coarse policy (for example, “all `kyc` journeys in `Running` phase”).
+  - Drive dashboards and coarse policy (for example, “all `kyc` journeys in `RUNNING` phase”).
 - Immutability:
   - For v1, instance tags are immutable after the journey is started.
   - Post-v1 enrichment (if introduced) must be append-only (new tags only, no removals).
@@ -240,7 +240,7 @@ We standardise a simple query model for listing journeys, backed by tags and att
     higher-level convenience but is not mandated by this ADR.
 - Filters (thin shims over fields/attributes):
   - `journeyName` – filters by journey name.
-  - `phase` – `Running`, `Succeeded`, `Failed`.
+  - `phase` – `RUNNING`, `SUCCEEDED`, `FAILED`.
   - `subjectId` – maps to `attributes.subjectId`.
   - `tenantId` – maps to `attributes.tenantId`.
   - `tag` – repeatable; all specified tags must be present (AND semantics).

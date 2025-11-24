@@ -37,12 +37,12 @@ This use case builds on:
   - `spec.errors.envelope.format: problemDetails` or `custom` (single envelope per journey).
 - API response mapping (`kind: Api`):
   - `spec.apiResponses.rules`:
-    - `when.phase: Succeeded | Failed`.
+    - `when.phase: SUCCEEDED | FAILED`.
     - Optional `when.errorType` (Problem `type`) and DW `predicate`.
     - `status` or `statusExpr` to set HTTP status.
   - `spec.apiResponses.default`:
-    - `Succeeded`: default 200.
-    - `Failed`: default Problem `status` or 500.
+    - `SUCCEEDED`: default 200.
+    - `FAILED`: default Problem `status` or 500.
 
 ## Example – API with Problem-based errors and custom status mapping
 
@@ -105,22 +105,22 @@ spec:
   apiResponses:
     rules:
       - when:
-          phase: Failed
+          phase: FAILED
           errorType: "urn:subject-unauthenticated"
         status: 401
       - when:
-          phase: Failed
+          phase: FAILED
           errorType: "urn:subject-unauthorized"
         status: 403
       - when:
-          phase: Failed
+          phase: FAILED
           predicate:
             lang: dataweave
             expr: |
               payload.error.status >= 500
         status: 502
       - when:
-          phase: Succeeded
+          phase: SUCCEEDED
           predicate:
             lang: dataweave
             expr: |
@@ -129,8 +129,8 @@ spec:
           lang: dataweave
           expr: context.api.status
     default:
-      Succeeded: 200
-      Failed: fromProblemStatus
+      SUCCEEDED: 200
+      FAILED: fromProblemStatus
 ```
 
 States (sketch):
@@ -170,4 +170,3 @@ States (sketch):
 - You want to:
   - Rewrite or group downstream errors into your own HTTP status vocabulary.
   - Preserve or selectively propagate upstream 2xx/4xx/5xx codes where appropriate.
-

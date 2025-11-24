@@ -9,7 +9,7 @@ start
 repeat
   :Client calls\nGET /api/v1/journeys/{journeyId}/result;
   :Journeys API returns\nJourneyOutcome with phase/output;
-repeat while (phase == "Running" and\ncurrentState != "waitForFnolDetails") is (creating claim)
+repeat while (phase == "RUNNING" and\ncurrentState != "waitForFnolDetails") is (creating claim)
 
 if (currentState == "waitForFnolDetails"?) then (yes)
   :Claimant submits additional FNOL details\nPOST /api/v1/journeys/{journeyId}/steps/submitFnolDetails;
@@ -24,7 +24,7 @@ if (currentState == "waitForSettlementApproval"?) then (yes)
   :Claims ops confirms or denies settlement\nPOST /api/v1/journeys/{journeyId}/steps/confirmSettlement;
 endif
 
-if (phase == "Succeeded" and finalStatus == "SETTLED"?) then (settled)
+if (phase == "SUCCEEDED" and finalStatus == "SETTLED"?) then (settled)
   :Client confirms settlement and updates\nclaim and payment records;
   stop
 else (denied)
@@ -33,4 +33,3 @@ else (denied)
 endif
 
 @enduml
-

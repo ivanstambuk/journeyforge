@@ -61,17 +61,17 @@ Here’s a breakdown of key steps over the Journeys API, aligned with `healthcar
 
 | # | Step ID | Description | Operation ID | Parameters | Success Criteria | Outputs |
 |---:|---------|-------------|--------------|------------|------------------|---------|
-| 1 | `startJourney` | Start a new `healthcare-appointment-referral` journey instance. | `healthcareAppointmentReferral_start` | Body: `startRequest` with referral and specialty details. | `$statusCode == 202` and a `journeyId` is returned. | `journeyId` for the referral. |
-| 2 | `getStatusAfterSearch` | Optional status check after appointment options have been proposed. | `healthcareAppointmentReferral_getStatus` | Path: `journeyId` from step 1. | `$statusCode == 200`; `phase == "Running"` and `currentState` reflects the patient decision step. | `JourneyStatus` with `phase` and `currentState`. |
+| 1 | `startJourney` | Start a new `healthcare-appointment-referral` journey instance (synchronous to the first patient decision step). | `healthcareAppointmentReferral_start` | Body: `startRequest` with referral and specialty details. | `$statusCode == 200`; `phase == "RUNNING"` and `currentState` reflects the patient decision step. | `JourneyStatus` for the referral. |
+| 2 | `getStatusAfterSearch` | Optional status check after appointment options have been proposed. | `healthcareAppointmentReferral_getStatus` | Path: `journeyId` from step 1. | `$statusCode == 200`; `phase == "RUNNING"` and `currentState` reflects the patient decision step. | `JourneyStatus` with `phase` and `currentState`. |
 | 3 | `patientConfirm` | Patient confirms one of the proposed appointments via the generic `patientDecision` step. | `healthcareAppointmentReferral_patientDecision` | Path: `journeyId`; body: `patientDecision` with `action: "CONFIRM"` and `appointmentId`. | `$statusCode == 200`; booking request has been sent. | `PatientDecisionStepResponse` extending `JourneyStatus`. |
 | 4 | `providerConfirms` | Provider/EMR posts a `CONFIRMED` status for the appointment. | `healthcareAppointmentReferral_waitForAppointmentStatus` | Path: `journeyId`; body: `providerCallback` with `appointmentId`, `status: "CONFIRMED"`. | `$statusCode == 200`; journey transitions toward completion. | `AppointmentStatusStepResponse` extending `JourneyStatus`. |
-| 5 | `getResult` | Retrieve the final `APPOINTMENT_CONFIRMED` or `APPOINTMENT_COMPLETED` outcome. | `healthcareAppointmentReferral_getResult` | Path: `journeyId` from step 1. | `$statusCode == 200`, `phase == "Succeeded"` or `phase == "Failed"`. | `JourneyOutcome` with `ReferralOutcome`. |
+| 5 | `getResult` | Retrieve the final `APPOINTMENT_CONFIRMED` or `APPOINTMENT_COMPLETED` outcome. | `healthcareAppointmentReferral_getResult` | Path: `journeyId` from step 1. | `$statusCode == 200`, `phase == "SUCCEEDED"` or `phase == "FAILED"`. | `JourneyOutcome` with `ReferralOutcome`. |
 
 ### Referral cancelled by patient
 
 | # | Step ID | Description | Operation ID | Parameters | Success Criteria | Outputs |
 |---:|---------|-------------|--------------|------------|------------------|---------|
-| 1 | `startJourney` | Start a new `healthcare-appointment-referral` journey instance. | `healthcareAppointmentReferral_start` | Body: `startRequest` with referral details. | `$statusCode == 202` and a `journeyId` is returned. | `journeyId` for the referral. |
+| 1 | `startJourney` | Start a new `healthcare-appointment-referral` journey instance (synchronous to the first patient decision step). | `healthcareAppointmentReferral_start` | Body: `startRequest` with referral details. | `$statusCode == 200`; `phase == "RUNNING"` and `currentState` reflects the patient decision step. | `JourneyStatus` for the referral. |
 | 2 | `patientCancels` | Patient cancels the referral via `patientDecision`. | `healthcareAppointmentReferral_patientDecision` | Path: `journeyId`; body: `patientDecision` with `action: "CANCEL"`. | `$statusCode == 200`; journey transitions to a terminal state. | `PatientDecisionStepResponse` extending `JourneyStatus`. |
 | 3 | `getResult` | Retrieve the final `PATIENT_CANCELLED` outcome. | `healthcareAppointmentReferral_getResult` | Path: `journeyId` from step 1. | `$statusCode == 200`. | `JourneyOutcome` with `ReferralOutcome.status == "PATIENT_CANCELLED"`. |
 
@@ -115,4 +115,3 @@ Here’s a breakdown of key steps over the Journeys API, aligned with `healthcar
     - `referralExpiryTimer` is a `timer` that converts `referralExpiryDays` into an ISO-8601 duration.
     - When it fires first, `markReferralExpired` sets `status: "EXPIRED"`, `expiryAt`, and carries current `appointments` into the outcome.
 - `referralCompleted` is a `succeed` state returning `ReferralOutcome` via `outputVar: outcome`.
-

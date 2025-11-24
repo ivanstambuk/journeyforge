@@ -11,9 +11,6 @@ participant "Journeys API" as Journeys
 Client -> Journeys: POST /api/v1/journeys/support-case-sla/start\nSupportCaseStartRequest
 Journeys -> Assignment: POST https://support.example.com/cases/assign\n(case details)
 Assignment --> Journeys: 200 OK
-Journeys --> Client: 202 Accepted\nJourneyStartResponse (journeyId, ...)
-
-Client -> Journeys: GET /api/v1/journeys/{journeyId}\n(getStatusAssigned)
 Journeys --> Client: 200 OK\nJourneyStatus (case assigned)
 
 Client -> Journeys: GET /api/v1/journeys/{journeyId}\n(getStatusInProgress)

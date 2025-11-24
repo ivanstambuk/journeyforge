@@ -8,7 +8,7 @@ participant "Journeys API" as Journeys
 participant "Notification Service" as Notifications
 
 OrderSystem -> Journeys: POST /api/v1/journeys/post-delivery-feedback/start\nPostDeliveryFeedbackStartRequest
-Journeys --> OrderSystem: 202 Accepted\nJourneyStartResponse (journeyId, ...)
+Journeys --> OrderSystem: 200 OK\nJourneyStatus (phase = Running,\ncurrentState = waitForDelivery)
 
 OrderSystem -> Journeys: POST /api/v1/journeys/{journeyId}/steps/confirmDelivery\nDeliveryConfirmationInput
 Journeys --> OrderSystem: 200 OK\nDeliveryConfirmationStepResponse
@@ -22,4 +22,3 @@ Journeys -> Notifications: POST /notifications/sendFeedbackRequest\n(with orderI
 Notifications --> Journeys: 200 OK\n(feedback request accepted)
 
 @enduml
-

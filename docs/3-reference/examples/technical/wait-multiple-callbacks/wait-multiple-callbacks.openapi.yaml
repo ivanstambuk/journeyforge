@@ -1,0 +1,98 @@
+openapi: 3.1.0
+info:
+  title: wait-multiple-callbacks – Journeys API example
+  version: 0.1.0
+  description: "JourneyForge – wait-multiple-callbacks"
+  contact:
+    name: JourneyForge
+servers:
+  - url: /api/v1
+tags:
+  - name: wait-multiple-callbacks
+paths:
+  /api/v1/journeys/wait-multiple-callbacks/start:
+    post:
+      summary: Start a journey that waits for N callbacks using a single external-input step.
+      operationId: waitMultipleCallbacks_start
+      description: Start the wait-multiple-callbacks journey (synchronous to first wait step).
+      tags:
+        - wait-multiple-callbacks
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WaitMultipleCallbacksStartRequest"
+      responses:
+        "200":
+          description: Journey status at the first external-input state (waitForCallback)
+          content:
+            application/json:
+              schema:
+                $ref: "../../../openapi/journeys.openapi.yaml#/components/schemas/JourneyStatus"
+  /api/v1/journeys/{journeyId}/steps/waitForCallback:
+    post:
+      summary: Submit a callback payload; the journey loops on the same step until all expected callbacks are received.
+      operationId: waitMultipleCallbacks_waitForCallback
+      description: Submit a callback payload for the waitForCallback step.
+      tags:
+        - wait-multiple-callbacks
+      parameters:
+        - name: journeyId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/WaitMultipleCallbacksStepInput"
+      responses:
+        "200":
+          description: Updated journey status after processing the callback.
+          content:
+            application/json:
+              schema:
+                $ref: "../../../openapi/journeys.openapi.yaml#/components/schemas/JourneyStatus"
+  /api/v1/journeys/{journeyId}/result:
+    get:
+      summary: Get the final outcome once all callbacks have been processed.
+      operationId: waitMultipleCallbacks_getResult
+      description: Retrieve the final JourneyOutcome once all callbacks have been processed.
+      tags:
+        - wait-multiple-callbacks
+      parameters:
+        - name: journeyId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Final outcome of the wait-multiple-callbacks journey.
+          content:
+            application/json:
+              schema:
+                $ref: "../../../openapi/journeys.openapi.yaml#/components/schemas/JourneyOutcome"
+
+components:
+  schemas:
+    WaitMultipleCallbacksStartRequest:
+      type: object
+      required:
+        - expectedCount
+      properties:
+        expectedCount:
+          type: integer
+          minimum: 1
+        correlationId:
+          type: string
+      additionalProperties: true
+    WaitMultipleCallbacksStepInput:
+      type: object
+      properties:
+        payload:
+          type: object
+      additionalProperties: true

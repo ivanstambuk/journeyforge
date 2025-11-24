@@ -43,7 +43,7 @@ Key points:
 - `onTimeout`:
   - Required when `spec.execution` is present.
   - Contains `errorCode` and `reason`, which shape the timeout failure in the same way as a `fail` state:
-    - For journeys, they map to `JourneyOutcome.phase = Failed` and `JourneyOutcome.error.{code,reason}`.
+    - For journeys, they map to `JourneyOutcome.phase = FAILED` and `JourneyOutcome.error.{code,reason}`.
     - For APIs, they map to the error envelope exposed over HTTP, following the same journey-level error configuration rules as other failures (see ADR‑0003 and `spec.errors`).
 
 Execution semantics:
@@ -61,7 +61,7 @@ Execution semantics:
     - Detect the timeout immediately after the operation completes, before scheduling the next state.
 - Timeout outcome:
   - When the global deadline is reached, the engine stops scheduling new states and terminates the run using `spec.execution.onTimeout`:
-    - For `kind: Journey`: produce a `JourneyOutcome` with `phase = Failed` and `error.{code,reason}` taken from `onTimeout`.
+    - For `kind: Journey`: produce a `JourneyOutcome` with `phase = FAILED` and `error.{code,reason}` taken from `onTimeout`.
     - For `kind: Api`: terminate the HTTP request with a non‑2xx response that exposes the same `code` and `reason`.
 - Exporters and the engine:
     - MAY map global execution timeouts to HTTP 504 Gateway Timeout by default.

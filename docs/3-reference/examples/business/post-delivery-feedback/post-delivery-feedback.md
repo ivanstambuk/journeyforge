@@ -41,9 +41,9 @@ Here’s a breakdown of the steps you’ll call over the Journeys API for the ma
 
 | # | Step ID | Description | Operation ID | Parameters | Success Criteria | Outputs |
 |---:|---------|-------------|--------------|------------|------------------|---------|
-| 1 | `startJourney` | Start a new `post-delivery-feedback` journey instance for the order. | `postDeliveryFeedback_start` | Body: `startRequest` with order and expected delivery information. | `$statusCode == 202` and a `journeyId` is returned. | `journeyId` for the order instance. |
+| 1 | `startJourney` | Start a new `post-delivery-feedback` journey instance for the order (synchronous to the first wait step). | `postDeliveryFeedback_start` | Body: `startRequest` with order and expected delivery information. | `$statusCode == 200`; `phase == "RUNNING"` and `currentState == "waitForDelivery"`. | `JourneyStatus` for the order instance. |
 | 2 | `confirmDelivery` | Confirm that the order has been delivered (or cancelled). | `postDeliveryFeedback_confirmDelivery` | Path: `journeyId`; body: `deliveryConfirmation` (`status`, `deliveryDate`). | `$statusCode == 200`; `JourneyStatus.phase` and `currentState` progress to terminal state. | `DeliveryConfirmationStepResponse` with projected status and deliveryDate. |
-| 3 | `getResult` | Retrieve the final outcome once the delivery step has completed. | `postDeliveryFeedback_getResult` | Path: `journeyId` from step 1. | `$statusCode == 200`, `phase == "Succeeded"` or `phase == "Failed"`. | `JourneyOutcome` with `output.finalStatus` and `deliveryDate`. |
+| 3 | `getResult` | Retrieve the final outcome once the delivery step has completed. | `postDeliveryFeedback_getResult` | Path: `journeyId` from step 1. | `$statusCode == 200`, `phase == "SUCCEEDED"` or `phase == "FAILED"`. | `JourneyOutcome` with `output.finalStatus` and `deliveryDate`. |
 
 The compensation journey runs asynchronously for delivered orders and is not directly visible in the per-journey OpenAPI surface; its behaviour is described below.
 

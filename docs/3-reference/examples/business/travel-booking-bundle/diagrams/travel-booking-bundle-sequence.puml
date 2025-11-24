@@ -8,7 +8,7 @@ actor "Trip Aggregator" as Aggregator
 participant "Journeys API" as Journeys
 
 Client -> Journeys: POST /api/v1/journeys/travel-booking-bundle/start\nTravelBookingStartRequest
-Journeys --> Client: 202 Accepted\nJourneyStartResponse (journeyId, ...)
+Journeys --> Client: 200 OK\nJourneyStatus (reservations evaluated, awaiting traveler confirmation)
 
 Client -> Journeys: GET /api/v1/journeys/{journeyId}\n(getStatusAfterReservation)
 Journeys --> Client: 200 OK\nJourneyStatus (reservations evaluated)

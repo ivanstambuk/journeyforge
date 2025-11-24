@@ -1,0 +1,38 @@
+@startuml
+!include journey-diagram-theme.puml
+title async-report-generation – state transitions
+
+[*] --> startReportJob
+
+state startReportJob
+state recordReportJob
+state waitForReportPoll
+state fetchReportStatus
+state decideReportStatus
+state scheduleNextReportPoll
+state completeFromReport
+state reportDone
+state failFromReport
+
+startReportJob --> recordReportJob : POST /jobs\nresultVar: reportStart
+recordReportJob --> waitForReportPoll : store reportJobId + polling config
+waitForReportPoll --> fetchReportStatus : timer fires
+fetchReportStatus --> decideReportStatus : GET /jobs/{reportJobId}
+
+decideReportStatus --> completeFromReport : state == "COMPLETED"
+decideReportStatus --> failFromReport : state == "FAILED"
+decideReportStatus --> scheduleNextReportPoll : default (still running)
+
+scheduleNextReportPoll --> waitForReportPoll : increment pollAttempts
+
+completeFromReport --> reportDone
+reportDone --> [*]
+
+failFromReport --> [*]
+
+note right of startReportJob
+  task.kind: httpCall
+  starts background report job
+end note
+
+@enduml

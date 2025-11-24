@@ -10,9 +10,7 @@ actor "Board UI" as Board
 participant "Journeys API" as Journeys
 
 Client -> Journeys: POST /api/v1/journeys/b2b-purchase-order/start\nB2bPurchaseOrderStartRequest
-Journeys --> Client: 202 Accepted\nJourneyStartResponse (journeyId, ...)
-
-Client -> Journeys: GET /api/v1/journeys/{journeyId}\n(getStatusAfterCreation)
+Journeys -> Journeys: Create purchase order\nand enter waitForLevel1Approval
 Journeys --> Client: 200 OK\nJourneyStatus (waiting for level 1 approval)
 
 note over Client, Manager

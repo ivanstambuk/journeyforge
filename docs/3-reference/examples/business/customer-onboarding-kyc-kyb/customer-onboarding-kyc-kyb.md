@@ -63,9 +63,9 @@ The Arazzo workflow `customer-onboarding-kyc-kyb.arazzo.yaml` focuses on start/s
 
 | # | Step ID | Description | Operation ID | Parameters | Success Criteria | Outputs |
 |---:|---------|-------------|--------------|------------|------------------|---------|
-| 1 | `startJourney` | Start a new `customer-onboarding-kyc-kyb` journey instance. | `customerOnboardingKycKyb_start` | Body: `startRequest` with customer + business details and UBOs. | `$statusCode == 202` and a `journeyId` is returned. | `journeyId` for the onboarding instance. |
-| 2 | `getStatusRunning` | Optional status check while KYC, KYB, registry, and risk checks are in progress. | `customerOnboardingKycKyb_getStatus` | Path: `journeyId` from step 1. | `$statusCode == 200`; `phase == "Running"`. | `JourneyStatus` with `phase` and `currentState`. |
-| 3 | `getResult` | Retrieve the final APPROVED, REFERRED, or REJECTED outcome. | `customerOnboardingKycKyb_getResult` | Path: `journeyId` from step 1. | `$statusCode == 200`, `phase == "Succeeded"` or `phase == "Failed"`. | `JourneyOutcome` with `CustomerOnboardingKycKybOutcome`. |
+| 1 | `startJourney` | Start a new `customer-onboarding-kyc-kyb` journey instance (synchronous to initial checks). | `customerOnboardingKycKyb_start` | Body: `startRequest` with customer + business details and UBOs. | `$statusCode == 200`; `phase == "RUNNING"` while KYC, KYB, registry, and risk checks are in progress. | `JourneyStatus` with `phase` and `currentState`. |
+| 2 | `getStatusRunning` | Optional status check while KYC, KYB, registry, and risk checks are in progress. | `customerOnboardingKycKyb_getStatus` | Path: `journeyId` from step 1 (or from `JourneyStatus.journeyId`). | `$statusCode == 200`; `phase == "RUNNING"`. | `JourneyStatus` with `phase` and `currentState`. |
+| 3 | `getResult` | Retrieve the final APPROVED, REFERRED, or REJECTED outcome. | `customerOnboardingKycKyb_getResult` | Path: `journeyId` from step 1. | `$statusCode == 200`, `phase == "SUCCEEDED"` or `phase == "FAILED"`. | `JourneyOutcome` with `CustomerOnboardingKycKybOutcome`. |
 
 Network flows for the external providers (KYC, KYB, registry, risk) are described conceptually in the Implementation notes rather than surfaced as separate Arazzo steps.
 
@@ -114,4 +114,3 @@ Network flows for the external providers (KYC, KYB, registry, risk) are describe
     - `kycResult`, `kybResult`, merged `ubos`, and `creditDecision` / `complianceDecision`.
 - `onboardingCompleted`:
   - `succeed` state that returns the built outcome via `outputVar: outcome`.
-

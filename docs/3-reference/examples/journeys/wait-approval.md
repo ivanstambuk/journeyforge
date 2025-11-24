@@ -30,7 +30,7 @@ Here’s a breakdown of the steps you’ll call over the Journeys API for the pr
 
 | # | Step ID | Description | Operation ID | Parameters | Success Criteria | Outputs |
 |---:|---------|-------------|--------------|------------|------------------|---------|
-| 1 | `startJourney` | Start a new `wait-approval` journey instance. | `waitApproval_start` | Body: `startRequest` as defined by JourneyStartRequest. | `$statusCode == 202` and a `journeyId` is returned. | `journeyId` for the new journey instance. |
+| 1 | `startJourney` | Start a new `wait-approval` journey instance (synchronous to the first wait step). | `waitApproval_start` | Body: `startRequest` as defined by JourneyStartRequest. | `$statusCode == 200`, `phase == "RUNNING"`, and `currentState` points at `waitForApproval`. | `JourneyStatus` at the first external-input state. |
 | 2 | `provideApproval` | Submit manual approval or rejection for the `waitForApproval` step. | `waitApproval_waitForApproval` | Path: `journeyId`; body: approval payload (for example `decision`, `comment`). | `$statusCode == 200` and `JourneyStatus.phase` reflects the new decision. | Updated `JourneyStatus` after processing the approval input. |
 | 3 | `getResult` | Poll for the final journey outcome once terminal. | `waitApproval_getResult` | Path: `journeyId` from step 1. | `$statusCode == 200` and `phase` is `Succeeded` or `Failed`. | `JourneyOutcome` for this journey. |
 

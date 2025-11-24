@@ -43,21 +43,21 @@ spec:
   outcomes:
     SucceededLowAmount:
       when:
-        phase: Succeeded
+        phase: SUCCEEDED
         predicate:
           lang: dataweave
           expr: |
             context.amount <= 1000
     SucceededHighAmount:
       when:
-        phase: Succeeded
+        phase: SUCCEEDED
         predicate:
           lang: dataweave
           expr: |
             context.amount > 1000
     FailedBusinessRule:
       when:
-        phase: Failed
+        phase: FAILED
         predicate:
           lang: dataweave
           expr: |

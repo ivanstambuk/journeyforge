@@ -48,21 +48,21 @@ spec:
   outcomes:
     SucceededLowAmount:
       when:
-        phase: Succeeded
+        phase: SUCCEEDED
         predicate:
           lang: dataweave
           expr: |
             context.amount <= 1000
     SucceededHighAmount:
       when:
-        phase: Succeeded
+        phase: SUCCEEDED
         predicate:
           lang: dataweave
           expr: |
             context.amount > 1000
     FailedBusinessRule:
       when:
-        phase: Failed
+        phase: FAILED
         predicate:
           lang: dataweave
           expr: |
@@ -99,4 +99,3 @@ spec:
 
 - Downstream analytics should rely on `spec.outcomes` labels rather than raw `errorCode` values.
 - Make sure business-rule failures consistently set `fail.errorCode` so the `FailedBusinessRule` predicate remains accurate.
-

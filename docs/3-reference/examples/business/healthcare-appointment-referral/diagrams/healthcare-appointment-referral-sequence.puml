@@ -10,7 +10,7 @@ participant "Journeys API" as Journeys
 Patient -> Journeys: POST /api/v1/journeys/healthcare-appointment-referral/start\nReferralStartRequest
 Journeys -> Scheduler: POST https://scheduler.example.com/referrals/search-appointments\n(referral details)
 Scheduler --> Journeys: 200 OK\n(appointment options)
-Journeys --> Patient: 202 Accepted\nJourneyStartResponse (journeyId, ...)
+Journeys --> Patient: 200 OK\nJourneyStatus (phase = Running,\ncurrentState = patientDecision)
 
 == Patient confirms ==
 
@@ -26,4 +26,3 @@ Patient -> Journeys: GET /api/v1/journeys/{journeyId}/result\n(getResult)
 Journeys --> Patient: 200 OK\nJourneyOutcome (APPOINTMENT_CONFIRMED / APPOINTMENT_COMPLETED)
 
 @enduml
-

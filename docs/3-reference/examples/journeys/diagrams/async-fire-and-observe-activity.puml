@@ -1,0 +1,21 @@
+@startuml
+!include journey-diagram-theme.puml
+title async-fire-and-observe – client activity flow
+
+start
+
+:Client sends\nPOST /api/v1/journeys/async-fire-and-observe/start\nwith AsyncFireAndObserveStartRequest;
+
+:Journeys API enqueues async job\nwith Jobs API and returns\n202 Accepted + JourneyStartResponse\n(journeyId, statusUrl);
+
+repeat
+  :Client polls\nGET /journeys/{journeyId}\n(getStatusRunning);
+  :Journeys API returns\nJourneyStatus with phase/currentState;
+repeat while (phase == "RUNNING") is (job still in progress)
+
+:Client calls\nGET /journeys/{journeyId}/result\n(getResult) once phase is terminal;
+:Journeys API returns\nJourneyOutcome with output.status\n(JOB_COMPLETED or JOB_FAILED);
+
+stop
+
+@enduml

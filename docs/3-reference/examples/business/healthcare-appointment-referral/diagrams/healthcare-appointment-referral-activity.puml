@@ -8,8 +8,8 @@ start
 
 repeat
   :Patient app polls\nGET /journeys/{journeyId}\nfor status and appointment options;
-  :Journeys API returns\nJourneyStatus (Running) and appointments\nvia downstream integration;
-repeat while (phase == "Running" and\nno final outcome yet)
+  :Journeys API returns\nJourneyStatus (RUNNING) and appointments\nvia downstream integration;
+repeat while (phase == "RUNNING" and\nno final outcome yet)
 
 if (output.status == "APPOINTMENT_COMPLETED"?) then (completed)
   :Patient app shows final\ncompleted appointment details;
@@ -26,4 +26,3 @@ endif
 stop
 
 @enduml
-

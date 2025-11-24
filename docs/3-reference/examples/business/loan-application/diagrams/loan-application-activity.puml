@@ -5,19 +5,16 @@ title loan-application – client activity flow
 start
 
 :Client sends\nPOST /api/v1/journeys/loan-application/start\nwith LoanApplicationStartRequest;
-
-repeat
-  :Client calls\nGET /api/v1/journeys/{journeyId}/result;
-  :Journeys API returns\nJourneyOutcome with phase/output;
-repeat while (phase == "Running" and\ncurrentState != "waitForUnderwriter") is (checks running)
+:Journeys API runs initial checks\nand returns JourneyStatus or\nJourneyOutcome depending on path;
 
 if (currentState == "waitForUnderwriter"?) then (yes)
   :Underwriter submits decision\nPOST /api/v1/journeys/{journeyId}/steps/underwriterApproval\nwith UnderwriterDecisionInput;
-  :Client resumes polling\nGET /api/v1/journeys/{journeyId}/result;
-  :Journeys API returns\nJourneyOutcome with updated decision;
 endif
 
-if (phase == "Succeeded" and decision == "APPROVED"?) then (approved)
+:Client calls\nGET /api/v1/journeys/{journeyId}/result;
+:Journeys API returns\nJourneyOutcome with decision and terms;
+
+if (phase == "SUCCEEDED" and decision == "APPROVED"?) then (approved)
   :Client processes approved terms\n(approvedAmount, interestRate, offerId);
   stop
 else (rejected or error)
@@ -26,4 +23,3 @@ else (rejected or error)
 endif
 
 @enduml
-

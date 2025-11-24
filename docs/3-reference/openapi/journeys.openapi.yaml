@@ -10,7 +10,7 @@ servers:
 paths:
   /journeys/{journeyName}/start:
     post:
-      summary: Start a new journey instance
+      summary: Start a new journey instance (sync or async)
       tags:
         - journeys
       parameters:
@@ -26,13 +26,21 @@ paths:
             schema:
               $ref: "#/components/schemas/JourneyStartRequest"
       responses:
+        "200":
+          description: "Synchronous start result for journeys whose spec.lifecycle.startMode is sync: either a terminal JourneyOutcome or a JourneyStatus at the first external-input state."
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: "#/components/schemas/JourneyOutcome"
+                  - $ref: "#/components/schemas/JourneyStatus"
         "202":
-          description: Accepted
+          description: "Accepted; asynchronous start for journeys whose spec.lifecycle.startMode is async. The body is a JourneyStartResponse describing the newly created instance."
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/JourneyStartResponse"
-      description: Start a new journey instance
+      description: "Start a new journey instance. Actual behaviour (synchronous vs asynchronous) is determined per journey by spec.lifecycle.startMode; see the DSL reference for details."
       operationId: journeys_journeys_journeyName_start_post
   /journeys:
     get:
@@ -51,9 +59,9 @@ paths:
           schema:
             type: string
             enum:
-              - Running
-              - Succeeded
-              - Failed
+              - RUNNING
+              - SUCCEEDED
+              - FAILED
         - in: query
           name: subjectId
           required: false
@@ -242,12 +250,6 @@ components:
           type: string
         journeyName:
           type: string
-        phase:
-          type: string
-          enum:
-            - Running
-            - Succeeded
-            - Failed
         currentState:
           type: string
         updatedAt:
@@ -292,7 +294,7 @@ components:
             the external-input state id (for example `waitForApproval`, `confirm`).
             When the journey is
 
-            Running and user-cancellable, the engine SHOULD also expose a `cancel`
+            RUNNING and user-cancellable, the engine SHOULD also expose a `cancel`
             link pointing to the
 
             canonical cancellation step `/api/v1/journeys/{journeyId}/steps/cancel`
@@ -326,8 +328,8 @@ components:
         phase:
           type: string
           enum:
-            - Succeeded
-            - Failed
+            - SUCCEEDED
+            - FAILED
         output: {}
         error:
           type: object

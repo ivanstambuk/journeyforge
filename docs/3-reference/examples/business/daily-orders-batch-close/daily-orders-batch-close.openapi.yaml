@@ -23,13 +23,13 @@ paths:
             schema:
               $ref: "#/components/schemas/DailyOrdersBatchCloseConfigRequest"
       responses:
-        "202":
-          description: Accepted
+        "200":
+          description: Synchronous outcome after configuring the daily batch-close schedule
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/JourneyStartResponse"
-      description: Configure and schedule the daily orders batch-close journey. The caller must provide an Authorization header with an access token suitable for token exchange.
+                $ref: "#/components/schemas/JourneyOutcome"
+      description: Configure and schedule the daily orders batch-close journey (synchronous configuration). The caller must provide an Authorization header with an access token suitable for token exchange.
   /journeys/{journeyId}:
     get:
       summary: Get journey status
@@ -102,25 +102,6 @@ components:
           type: string
           description: ISO-8601 duration to wait for replication/consistency before final close (for example PT5M).
       additionalProperties: true
-    JourneyStartResponse:
-      type: object
-      required:
-        - journeyId
-        - journeyName
-        - statusUrl
-      properties:
-        journeyId:
-          type: string
-        journeyName:
-          type: string
-        statusUrl:
-          type: string
-          format: uri
-        _links:
-          description: "Optional hypermedia links (HAL-style) describing related resources and next actions.\n\nPresence is controlled per-journey via spec.httpSurface.links.enabled; when enabled, the engine typically includes at least `self` and `result` links.\n"
-          type: object
-          additionalProperties:
-            $ref: "#/components/schemas/Link"
     JourneyStatus:
       type: object
       required:

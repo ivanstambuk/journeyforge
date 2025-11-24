@@ -23,13 +23,13 @@ paths:
             schema:
               $ref: "#/components/schemas/CustomerOnboardingKycStartRequest"
       responses:
-        "202":
-          description: Accepted
+        "200":
+          description: Journey status after prospect creation and at the first external-input state (waitForKycDocuments)
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/JourneyStartResponse"
-      description: Start customer-onboarding-kyc journey
+                $ref: "#/components/schemas/JourneyStatus"
+      description: Start customer-onboarding-kyc journey (synchronous to first wait/webhook step)
   /journeys/{journeyId}:
     get:
       summary: Get journey status
@@ -281,25 +281,6 @@ components:
         notes:
           type: string
       additionalProperties: false
-    JourneyStartResponse:
-      type: object
-      required:
-        - journeyId
-        - journeyName
-        - statusUrl
-      properties:
-        journeyId:
-          type: string
-        journeyName:
-          type: string
-        statusUrl:
-          type: string
-          format: uri
-        _links:
-          description: "Optional hypermedia links (HAL-style) describing related resources and next actions.\n\nPresence is controlled per-journey via spec.httpSurface.links.enabled; when enabled, the engine typically includes at least `self` and `result` links.\n"
-          type: object
-          additionalProperties:
-            $ref: "#/components/schemas/Link"
     JourneyStatus:
       type: object
       required:

@@ -9,7 +9,7 @@ start
 repeat
   :Client calls\nGET /api/v1/journeys/{journeyId}/result;
   :Journeys API returns\nJourneyOutcome with phase/output;
-repeat while (phase == "Running" and\ncurrentState != "waitForTravelerConfirmation") is (reserving bundle)
+repeat while (phase == "RUNNING" and\ncurrentState != "waitForTravelerConfirmation") is (reserving bundle)
 
 if (currentState == "waitForTravelerConfirmation"?) then (yes)
   :Traveler confirms or cancels bundle\nPOST /api/v1/journeys/{journeyId}/steps/confirmBundle;
@@ -23,7 +23,7 @@ if (currentState == "waitForFeedback"?) then (yes)
   :Traveler submits optional post-trip feedback\nPOST /api/v1/journeys/{journeyId}/steps/submitFeedback;
 endif
 
-if (phase == "Succeeded" and overallStatus == "CONFIRMED"?) then (confirmed)
+if (phase == "SUCCEEDED" and overallStatus == "CONFIRMED"?) then (confirmed)
   :Client confirms confirmed trip and\nupdates itinerary storage;
   stop
 else (partial/cancelled/failed)

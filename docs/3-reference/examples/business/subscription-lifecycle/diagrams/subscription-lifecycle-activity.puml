@@ -9,19 +9,19 @@ start
 repeat
   :Client calls\nGET /api/v1/journeys/{journeyId}/result;
   :Journeys API returns\nJourneyOutcome with phase/output;
-repeat while (phase == "Running" and\ncurrentState == "waitForUpgrade") is (trial)
+repeat while (phase == "RUNNING" and\ncurrentState == "waitForUpgrade") is (trial)
 
 if (currentState == "waitForUpgrade"?) then (yes)
   :Client submits upgrade/expire decision\nPOST /steps/upgradeSubscription;
   :Client resumes polling\nGET /journeys/{journeyId}/result;
 endif
 
-if (phase == "Running" and within cancel/reactivate window?) then (active)
+if (phase == "RUNNING" and within cancel/reactivate window?) then (active)
   :Client may submit cancel/reactivate decision\nPOST /steps/changeSubscriptionStatus;
   :Client resumes polling\nGET /journeys/{journeyId}/result;
 endif
 
-if (phase == "Succeeded"?) then (completed)
+if (phase == "SUCCEEDED"?) then (completed)
   :Client records finalStatus\n(TRIAL_EXPIRED, ACTIVE, CANCELLED, REACTIVATED);
   stop
 else (failed)

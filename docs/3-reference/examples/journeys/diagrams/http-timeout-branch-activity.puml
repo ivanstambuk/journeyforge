@@ -5,9 +5,9 @@ title http-timeout-branch – client activity flow
 start
 
 :Client sends\nPOST /api/v1/journeys/http-timeout-branch/start;
-:Client polls\nGET /api/v1/journeys/{journeyId}/result\nuntil phase != "Running";
+:Journeys API runs\nhttp-timeout-branch journey\nto completion and returns\nJourneyOutcome with phase and output;
 
-if (phase == "Succeeded"?) then (yes)
+if (phase == "SUCCEEDED"?) then (yes)
   :Client processes successful\nJourneyOutcome.output;
 else (no)
   :Client handles failure via\nJourneyOutcome.error;

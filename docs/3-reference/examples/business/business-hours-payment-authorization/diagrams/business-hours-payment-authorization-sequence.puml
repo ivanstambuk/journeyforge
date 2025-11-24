@@ -6,10 +6,8 @@ actor "Client" as Client
 participant "Journeys API" as Journeys
 
 Client -> Journeys: POST /api/v1/journeys/business-hours-payment-authorization/start\nBusinessHoursPaymentStartRequest
-Journeys --> Client: 202 Accepted\nJourneyStartResponse (journeyId, ...)
-
-Client -> Journeys: GET /api/v1/journeys/{journeyId}\n(getStatus)
-Journeys --> Client: 200 OK\nJourneyStatus (Running or terminal)
+Journeys -> Journeys: Classify submission time\nand perform any immediate authorization work
+Journeys --> Client: 200 OK\nJourneyOutcome or JourneyStatus\n(depending on whether authorization completed)
 
 alt Submitted during business hours
   note over Journeys
@@ -29,4 +27,3 @@ Client -> Journeys: GET /api/v1/journeys/{journeyId}/result\n(getResult)
 Journeys --> Client: 200 OK\nJourneyOutcome (AUTHORIZED or FAILED,\nprocessingMode IMMEDIATE or DEFERRED)
 
 @enduml
-

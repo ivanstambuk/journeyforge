@@ -33,8 +33,8 @@ Here’s a breakdown of the steps you’ll call over the Journeys API for the ma
 
 | # | Step ID | Description | Operation ID | Parameters | Success Criteria | Outputs |
 |---:|---------|-------------|--------------|------------|------------------|---------|
-| 1 | `startJourney` | Start a new `recurring-payment` journey instance and create or update the underlying schedule. | `recurringPayment_start` | Body: `startRequest` with user id, payment method reference, amount, currency, interval, and maxRuns. | `$statusCode == 202` and a `journeyId` is returned. | `journeyId` for the interactive configuration run. |
-| 2 | `getResult` | Retrieve the initial outcome that summarises the configured schedule. | `recurringPayment_getResult` | Path: `journeyId` from step 1. | `$statusCode == 200`, `phase == "Succeeded"` or `phase == "Failed"`. | `JourneyOutcome` with `output.status == "SCHEDULED"` and schedule configuration fields. |
+| 1 | `startJourney` | Start a new `recurring-payment` journey instance and create or update the underlying schedule (synchronous). | `recurringPayment_start` | Body: `startRequest` with user id, payment method reference, amount, currency, interval, and maxRuns. | `$statusCode == 200`, `phase == "SUCCEEDED"` or `phase == "FAILED"`. | `JourneyOutcome` with `output.status == "SCHEDULED"` and schedule configuration fields. |
+| 2 | `getResult` | (Optional) Re-fetch the initial outcome that summarises the configured schedule. | `recurringPayment_getResult` | Path: `journeyId` from step 1 (or from `JourneyOutcome.journeyId`). | `$statusCode == 200`, `phase == "SUCCEEDED"` or `phase == "FAILED"`. | `JourneyOutcome` with `output.status == "SCHEDULED"` and schedule configuration fields. |
 
 Subsequent scheduled runs are started by the engine based on the created schedule; they do not introduce additional HTTP-visible steps.
 

@@ -7,13 +7,8 @@ actor "Underwriter UI" as Underwriter
 participant "Journeys API" as Journeys
 
 Client -> Journeys: POST /api/v1/journeys/loan-application/start\nLoanApplicationStartRequest
-Journeys --> Client: 202 Accepted\nJourneyStartResponse (journeyId, ...)
-
-Client -> Journeys: GET /api/v1/journeys/{journeyId}\n(getStatusAfterChecks)
+Journeys -> Journeys: Run initial bureau/KYC checks\nand route based on scoring
 Journeys --> Client: 200 OK\nJourneyStatus (phase, currentState)
-
-Client -> Journeys: GET /api/v1/journeys/{journeyId}\n(getStatusAwaitingUnderwriter)
-Journeys --> Client: 200 OK\nJourneyStatus (phase, currentState == waitForUnderwriter)
 
 note over Client, Underwriter
   Client and underwriter review the application

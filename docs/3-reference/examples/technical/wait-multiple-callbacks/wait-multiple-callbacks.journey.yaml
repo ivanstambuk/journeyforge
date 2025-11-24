@@ -1,0 +1,110 @@
+apiVersion: v1
+kind: Journey
+metadata:
+  name: wait-multiple-callbacks
+  version: 0.1.0
+  description: Technical pattern – wait for N callbacks using a single external-input step and an aggregate in context.
+spec:
+  input:
+    schema:
+      title: WaitMultipleCallbacksStartRequest
+      type: object
+      required:
+        - expectedCount
+      properties:
+        expectedCount:
+          type: integer
+          minimum: 1
+        correlationId:
+          type: string
+          description: Optional correlation id propagated to callback callers.
+      additionalProperties: true
+  output:
+    schema:
+      title: WaitMultipleCallbacksOutcome
+      type: object
+      required:
+        - expectedCount
+        - receivedCount
+        - callbacks
+      properties:
+        expectedCount:
+          type: integer
+        receivedCount:
+          type: integer
+        callbacks:
+          type: array
+          items:
+            type: object
+        correlationId:
+          type: string
+      additionalProperties: true
+
+  start: init
+  states:
+    init:
+      type: transform
+      transform:
+        mapper:
+          lang: dataweave
+          expr: |
+            context ++ {
+              callbacks: [],
+              receivedCount: 0
+            }
+        target:
+          kind: context
+          path: ""
+      next: waitForCallback
+
+    waitForCallback:
+      type: wait
+      wait:
+        channel: manual
+        input:
+          schema:
+            title: WaitMultipleCallbacksStepInput
+            type: object
+            properties:
+              payload:
+                description: Arbitrary callback payload to aggregate.
+                type: object
+            additionalProperties: true
+        apply:
+          mapper:
+            lang: dataweave
+            expr: |
+              // Append each callback payload into context.callbacks and bump receivedCount.
+              context ++ {
+                callbacks: (context.callbacks default []) ++ [payload],
+                receivedCount: (context.receivedCount default 0) + 1
+              }
+        on:
+          - when:
+              predicate:
+                lang: dataweave
+                expr: |
+                  (context.receivedCount default 0) >= (context.expectedCount default 0)
+            next: complete
+        default: waitForCallback
+
+    complete:
+      type: succeed
+      outputVar: callbacksOutcome
+
+    projectOutcome:
+      type: transform
+      transform:
+        mapper:
+          lang: dataweave
+          expr: |
+            {
+              expectedCount: context.expectedCount,
+              receivedCount: context.receivedCount,
+              callbacks: context.callbacks default [],
+              correlationId: context.correlationId default null
+            }
+        target:
+          kind: context
+          path: callbacksOutcome
+      next: complete

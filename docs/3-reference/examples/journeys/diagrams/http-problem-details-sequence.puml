@@ -6,9 +6,6 @@ actor "API client" as Client
 participant "Journeys API" as Journeys
 
 Client -> Journeys: POST /api/v1/journeys/http-problem-details/start
-Journeys --> Client: 202 Accepted\nJourneyStartResponse (journeyId, ...)
-
-Client -> Journeys: GET /api/v1/journeys/{journeyId}/result
 Journeys -> Journeys: Run http-problem-details journey to completion
 Journeys --> Client: 200 OK\nJourneyOutcome (phase, output, error)
 

@@ -5,9 +5,9 @@ title http-idempotent-create – client activity flow
 start
 
 :Client sends\nPOST /api/v1/journeys/http-idempotent-create/start;
-:Client polls\nGET /api/v1/journeys/{journeyId}/result\nuntil phase != "Running";
+:Journeys API runs\nhttp-idempotent-create journey\nto completion and returns\nJourneyOutcome with phase and output;
 
-if (phase == "Succeeded"?) then (yes)
+if (phase == "SUCCEEDED"?) then (yes)
   :Client processes successful\nJourneyOutcome.output;
 else (no)
   :Client handles failure via\nJourneyOutcome.error;

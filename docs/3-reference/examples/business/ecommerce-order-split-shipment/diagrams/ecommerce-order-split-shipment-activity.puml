@@ -9,14 +9,14 @@ start
 repeat
   :Client calls\nGET /api/v1/journeys/{journeyId}/result;
   :Journeys API returns\nJourneyOutcome with phase/output;
-repeat while (phase == "Running" and\ncurrentState != "waitForConfirmation") is (reservation running)
+repeat while (phase == "RUNNING" and\ncurrentState != "waitForConfirmation") is (reservation running)
 
 if (currentState == "waitForConfirmation"?) then (yes)
   :Storefront captures customer decision\nand calls POST /api/v1/journeys/{journeyId}/steps/confirmOrder;
   :Client resumes polling\nGET /api/v1/journeys/{journeyId}/result;
 endif
 
-if (phase == "Succeeded" and overallStatus == "FULFILLED"?) then (fulfilled)
+if (phase == "SUCCEEDED" and overallStatus == "FULFILLED"?) then (fulfilled)
   :Client confirms fulfillment and updates\norder history or UI;
   stop
 else (partial/cancelled/failed)
@@ -25,4 +25,3 @@ else (partial/cancelled/failed)
 endif
 
 @enduml
-

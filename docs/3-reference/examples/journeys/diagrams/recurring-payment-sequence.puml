@@ -7,9 +7,7 @@ participant "Journeys API" as Journeys
 participant "Payments API" as Payments
 
 Client -> Journeys: POST /api/v1/journeys/recurring-payment/start\nRecurringPaymentStartRequest
-Journeys --> Client: 202 Accepted\nJourneyStartResponse (journeyId, ...)
-
-Client -> Journeys: GET /api/v1/journeys/{journeyId}/result\n(getResult)
+Journeys -> Journeys: Configure schedule and complete initial run
 Journeys --> Client: 200 OK\nJourneyOutcome (status = SCHEDULED, config fields)
 
 ... later, on schedule ...

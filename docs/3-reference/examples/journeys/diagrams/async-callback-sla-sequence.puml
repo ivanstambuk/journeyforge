@@ -1,0 +1,33 @@
+@startuml
+!include journey-diagram-theme.puml
+title async-callback-sla – sequence
+
+actor "Client" as Client
+actor "Provider" as Provider
+participant "Journeys API" as Journeys
+
+Client -> Journeys: POST /api/v1/journeys/async-callback-sla/start\nAsyncCallbackSlaStartRequest
+Journeys -> Provider: POST https://provider.example.com/jobs/start\n(requestId)
+Provider --> Journeys: 202 Accepted\n(jobId)
+Journeys --> Client: 202 Accepted\nJourneyStartResponse (journeyId, statusUrl)
+
+== Callback arrives within SLA ==
+
+loop Optional polling
+  Client -> Journeys: GET /journeys/{journeyId}\n(getStatusRunning)
+  Journeys --> Client: 200 OK\nJourneyStatus (phase = Running)
+end
+
+Provider -> Journeys: POST /api/v1/journeys/{journeyId}/steps/waitForCallback\nProviderCallbackInput
+Journeys --> Provider: 200 OK\nProviderCallbackStepResponse
+
+Client -> Journeys: GET /journeys/{journeyId}/result\n(getResult)
+Journeys --> Client: 200 OK\nJourneyOutcome (status = COMPLETED_WITHIN_SLA\nor FAILED)
+
+== No callback within SLA ==
+
+Client -> Journeys: GET /journeys/{journeyId}/result\n(getResult after SLA)
+Journeys --> Client: 200 OK\nJourneyOutcome (status = TIMED_OUT)
+
+@enduml
+

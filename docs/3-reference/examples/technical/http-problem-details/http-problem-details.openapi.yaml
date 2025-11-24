@@ -23,13 +23,13 @@ paths:
             schema:
               $ref: "#/components/schemas/JourneyStartRequest"
       responses:
-        "202":
-          description: Accepted
+        "200":
+          description: Synchronous outcome for http-problem-details
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/JourneyStartResponse"
-      description: Start http-problem-details journey
+                $ref: "#/components/schemas/JourneyOutcome"
+      description: Start http-problem-details journey (synchronous)
   /journeys/{journeyId}:
     get:
       summary: Get journey status

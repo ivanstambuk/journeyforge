@@ -16,9 +16,6 @@ Journeys -> Erasure: POST https://privacy.example.com/erasure/inventory\n(reques
 Erasure --> Journeys: 200 OK\n(inventory)
 Journeys -> Desk: POST https://privacy.example.com/erasure/notify-privacy-desk\n(request details, review SLA)
 Desk --> Journeys: 202 Accepted
-Journeys --> Client: 202 Accepted\nJourneyStartResponse (journeyId, ...)
-
-Client -> Journeys: GET /api/v1/journeys/{journeyId}\n(getStatusDuringReview)
 Journeys --> Client: 200 OK\nJourneyStatus (waiting at privacyDeskReview)
 
 Desk -> Journeys: POST /api/v1/journeys/{journeyId}/steps/privacyDeskReview\nPrivacyDeskDecisionInput (APPROVE)
@@ -42,4 +39,3 @@ Client -> Journeys: GET /api/v1/journeys/{journeyId}/result\n(getResultAfterSeni
 Journeys --> Client: 200 OK\nJourneyOutcome (ERASURE_COMPLETED / ERASURE_FAILED / REJECTED)
 
 @enduml
-

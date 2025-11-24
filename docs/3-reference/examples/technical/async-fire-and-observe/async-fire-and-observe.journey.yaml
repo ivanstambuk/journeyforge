@@ -1,0 +1,169 @@
+apiVersion: v1
+kind: Journey
+metadata:
+  name: async-fire-and-observe
+  version: 0.1.0
+  description: Simple async fire-and-observe pattern where the start call returns 202 and the journey polls a long-running background job to completion.
+spec:
+  lifecycle:
+    startMode: async
+  input:
+    schema:
+      title: AsyncFireAndObserveStartRequest
+      type: object
+      required:
+        - jobType
+        - correlationId
+      properties:
+        jobType:
+          type: string
+        correlationId:
+          type: string
+        pollIntervalSeconds:
+          type: integer
+          description: Optional poll interval in seconds for the background job (default 30).
+      additionalProperties: true
+  output:
+    schema:
+      title: AsyncFireAndObserveOutcome
+      type: object
+      required:
+        - status
+        - jobId
+      properties:
+        status:
+          type: string
+          enum:
+            - JOB_COMPLETED
+            - JOB_FAILED
+        jobId:
+          type: string
+        providerStatus:
+          type: string
+        completedAt:
+          type: string
+          format: date-time
+        failureReason:
+          type: string
+      additionalProperties: true
+  start: enqueueJob
+  states:
+    enqueueJob:
+      type: task
+      task:
+        kind: httpCall
+        method: POST
+        url: https://jobs.example.com/async-jobs
+        params:
+          headers:
+            Accept: application/json
+        body:
+          mapper:
+            lang: dataweave
+            expr: |
+              {
+                jobType: context.jobType,
+                correlationId: context.correlationId
+              }
+        timeoutMs: 2000
+        resultVar: jobStart
+      next: recordJob
+
+    recordJob:
+      type: transform
+      transform:
+        mapper:
+          lang: dataweave
+          expr: |
+            context ++ {
+              jobId: jobStart.body.jobId,
+              pollIntervalSeconds:
+                (context.pollIntervalSeconds default 30),
+              pollAttempts: 0
+            }
+        target:
+          kind: context
+          path: ""
+      next: waitForNextPoll
+
+    waitForNextPoll:
+      type: timer
+      timer:
+        duration:
+          mapper:
+            lang: dataweave
+            expr: |
+              "PT" ++ (context.pollIntervalSeconds as String) ++ "S"
+      next: fetchJobStatus
+
+    fetchJobStatus:
+      type: task
+      task:
+        kind: httpCall
+        method: GET
+        url: "https://jobs.example.com/async-jobs/${context.jobId}"
+        params:
+          headers:
+            Accept: application/json
+        timeoutMs: 2000
+        resultVar: jobStatus
+      next: decideJobStatus
+
+    decideJobStatus:
+      type: choice
+      choices:
+        - when:
+            predicate:
+              lang: dataweave
+              expr: |
+                jobStatus.body.state == "COMPLETED"
+          next: completeFromJob
+        - when:
+            predicate:
+              lang: dataweave
+              expr: |
+                jobStatus.body.state == "FAILED"
+          next: failFromJob
+      default: scheduleNextPoll
+
+    scheduleNextPoll:
+      type: transform
+      transform:
+        mapper:
+          lang: dataweave
+          expr: |
+            context ++ {
+              pollAttempts: (context.pollAttempts default 0) + 1
+            }
+        target:
+          kind: context
+          path: ""
+      next: waitForNextPoll
+
+    completeFromJob:
+      type: transform
+      transform:
+        mapper:
+          lang: dataweave
+          expr: |
+            context ++ {
+              asyncJobOutcome: {
+                status: "JOB_COMPLETED",
+                jobId: context.jobId,
+                providerStatus: jobStatus.body.state,
+                completedAt: now()
+              }
+            }
+        target:
+          kind: context
+          path: ""
+      next: done
+
+    done:
+      type: succeed
+      outputVar: asyncJobOutcome
+
+    failFromJob:
+      type: fail
+      errorCode: ASYNC_JOB_FAILED
+      reason: "Async job reported FAILED state"

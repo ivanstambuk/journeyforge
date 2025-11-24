@@ -5,13 +5,13 @@ title sync-wrapper-wait – client activity flow
 start
 
 :Client sends\nPOST /api/v1/journeys/sync-wrapper-wait/start;
-:Client polls\nGET /api/v1/journeys/{journeyId}/result\nuntil phase != "Running";
+:Journeys API returns\nJourneyStatus at waitStep\n(phase = Running);
 
-if (phase == "Succeeded"?) then (yes)
-  :Client processes successful\nJourneyOutcome.output;
-else (no)
-  :Client handles failure via\nJourneyOutcome.error;
-endif
+:Client submits completion event\nvia POST /steps/waitStep;
+:Journeys API returns updated\nJourneyStatus after completion;
+
+:Client calls\nGET /api/v1/journeys/{journeyId}/result;
+:Journeys API returns\nJourneyOutcome with phase and output;
 
 stop
 

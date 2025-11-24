@@ -10,10 +10,7 @@ participant "Journeys API" as Journeys
 Client -> Journeys: POST /api/v1/journeys/kyc-async-timeout-fallback/start\nKycAsyncTimeoutFallbackStartRequest
 Journeys -> Primary: POST https://kyc-primary.example.com/checks/start\n(customerId, requestId, channel)
 Primary --> Journeys: 202 Accepted\n(jobId)
-Journeys --> Client: 202 Accepted\nJourneyStartResponse (journeyId, ...)
-
-Client -> Journeys: GET /api/v1/journeys/{journeyId}\n(getStatusRunning)
-Journeys --> Client: 200 OK\nJourneyStatus (Running)
+Journeys --> Client: 202 Accepted\nJourneyStartResponse (journeyId, statusUrl)
 
 == Primary completes within SLA ==
 
@@ -41,4 +38,3 @@ Client -> Journeys: GET /api/v1/journeys/{journeyId}/result\n(getResult)
 Journeys --> Client: 200 OK\nJourneyOutcome (KYC_COMPLETED_FALLBACK or KYC_FAILED)
 
 @enduml
-

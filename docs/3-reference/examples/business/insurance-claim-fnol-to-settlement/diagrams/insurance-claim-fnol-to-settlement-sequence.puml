@@ -10,9 +10,6 @@ actor "Claims Ops UI" as ClaimsOps
 participant "Journeys API" as Journeys
 
 Client -> Journeys: POST /api/v1/journeys/insurance-claim-fnol-to-settlement/start\nInsuranceClaimStartRequest
-Journeys --> Client: 202 Accepted\nJourneyStartResponse (journeyId, ...)
-
-Client -> Journeys: GET /api/v1/journeys/{journeyId}\n(getStatusAfterCreation)
 Journeys --> Client: 200 OK\nJourneyStatus (waiting for FNOL details)
 
 Claimant -> Journeys: POST /api/v1/journeys/{journeyId}/steps/submitFnolDetails\nFnolDetailsInput
@@ -34,4 +31,3 @@ Client -> Journeys: GET /api/v1/journeys/{journeyId}/result\n(getResult)
 Journeys --> Client: 200 OK\nJourneyOutcome (SETTLED or DENIED)
 
 @enduml
-

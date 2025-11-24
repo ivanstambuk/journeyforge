@@ -28,7 +28,7 @@ Here’s a breakdown of the steps you’ll call over the Journeys API for the pr
 |---:|---------|-------------|--------------|------------|------------------|---------|
 | 1 | `startJourney` | Start a new `payment-callback` journey instance. | `paymentCallback_start` | Body: `startRequest` as defined by JourneyStartRequest. | `$statusCode == 202` and a `journeyId` is returned. | `journeyId` for the new journey instance. |
 | 2 | `waitForCallback` | Webhook callback that notifies the journey of the final payment status. | `paymentCallback_waitForCallback` | Path: `journeyId`; header: `X-Webhook-Secret`; body: payment status payload. | `$statusCode == 200` and callback accepted; journey status updated to SUCCESS or FAILED. | Updated `JourneyStatus` after processing the payment callback. |
-| 3 | `getResult` | Poll for the final journey outcome once terminal. | `paymentCallback_getResult` | Path: `journeyId` from step 1. | `$statusCode == 200` and `phase` is `Succeeded` or `Failed`. | `JourneyOutcome` for this journey. |
+| 3 | `getResult` | Poll for the final journey outcome once terminal. | `paymentCallback_getResult` | Path: `journeyId` from step 1. | `$statusCode == 200` and `phase` is `SUCCEEDED` or `FAILED`. | `JourneyOutcome` for this journey. |
 
 ## Graphical overview
 

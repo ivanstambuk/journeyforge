@@ -32,13 +32,13 @@ paths:
                   type: string
               additionalProperties: true
       responses:
-        "202":
-          description: Accepted
+        "200":
+          description: Journey status at the first external-input state (waitForApproval)
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/JourneyStartResponse"
-      description: Start wait-approval journey
+                $ref: "#/components/schemas/JourneyStatus"
+      description: Start wait-approval journey (synchronous to first wait step)
   /journeys/{journeyId}:
     get:
       summary: Get journey status

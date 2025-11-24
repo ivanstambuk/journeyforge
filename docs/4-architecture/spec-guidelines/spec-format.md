@@ -39,7 +39,7 @@ JSON Schema dialect
   - Treat YAML as a strict JSON surface:
     - Booleans: `true` / `false` (lowercase).
     - Numbers: plain decimal; avoid leading `+` and leading zeros (except for `0`).
-  - Prefer unquoted scalars only for obviously safe identifiers (for example `http-custom-error-envelope-api`, `users`, `Succeeded`).
+  - Prefer unquoted scalars only for obviously safe identifiers (for example `http-custom-error-envelope-api`, `users`, `SUCCEEDED`).
   - Always quote scalars when they:
     - Could be interpreted as special YAML values (`on`, `off`, `yes`, `no`, `y`, `n`, `null`, `~`) or as timestamps/IPv6 addresses.
     - Start with `0` and are more than one digit (for example `"01"`, `"007"`).

@@ -23,13 +23,13 @@ paths:
             schema:
               $ref: "#/components/schemas/PaymentReminderStartRequest"
       responses:
-        "202":
-          description: Accepted
+        "200":
+          description: Journey status after sending the reminder and entering the wait/timer parallel branch
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/JourneyStartResponse"
-      description: Start payment-reminder-with-timeout journey
+                $ref: "#/components/schemas/JourneyStatus"
+      description: Start payment-reminder-with-timeout journey (synchronous to first external-input/timer branch)
   /journeys/{journeyId}:
     get:
       summary: Get journey status

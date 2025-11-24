@@ -9,9 +9,9 @@ start
 repeat
   :App calls\nGET /api/v1/journeys/{journeyId}/result;
   :Journeys API returns\nJourneyOutcome with phase/output;
-repeat while (phase == "Running") is (pacing decision)
+repeat while (phase == "RUNNING") is (pacing decision)
 
-if (phase == "Succeeded"?) then (completed)
+if (phase == "SUCCEEDED"?) then (completed)
   :App inspects notificationDecision\nand integrationDecision to decide\nwhether to show or skip notifications\nand integration calls;
   stop
 else (failed)
@@ -20,4 +20,3 @@ else (failed)
 endif
 
 @enduml
-

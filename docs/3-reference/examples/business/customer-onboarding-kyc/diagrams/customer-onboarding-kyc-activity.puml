@@ -5,15 +5,9 @@ title customer-onboarding-kyc – client activity flow
 start
 
 :Client sends\nPOST /api/v1/journeys/customer-onboarding-kyc/start\nwith CustomerOnboardingKycStartRequest;
+:Journeys API returns\nJourneyStatus at waitForKycDocuments\n(phase = Running);
 
-repeat
-  :Client calls\nGET /api/v1/journeys/{journeyId}/result;
-  :Journeys API returns\nJourneyOutcome with phase/output;
-repeat while (phase == "Running" and\ncurrentState != "waitForKycDocuments") is (creating prospect)
-
-if (currentState == "waitForKycDocuments"?) then (yes)
-  :Customer uploads documents and details\nPOST /api/v1/journeys/{journeyId}/steps/submitKycDocuments;
-endif
+:Customer uploads documents and details\nPOST /api/v1/journeys/{journeyId}/steps/submitKycDocuments;
 
 if (currentState == "waitForKycResult"?) then (yes)
   :KYC provider posts result\nPOST /api/v1/journeys/{journeyId}/steps/waitForKycResult;
@@ -27,7 +21,10 @@ if (currentState == "waitForRiskDecision"?) then (yes)
   :Risk/compliance system posts decision\nPOST /api/v1/journeys/{journeyId}/steps/waitForRiskDecision;
 endif
 
-if (phase == "Succeeded" and finalStatus == "APPROVED"?) then (approved)
+:Client calls\nGET /api/v1/journeys/{journeyId}/result;
+:Journeys API returns\nJourneyOutcome with finalStatus\n(APPROVED or REJECTED);
+
+if (phase == "SUCCEEDED" and finalStatus == "APPROVED"?) then (approved)
   :Client treats customer as fully onboarded\nand proceeds with account usage;
   stop
 else (rejected)
@@ -36,4 +33,3 @@ else (rejected)
 endif
 
 @enduml
-

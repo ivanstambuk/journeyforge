@@ -6,7 +6,7 @@ actor "Client" as Client
 participant "Journeys API" as Journeys
 
 Client -> Journeys: POST /api/v1/journeys/market-open-order-submission/start\nMarketOpenOrderStartRequest
-Journeys --> Client: 202 Accepted\nJourneyStartResponse (journeyId, ...)
+Journeys --> Client: 200 OK\nJourneyStatus (order timing classified, pre-open window active or immediate submission running)
 
 alt Order submitted during market hours
   note over Journeys
@@ -29,4 +29,3 @@ Client -> Journeys: GET /api/v1/journeys/{journeyId}/result\n(getResult)
 Journeys --> Client: 200 OK\nJourneyOutcome (SUBMITTED, NOT_SUBMITTED, or FAILED)
 
 @enduml
-

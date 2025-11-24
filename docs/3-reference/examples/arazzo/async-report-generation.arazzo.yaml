@@ -1,0 +1,72 @@
+arazzo: 1.0.1
+info:
+  title: JourneyForge – async-report-generation workflows
+  version: 0.1.0
+  summary: Workflows for long-running report generation with async start.
+  description: >
+    Workflows for starting an async-report-generation journey, polling status while a report runs in the background,
+    and retrieving the final outcome once the report is ready.
+sourceDescriptions:
+  - name: asyncReportGeneration
+    type: openapi
+    url: ../oas/async-report-generation.openapi.yaml
+workflows:
+  - workflowId: async-report-generation-basic
+    summary: Start a long-running report and observe completion.
+    description: >
+      Start an async-report-generation journey instance asynchronously (HTTP 202 + JourneyStartResponse),
+      poll status while the report job runs in the background, and retrieve the final outcome once the report is ready.
+    inputs:
+      type: object
+      properties:
+        startRequest:
+          description: Initial report request payload.
+          type: object
+          required:
+            - reportId
+            - tenantId
+          properties:
+            reportId:
+              type: string
+            tenantId:
+              type: string
+            rangeFrom:
+              type: string
+              format: date-time
+            rangeTo:
+              type: string
+              format: date-time
+            notifyEmail:
+              type: string
+            pollIntervalSeconds:
+              type: integer
+          additionalProperties: true
+    steps:
+      - stepId: startJourney
+        description: Start a new async-report-generation journey instance (async start).
+        operationId: asyncReportGeneration_start
+        x-source: asyncReportGeneration
+        requestBody:
+          contentType: application/json
+          payload: $inputs.startRequest
+        outputs:
+          journeyId: $response.body.journeyId
+      - stepId: getStatusRunning
+        description: Optional status check while the report job is running.
+        operationId: asyncReportGeneration_getStatus
+        x-source: asyncReportGeneration
+        parameters:
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId
+        outputs:
+          phase: $response.body.phase
+          currentState: $response.body.currentState
+      - stepId: getResult
+        description: Retrieve the final outcome once the report job has completed.
+        operationId: asyncReportGeneration_getResult
+        x-source: asyncReportGeneration
+        parameters:
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId

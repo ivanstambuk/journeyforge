@@ -6,7 +6,7 @@ actor "Client" as Client
 participant "Journeys API" as Journeys
 
 Client -> Journeys: POST /api/v1/journeys/subscription-lifecycle/start\nSubscriptionLifecycleStartRequest
-Journeys --> Client: 202 Accepted\nJourneyStartResponse (journeyId, ...)
+Journeys --> Client: 200 OK\nJourneyStatus (trial running, waiting for upgrade or expiry)
 
 Client -> Journeys: GET /api/v1/journeys/{journeyId}\n(getStatusDuringTrial)
 Journeys --> Client: 200 OK\nJourneyStatus (trial running, waiting for upgrade or expiry)

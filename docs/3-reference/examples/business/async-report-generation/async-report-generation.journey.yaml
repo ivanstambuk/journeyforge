@@ -1,0 +1,183 @@
+apiVersion: v1
+kind: Journey
+metadata:
+  name: async-report-generation
+  version: 0.1.0
+  description: Business journey that starts a long-running report generation job asynchronously and exposes status/result for clients to observe completion.
+spec:
+  lifecycle:
+    startMode: async
+  input:
+    schema:
+      title: AsyncReportGenerationStartRequest
+      type: object
+      required:
+        - reportId
+        - tenantId
+      properties:
+        reportId:
+          type: string
+        tenantId:
+          type: string
+        rangeFrom:
+          type: string
+          format: date-time
+        rangeTo:
+          type: string
+          format: date-time
+        notifyEmail:
+          type: string
+        pollIntervalSeconds:
+          type: integer
+          description: Optional poll interval in seconds for report status checks (default 60).
+      additionalProperties: true
+  output:
+    schema:
+      title: AsyncReportGenerationOutcome
+      type: object
+      required:
+        - status
+        - reportId
+        - tenantId
+      properties:
+        status:
+          type: string
+          enum:
+            - REPORT_COMPLETED
+            - REPORT_FAILED
+        reportId:
+          type: string
+        tenantId:
+          type: string
+        downloadUrl:
+          type: string
+        completedAt:
+          type: string
+          format: date-time
+        failureReason:
+          type: string
+      additionalProperties: true
+  start: startReportJob
+  states:
+    startReportJob:
+      type: task
+      task:
+        kind: httpCall
+        method: POST
+        url: https://reports.example.com/jobs
+        params:
+          headers:
+            Accept: application/json
+        body:
+          mapper:
+            lang: dataweave
+            expr: |
+              {
+                reportId: context.reportId,
+                tenantId: context.tenantId,
+                rangeFrom: context.rangeFrom,
+                rangeTo: context.rangeTo,
+                notifyEmail: context.notifyEmail
+              }
+        timeoutMs: 3000
+        resultVar: reportStart
+      next: recordReportJob
+
+    recordReportJob:
+      type: transform
+      transform:
+        mapper:
+          lang: dataweave
+          expr: |
+            context ++ {
+              reportJobId: reportStart.body.jobId,
+              pollIntervalSeconds: (context.pollIntervalSeconds default 60),
+              pollAttempts: 0
+            }
+        target:
+          kind: context
+          path: ""
+      next: waitForReportPoll
+
+    waitForReportPoll:
+      type: timer
+      timer:
+        duration:
+          mapper:
+            lang: dataweave
+            expr: |
+              "PT" ++ (context.pollIntervalSeconds as String) ++ "S"
+      next: fetchReportStatus
+
+    fetchReportStatus:
+      type: task
+      task:
+        kind: httpCall
+        method: GET
+        url: "https://reports.example.com/jobs/${context.reportJobId}"
+        params:
+          headers:
+            Accept: application/json
+        timeoutMs: 3000
+        resultVar: reportStatus
+      next: decideReportStatus
+
+    decideReportStatus:
+      type: choice
+      choices:
+        - when:
+            predicate:
+              lang: dataweave
+              expr: |
+                reportStatus.body.state == "COMPLETED"
+          next: completeFromReport
+        - when:
+            predicate:
+              lang: dataweave
+              expr: |
+                reportStatus.body.state == "FAILED"
+          next: failFromReport
+      default: scheduleNextReportPoll
+
+    scheduleNextReportPoll:
+      type: transform
+      transform:
+        mapper:
+          lang: dataweave
+          expr: |
+            context ++ {
+              pollAttempts: (context.pollAttempts default 0) + 1
+            }
+        target:
+          kind: context
+          path: ""
+      next: waitForReportPoll
+
+    completeFromReport:
+      type: transform
+      transform:
+        mapper:
+          lang: dataweave
+          expr: |
+            context ++ {
+              reportOutcome: {
+                status: "REPORT_COMPLETED",
+                reportId: context.reportId,
+                tenantId: context.tenantId,
+                downloadUrl: reportStatus.body.downloadUrl,
+                completedAt: now()
+              }
+            }
+        target:
+          kind: context
+          path: ""
+      next: reportDone
+
+    reportDone:
+      type: succeed
+      outputVar: reportOutcome
+
+    failFromReport:
+      type: fail
+      errorCode: REPORT_FAILED
+      reason: "Report generation job reported FAILED state"

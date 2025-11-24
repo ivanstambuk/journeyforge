@@ -1,0 +1,362 @@
+apiVersion: v1
+kind: Journey
+metadata:
+  name: subjourney-local-reuse
+  version: 0.1.0
+  description: Demonstrates local subjourneys with propagate vs capture and output vs outcome results.
+spec:
+  apis:
+    customers: { openApiRef: apis/customers.openapi.yaml }
+  input:
+    schema:
+      title: SubjourneyLocalReuseStartRequest
+      type: object
+      required:
+        - cart
+        - customerId
+      properties:
+        cart:
+          type: object
+          description: Simple cart model with line items.
+          properties:
+            items:
+              type: array
+              items:
+                type: object
+                required:
+                  - sku
+                  - unitPrice
+                  - quantity
+                properties:
+                  sku:
+                    type: string
+                  unitPrice:
+                    type: number
+                  quantity:
+                    type: integer
+                additionalProperties: false
+          additionalProperties: true
+        customerId:
+          type: string
+        segment:
+          type: string
+          description: Optional customer segment (for example STANDARD, VIP).
+        simulateRiskFailure:
+          type: boolean
+          description: Optional flag to simulate a risk subjourney failure.
+        simulateProfileFailure:
+          type: boolean
+          description: Optional flag to simulate a profile-enrichment subjourney failure.
+      additionalProperties: true
+  output:
+    schema:
+      title: SubjourneyLocalReuseOutcome
+      type: object
+      required:
+        - decision
+      properties:
+        decision:
+          type: string
+          enum:
+            - APPROVED
+            - REJECTED
+            - ERROR
+        totals:
+          type: object
+          description: Aggregated cart totals returned from the computeTotals subjourney.
+          properties:
+            itemCount:
+              type: integer
+            subtotal:
+              type: number
+            discountRate:
+              type: number
+            total:
+              type: number
+          additionalProperties: true
+        risk:
+          type: object
+          description: "Risk outcome captured as a mini-outcome (resultKind: outcome)."
+          properties:
+            phase:
+              type: string
+            terminationKind:
+              type: string
+            output:
+              type: object
+            error:
+              type: object
+              properties:
+                code:
+                  type: string
+                reason:
+                  type: string
+              additionalProperties: true
+          additionalProperties: true
+        profile:
+          type: object
+          description: "Profile enrichment captured via resultKind: output with capture on failure."
+          additionalProperties: true
+      additionalProperties: true
+
+  subjourneys:
+    computeTotals:
+      start: calculate
+      states:
+        calculate:
+          type: transform
+          transform:
+            mapper:
+              lang: dataweave
+              expr: |
+                do {
+                  var items = context.cart.items default []
+                  var subtotal = items
+                    reduce (item, acc = 0.0) -> acc + (item.unitPrice default 0.0) * (item.quantity default 0)
+                  var discountRate =
+                    if ((context.segment default "STANDARD") == "VIP") 0.1
+                    else 0.0
+                  ---
+                  {
+                    itemCount: sizeOf(items),
+                    subtotal: subtotal,
+                    discountRate: discountRate,
+                    total: subtotal * (1.0 - discountRate)
+                  }
+                }
+            target:
+              kind: context
+              path: totals
+          next: done
+
+        done:
+          type: succeed
+          outputVar: totals
+
+    riskCheck:
+      start: evaluate
+      states:
+        evaluate:
+          type: transform
+          transform:
+            mapper:
+              lang: dataweave
+              expr: |
+                do {
+                  var baseScore =
+                    if ((context.segment default "STANDARD") == "VIP") 20
+                    else 50
+                  var amountScore =
+                    if ((context.totals.total default 0.0) <= 1000) 10
+                    else if (context.totals.total <= 5000) 30
+                    else 60
+                  var simulated =
+                    if (context.simulateRiskFailure default false) 100
+                    else 0
+                  var score = baseScore + amountScore + simulated
+                  var level =
+                    if (score <= 40) "LOW"
+                    else if (score <= 70) "MEDIUM"
+                    else "HIGH"
+                  ---
+                  {
+                    score: score,
+                    level: level
+                  }
+                }
+            target:
+              kind: context
+              path: risk
+          next: decide
+
+        decide:
+          type: choice
+          choices:
+            - when:
+                predicate:
+                  lang: dataweave
+                  expr: |
+                    context.risk.level == "LOW" or context.risk.level == "MEDIUM"
+              next: approved
+          default: rejected
+
+        approved:
+          type: succeed
+          outputVar: risk
+
+        rejected:
+          type: fail
+          errorCode: RISK_TOO_HIGH
+          reason: "Risk score too high for this cart and customer segment"
+
+    enrichProfile:
+      start: fetchProfile
+      states:
+        fetchProfile:
+          type: task
+          task:
+            kind: httpCall
+            operationRef: customers.getCustomerById
+            params:
+              path:
+                customerId: "${context.customerId}"
+              headers:
+                Accept: application/json
+            timeoutMs: 2000
+            resultVar: httpResult
+          next: maybeFail
+
+        maybeFail:
+          type: choice
+          choices:
+            - when:
+                predicate:
+                  lang: dataweave
+                  expr: |
+                    (context.simulateProfileFailure default false) == true
+              next: failProfile
+          default: projectProfile
+
+        failProfile:
+          type: fail
+          errorCode: PROFILE_ENRICH_FAILED
+          reason: "Simulated profile enrichment failure"
+
+        projectProfile:
+          type: transform
+          transform:
+            mapper:
+              lang: dataweave
+              expr: |
+                {
+                  customerId: context.customerId,
+                  segment: context.segment default "STANDARD",
+                  profile: context.httpResult.body
+                }
+            target:
+              kind: context
+              path: profile
+          next: done
+
+        done:
+          type: succeed
+          outputVar: profile
+
+  start: prepareContext
+  states:
+    prepareContext:
+      type: transform
+      transform:
+        mapper:
+          lang: dataweave
+          expr: |
+            context
+        target:
+          kind: context
+          path: ""
+      next: callComputeTotals
+
+    callComputeTotals:
+      type: subjourney
+      subjourney:
+        ref: computeTotals
+        input:
+          mapper:
+            lang: dataweave
+            expr: |
+              {
+                cart: context.cart,
+                segment: context.segment
+              }
+        resultVar: totals
+        resultKind: output
+        onFailure:
+          behavior: propagate
+      next: callRiskCheck
+
+    callRiskCheck:
+      type: subjourney
+      subjourney:
+        ref: riskCheck
+        input:
+          mapper:
+            lang: dataweave
+            expr: |
+              {
+                segment: context.segment,
+                totals: context.totals,
+                simulateRiskFailure: context.simulateRiskFailure default false
+              }
+        resultVar: risk
+        resultKind: outcome
+        onFailure:
+          behavior: capture
+      next: callProfileEnrichment
+
+    callProfileEnrichment:
+      type: subjourney
+      subjourney:
+        ref: enrichProfile
+        input:
+          mapper:
+            lang: dataweave
+            expr: |
+              {
+                customerId: context.customerId,
+                segment: context.segment,
+                simulateProfileFailure: context.simulateProfileFailure default false
+              }
+        resultVar: profile
+        resultKind: output
+        onFailure:
+          behavior: capture
+      next: decide
+
+    decide:
+      type: choice
+      choices:
+        - when:
+            predicate:
+              lang: dataweave
+              expr: |
+                context.risk.phase == "SUCCEEDED"
+                  and (context.risk.output.level default "LOW") != "HIGH"
+          next: projectApproved
+        - when:
+            predicate:
+              lang: dataweave
+              expr: |
+                context.risk.phase == "FAILED"
+          next: errorFromRisk
+      default: rejected
+
+    projectApproved:
+      type: transform
+      transform:
+        mapper:
+          lang: dataweave
+          expr: |
+            {
+              decision: "APPROVED",
+              totals: context.totals,
+              risk: context.risk,
+              profile: context.profile
+            }
+        target:
+          kind: context
+          path: approvedOutcome
+      next: approved
+
+    approved:
+      type: succeed
+      outputVar: approvedOutcome
+
+    rejected:
+      type: fail
+      errorCode: CART_REJECTED
+      reason: "Cart rejected based on risk or other rules"
+
+    errorFromRisk:
+      type: fail
+      errorCode: RISK_SUBJOURNEY_FAILED
+      reason: "Risk subjourney failed; see JourneyOutcome.error for details"

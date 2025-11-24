@@ -30,8 +30,8 @@ Here’s a breakdown of the steps you’ll call over the Journeys API for the pr
 
 | # | Step ID | Description | Operation ID | Parameters | Success Criteria | Outputs |
 |---:|---------|-------------|--------------|------------|------------------|---------|
-| 1 | `startJourney` | Start a new `credit-decision-parallel` journey instance. | `creditDecisionParallel_start` | Body: `startRequest` as defined by JourneyStartRequest. | `$statusCode == 202` and a `journeyId` is returned. | `journeyId` for the new journey instance. |
-| 2 | `getResult` | Poll for the final journey outcome once terminal. | `creditDecisionParallel_getResult` | Path: `journeyId` from step 1. | `$statusCode == 200` and `phase` is `Succeeded` or `Failed`. | `JourneyOutcome` for this journey. |
+| 1 | `startJourney` | Start a new `credit-decision-parallel` journey instance (synchronous). | `creditDecisionParallel_start` | Body: `startRequest` as defined by JourneyStartRequest. | `$statusCode == 200`, `phase == "SUCCEEDED"` or `"FAILED"`. | `JourneyOutcome` for this journey. |
+| 2 | `getResult` | (Optional) Re-fetch the final journey outcome by id. | `creditDecisionParallel_getResult` | Path: `journeyId` from step 1 (or from `JourneyOutcome.journeyId`). | `$statusCode == 200` and `phase` is `SUCCEEDED` or `FAILED`. | `JourneyOutcome` for this journey. |
 
 ## Graphical overview
 

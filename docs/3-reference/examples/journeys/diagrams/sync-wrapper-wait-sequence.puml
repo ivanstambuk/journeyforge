@@ -6,10 +6,14 @@ actor "API client" as Client
 participant "Journeys API" as Journeys
 
 Client -> Journeys: POST /api/v1/journeys/sync-wrapper-wait/start
-Journeys --> Client: 202 Accepted\nJourneyStartResponse (journeyId, ...)
+Journeys -> Journeys: Start journey and enter waitStep
+Journeys --> Client: 200 OK\nJourneyStatus (phase = Running,\ncurrentState = waitStep)
+
+Client -> Journeys: POST /api/v1/journeys/{journeyId}/steps/waitStep\ncompletion event
+Journeys -> Journeys: Process completion event\nand drive journey to terminal state
+Journeys --> Client: 200 OK\nJourneyStatus (phase, currentState)
 
 Client -> Journeys: GET /api/v1/journeys/{journeyId}/result
-Journeys -> Journeys: Run sync-wrapper-wait journey to completion
 Journeys --> Client: 200 OK\nJourneyOutcome (phase, output, error)
 
 @enduml

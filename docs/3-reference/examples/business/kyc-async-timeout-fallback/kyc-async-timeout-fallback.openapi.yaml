@@ -12,7 +12,7 @@ tags:
 paths:
   /journeys/kyc-async-timeout-fallback/start:
     post:
-      summary: Start kyc-async-timeout-fallback journey
+      summary: Start kyc-async-timeout-fallback journey (async)
       operationId: kycAsyncTimeoutFallback_start
       tags:
         - kyc-async-timeout-fallback
@@ -24,12 +24,12 @@ paths:
               $ref: "#/components/schemas/KycAsyncTimeoutFallbackStartRequest"
       responses:
         "202":
-          description: Accepted
+          description: Accepted; asynchronous start. Returns a JourneyStartResponse for the new KYC journey instance.
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/JourneyStartResponse"
-      description: Start kyc-async-timeout-fallback journey
+      description: Start kyc-async-timeout-fallback journey (asynchronous start; clients observe progress via status/result).
   /journeys/{journeyId}:
     get:
       summary: Get journey status

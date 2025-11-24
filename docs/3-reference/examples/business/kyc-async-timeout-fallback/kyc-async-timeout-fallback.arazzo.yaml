@@ -12,10 +12,10 @@ sourceDescriptions:
     url: kyc-async-timeout-fallback.openapi.yaml
 workflows:
   - workflowId: kyc-primary-completes-within-sla
-    summary: Start KYC and complete from the primary provider within the SLA window.
+    summary: Start KYC asynchronously and complete from the primary provider within the SLA window.
     description: >
-      Start a kyc-async-timeout-fallback journey instance, receive a callback from the primary provider
-      within the SLA window, and read a KYC_COMPLETED_PRIMARY outcome.
+      Start a kyc-async-timeout-fallback journey instance asynchronously (HTTP 202 + JourneyStartResponse),
+      receive a callback from the primary provider within the SLA window, and read a KYC_COMPLETED_PRIMARY outcome.
     inputs:
       type: object
       properties:
@@ -58,7 +58,7 @@ workflows:
           additionalProperties: true
     steps:
       - stepId: startJourney
-        description: Start a new kyc-async-timeout-fallback journey instance.
+        description: Start a new kyc-async-timeout-fallback journey instance (async start).
         operationId: kycAsyncTimeoutFallback_start
         x-source: kycAsyncTimeoutFallback
         requestBody:
@@ -100,11 +100,11 @@ workflows:
             value: $steps.startJourney.outputs.journeyId
 
   - workflowId: kyc-timeout-then-fallback
-    summary: Start KYC, let the primary provider time out, then complete via fallback provider.
+    summary: Start KYC asynchronously, let the primary provider time out, then complete via fallback provider.
     description: >
-      Start a kyc-async-timeout-fallback journey instance, allow the primary provider SLA timer to fire
-      (with any late callbacks ignored), wait for the recovery attempts and fallback provider start,
-      then handle the fallback provider callback and read the final outcome.
+      Start a kyc-async-timeout-fallback journey instance asynchronously (HTTP 202 + JourneyStartResponse),
+      allow the primary provider SLA timer to fire (with any late callbacks ignored), wait for the recovery attempts
+      and fallback provider start, then handle the fallback provider callback and read the final outcome.
     inputs:
       type: object
       properties:
@@ -143,7 +143,7 @@ workflows:
           additionalProperties: true
     steps:
       - stepId: startJourney
-        description: Start a new kyc-async-timeout-fallback journey instance.
+        description: Start a new kyc-async-timeout-fallback journey instance (async start).
         operationId: kycAsyncTimeoutFallback_start
         x-source: kycAsyncTimeoutFallback
         requestBody:

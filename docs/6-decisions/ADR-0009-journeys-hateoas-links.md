@@ -37,7 +37,7 @@ When links are enabled (the default), the Journeys API responses MAY include a H
 {
   "journeyId": "123",
   "journeyName": "wait-approval",
-  "phase": "Running",
+  "phase": "RUNNING",
   "currentState": "waitForApproval",
   "_links": {
     "self":   { "href": "/api/v1/journeys/123", "method": "GET" },
@@ -59,7 +59,7 @@ Key points:
   - Additional rels for active step endpoints MAY reuse the state id (for example `waitForApproval`), or an implementation MAY adopt a more structured naming convention later.
  - For self-service journeys that support user cancellation:
    - Cancellation is expressed as a normal failure mode with its own stable error code (for example `JOURNEY_CANCELLED`), not as a separate phase in the schema.
-   - `_links.cancel` SHOULD be present whenever a journey is `Running` and cancellable, and MUST be omitted once the journey becomes terminal.
+   - `_links.cancel` SHOULD be present whenever a journey is `RUNNING` and cancellable, and MUST be omitted once the journey becomes terminal.
    - `_links.cancel` MUST be idempotent: repeated calls when the journey is already terminal or cancelled MUST NOT change the outcome.
 
 Specification updates:

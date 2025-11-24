@@ -9,9 +9,9 @@ start
 repeat
   :Client calls\nGET /api/v1/journeys/{journeyId}/result;
   :Journeys API returns\nJourneyOutcome with phase/output;
-repeat while (phase == "Running") is (still running)
+repeat while (phase == "RUNNING") is (still running)
 
-if (phase == "Succeeded"?) then (yes)
+if (phase == "SUCCEEDED"?) then (yes)
   :Client processes successful\nJourneyOutcome.output;
   stop
 else (no)

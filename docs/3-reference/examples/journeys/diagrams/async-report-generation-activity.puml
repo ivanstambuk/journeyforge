@@ -1,0 +1,20 @@
+@startuml
+!include journey-diagram-theme.puml
+title async-report-generation – client activity flow
+
+start
+
+:Client sends\nPOST /api/v1/journeys/async-report-generation/start\nwith AsyncReportGenerationStartRequest;
+:Journeys API starts report job\nwith Reports API and returns\n202 Accepted + JourneyStartResponse\n(journeyId, statusUrl);
+
+repeat
+  :Client polls\nGET /journeys/{journeyId}\n(getStatusRunning);
+  :Journeys API returns\nJourneyStatus with phase/currentState;
+repeat while (phase == "RUNNING") is (report job still running)
+
+:Client calls\nGET /journeys/{journeyId}/result\n(getResult);
+:Journeys API returns\nJourneyOutcome with output.status\n(REPORT_COMPLETED or REPORT_FAILED)\nand downloadUrl when available;
+
+stop
+
+@enduml

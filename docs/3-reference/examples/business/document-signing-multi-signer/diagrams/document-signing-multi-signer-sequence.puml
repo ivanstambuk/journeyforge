@@ -6,7 +6,7 @@ actor "Client" as Client
 participant "Journeys API" as Journeys
 
 Client -> Journeys: POST /api/v1/journeys/document-signing-multi-signer/start\nDocumentSigningStartRequest
-Journeys --> Client: 202 Accepted\nJourneyStartResponse (journeyId, ...)
+Journeys --> Client: 200 OK\nJourneyStatus (Running, submitSignature)
 
 Client -> Journeys: GET /api/v1/journeys/{journeyId}\n(getStatus)
 Journeys --> Client: 200 OK\nJourneyStatus (Running, submitSignature)
@@ -25,4 +25,3 @@ Client -> Journeys: GET /api/v1/journeys/{journeyId}/result\n(getResult)
 Journeys --> Client: 200 OK\nJourneyOutcome (FULLY_SIGNED / DECLINED / EXPIRED)
 
 @enduml
-

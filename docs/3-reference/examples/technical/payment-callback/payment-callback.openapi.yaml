@@ -35,13 +35,13 @@ paths:
                   type: string
               additionalProperties: true
       responses:
-        "202":
-          description: Accepted
+        "200":
+          description: Journey status at the first external-input state (waitForCallback)
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/JourneyStartResponse"
-      description: Start payment-callback journey
+                $ref: "#/components/schemas/JourneyStatus"
+      description: Start payment-callback journey (synchronous to first webhook step)
   /journeys/{journeyId}:
     get:
       summary: Get journey status

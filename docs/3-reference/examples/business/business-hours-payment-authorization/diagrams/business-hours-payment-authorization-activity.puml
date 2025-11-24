@@ -5,13 +5,9 @@ title business-hours-payment-authorization – client activity flow
 start
 
 :Client sends\nPOST /api/v1/journeys/business-hours-payment-authorization/start\nwith BusinessHoursPaymentStartRequest;
+:Journeys API runs the journey\n(classify window, timer if needed,\nauthorize payment) and returns\nJourneyOutcome or JourneyStatus;
 
-repeat
-  :Client calls\nGET /api/v1/journeys/{journeyId}/result;
-  :Journeys API returns\nJourneyOutcome with phase/output;
-repeat while (phase == "Running") is (waiting or authorizing)
-
-if (phase == "Succeeded" and finalStatus == "AUTHORIZED"?) then (authorized)
+if (phase == "SUCCEEDED" and finalStatus == "AUTHORIZED"?) then (authorized)
   :Client records successful authorization and\nprocessingMode (IMMEDIATE or DEFERRED);
   stop
 else (failed)
@@ -20,4 +16,3 @@ else (failed)
 endif
 
 @enduml
-

@@ -6,14 +6,6 @@ actor "Ops Client" as Client
 participant "Journeys API" as Journeys
 
 Client -> Journeys: POST /api/v1/journeys/daily-orders-batch-close/start\nDailyOrdersBatchCloseConfigRequest\n+ Authorization: Bearer <access token>
-Journeys --> Client: 202 Accepted\nJourneyStartResponse (journeyId, ...)
-
-Client -> Journeys: GET /api/v1/journeys/{journeyId}\n(getStatus)
-Journeys --> Client: 200 OK\nJourneyStatus (configuring schedule)
-
-... Interactive run completes, schedule binding created ...
-
-Client -> Journeys: GET /api/v1/journeys/{journeyId}/result\n(getResult)
 Journeys --> Client: 200 OK\nJourneyOutcome (status = SCHEDULED,\nfirstRunAt, interval, maxRuns)
 
 == Scheduled runs (non-interactive) ==
@@ -37,4 +29,3 @@ loop Once per interval (for example daily at 23:00)
 end
 
 @enduml
-

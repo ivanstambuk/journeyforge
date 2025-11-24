@@ -6,12 +6,9 @@ start
 
 :Client sends\nPOST /api/v1/journeys/recurring-payment/start\nwith RecurringPaymentStartRequest\n(userId, paymentMethodRef,\namount, currency, interval, maxRuns);
 
-:Journeys API creates or updates\nschedule binding via task.kind: schedule;
+:Journeys API creates or updates\nschedule binding via task.kind: schedule\nand returns JourneyOutcome with\noutput.status == \"SCHEDULED\" and\nconfigured schedule fields;
 
-:Client calls\nGET /api/v1/journeys/{journeyId}/result;
-:Journeys API returns\nJourneyOutcome with output.status == "SCHEDULED"\nand configured schedule fields;
-
-if (JourneyOutcome.phase == "Succeeded"?) then (yes)
+if (JourneyOutcome.phase == "SUCCEEDED"?) then (yes)
   :Client records schedule configuration\nfor the user;
   stop
 else (failed)
@@ -20,4 +17,3 @@ else (failed)
 endif
 
 @enduml
-

@@ -1,0 +1,138 @@
+arazzo: 1.0.1
+info:
+  title: JourneyForge – async-callback-sla workflows
+  version: 0.1.0
+  summary: Workflows for async callback + SLA journeys.
+  description: >
+    Workflows for starting an async-callback-sla journey, handling provider callbacks, and observing timeout outcomes
+    when the callback does not arrive within the SLA window.
+sourceDescriptions:
+  - name: asyncCallbackSla
+    type: openapi
+    url: async-callback-sla.openapi.yaml
+workflows:
+  - workflowId: async-callback-within-sla
+    summary: Start an async job and complete from callback within SLA.
+    description: >
+      Start an async-callback-sla journey instance asynchronously (HTTP 202 + JourneyStartResponse),
+      receive a provider callback within the SLA window, and read a COMPLETED_WITHIN_SLA outcome.
+    inputs:
+      type: object
+      properties:
+        startRequest:
+          description: Initial request payload.
+          type: object
+          required:
+            - requestId
+          properties:
+            requestId:
+              type: string
+            slaSeconds:
+              type: integer
+          additionalProperties: true
+        callbackInput:
+          description: Provider callback payload.
+          type: object
+          required:
+            - jobId
+            - status
+          properties:
+            jobId:
+              type: string
+            status:
+              type: string
+              enum:
+                - COMPLETED
+                - FAILED
+          additionalProperties: true
+    steps:
+      - stepId: startJourney
+        description: Start a new async-callback-sla journey instance (async start).
+        operationId: asyncCallbackSla_start
+        x-source: asyncCallbackSla
+        requestBody:
+          contentType: application/json
+          payload: $inputs.startRequest
+        outputs:
+          journeyId: $response.body.journeyId
+      - stepId: getStatusRunning
+        description: Optional status check while waiting for the provider callback.
+        operationId: asyncCallbackSla_getStatus
+        x-source: asyncCallbackSla
+        parameters:
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId
+        outputs:
+          phase: $response.body.phase
+          currentState: $response.body.currentState
+      - stepId: callback
+        description: Provider posts the callback within the SLA window.
+        operationId: asyncCallbackSla_waitForCallback
+        x-source: asyncCallbackSla
+        parameters:
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId
+        requestBody:
+          contentType: application/json
+          payload: $inputs.callbackInput
+        outputs:
+          phase: $response.body.phase
+      - stepId: getResult
+        description: Retrieve the final outcome after the callback has been processed.
+        operationId: asyncCallbackSla_getResult
+        x-source: asyncCallbackSla
+        parameters:
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId
+
+  - workflowId: async-callback-times-out
+    summary: Start an async job and observe a timeout when no callback arrives within SLA.
+    description: >
+      Start an async-callback-sla journey instance asynchronously (HTTP 202 + JourneyStartResponse),
+      wait for the SLA timer to fire when no callback arrives, and read a TIMED_OUT outcome.
+    inputs:
+      type: object
+      properties:
+        startRequest:
+          description: Initial request payload.
+          type: object
+          required:
+            - requestId
+          properties:
+            requestId:
+              type: string
+            slaSeconds:
+              type: integer
+          additionalProperties: true
+    steps:
+      - stepId: startJourney
+        description: Start a new async-callback-sla journey instance (async start).
+        operationId: asyncCallbackSla_start
+        x-source: asyncCallbackSla
+        requestBody:
+          contentType: application/json
+          payload: $inputs.startRequest
+        outputs:
+          journeyId: $response.body.journeyId
+      - stepId: getStatusDuringSla
+        description: Optional status checks while the SLA timer is still running.
+        operationId: asyncCallbackSla_getStatus
+        x-source: asyncCallbackSla
+        parameters:
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId
+        outputs:
+          phase: $response.body.phase
+          currentState: $response.body.currentState
+      - stepId: getResult
+        description: Retrieve the final outcome after the SLA timer has fired.
+        operationId: asyncCallbackSla_getResult
+        x-source: asyncCallbackSla
+        parameters:
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId

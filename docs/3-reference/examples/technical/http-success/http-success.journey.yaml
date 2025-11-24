@@ -11,6 +11,12 @@ spec:
     accounts: { openApiRef: apis/accounts.openapi.yaml }
     serviceA: { openApiRef: apis/serviceA.openapi.yaml }
     serviceB: { openApiRef: apis/serviceB.openapi.yaml }
+  platform:
+    config:
+      itemsApiBaseUrl:
+        type: string
+        required: true
+        description: "Base URL for the upstream items API"
   input:
     schema:
       title: JourneyStartRequest
@@ -52,7 +58,7 @@ spec:
       task:
         kind: httpCall
         method: GET
-        url: "https://api.example.com/items/${context.inputId}"
+        url: "${platform.config.itemsApiBaseUrl}/items/${context.inputId}"
         headers: { Accept: application/json }
         timeoutMs: 5000
         resultVar: api

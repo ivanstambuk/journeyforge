@@ -8,13 +8,9 @@ actor "Email link adapter" as Adapter
 participant "Journeys API" as Journeys
 
 Client -> Journeys: POST /api/v1/journeys/email-verification/start\nEmailVerificationStartRequest
-Journeys --> Client: 202 Accepted\nJourneyStartResponse (journeyId, ...)
-
 Journeys -> EmailService: POST /email/verification\n(userId, email, verificationCode)
 EmailService --> Journeys: 202 Accepted\n(email queued)
-
-Client -> Journeys: GET /api/v1/journeys/{journeyId}\n(getStatusAfterStart)
-Journeys --> Client: 200 OK\nJourneyStatus (email sent, waiting for verification)
+Journeys --> Client: 200 OK\nJourneyStatus (email sent,\nwaiting for verification)
 
 note over Client, Adapter
   User receives the email and clicks the magic link

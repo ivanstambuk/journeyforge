@@ -1,0 +1,20 @@
+arazzo: 1.0.0
+info:
+  title: wait-multiple-callbacks – technical pattern
+  version: 0.1.0
+  description: >
+    Technical pattern showing how to wait for N callbacks using a single external-input step,
+    looping on /steps/waitForCallback until all expected callbacks have been processed.
+workflows:
+  waitMultipleCallbacks:
+    summary: Wait for N callback submissions and aggregate their payloads.
+    steps:
+      - stepId: startJourney
+        operationId: waitMultipleCallbacks_start
+        description: Start a journey instance that will wait for N callbacks.
+      - stepId: waitForCallback
+        operationId: waitMultipleCallbacks_waitForCallback
+        description: Submit a callback payload; call repeatedly until all expected callbacks are received.
+      - stepId: getResult
+        operationId: waitMultipleCallbacks_getResult
+        description: Retrieve the aggregated callbacks and counts after completion.

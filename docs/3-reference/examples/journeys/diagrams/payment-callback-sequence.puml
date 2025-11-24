@@ -6,10 +6,16 @@ actor "API client" as Client
 participant "Journeys API" as Journeys
 
 Client -> Journeys: POST /api/v1/journeys/payment-callback/start
-Journeys --> Client: 202 Accepted\nJourneyStartResponse (journeyId, ...)
+Journeys -> Journeys: Authorise payment\nand enter waitForCallback webhook state
+Journeys --> Client: 200 OK\nJourneyStatus (phase = Running,\ncurrentState = waitForCallback)
+
+... later, payment provider callback ...
+
+Client -> Journeys: POST /api/v1/journeys/{journeyId}/steps/waitForCallback\ncallback payload
+Journeys -> Journeys: Process callback and\n drive journey to terminal state
+Journeys --> Client: 200 OK\nPaymentCallbackStepResponse (and/or JourneyStatus)
 
 Client -> Journeys: GET /api/v1/journeys/{journeyId}/result
-Journeys -> Journeys: Run payment-callback journey to completion
 Journeys --> Client: 200 OK\nJourneyOutcome (phase, output, error)
 
 @enduml

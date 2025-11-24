@@ -43,13 +43,13 @@ paths:
             schema:
               $ref: "#/components/schemas/SupportCaseStartRequest"
       responses:
-        "202":
-          description: Accepted
+        "200":
+          description: Journey status after classification and at the first external-input state
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/JourneyStartResponse"
-      description: Start support-case-sla journey
+                $ref: "#/components/schemas/JourneyStatus"
+      description: Start support-case-sla journey (synchronous to first wait/timer branch)
   /journeys/{journeyId}:
     get:
       summary: Get journey status
@@ -181,25 +181,6 @@ components:
         resolutionSummary:
           type: string
       additionalProperties: true
-    JourneyStartResponse:
-      type: object
-      required:
-        - journeyId
-        - journeyName
-        - statusUrl
-      properties:
-        journeyId:
-          type: string
-        journeyName:
-          type: string
-        statusUrl:
-          type: string
-          format: uri
-        _links:
-          description: "Optional hypermedia links (HAL-style) describing related resources and next actions.\n\nPresence is controlled per-journey via spec.httpSurface.links.enabled; when enabled, the engine typically includes at least `self` and `result` links.\n"
-          type: object
-          additionalProperties:
-            $ref: "#/components/schemas/Link"
     JourneyStatus:
       type: object
       required:

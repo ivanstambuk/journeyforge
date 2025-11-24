@@ -1,0 +1,241 @@
+apiVersion: v1
+kind: Journey
+metadata:
+  name: async-callback-sla
+  version: 0.1.0
+  description: Async callback + SLA race pattern where a provider callback is raced against a durable timer.
+spec:
+  lifecycle:
+    startMode: async
+  input:
+    schema:
+      title: AsyncCallbackSlaStartRequest
+      type: object
+      required:
+        - requestId
+      properties:
+        requestId:
+          type: string
+        slaSeconds:
+          type: integer
+          description: Optional SLA window in seconds for the provider callback (default 300).
+      additionalProperties: true
+  output:
+    schema:
+      title: AsyncCallbackSlaOutcome
+      type: object
+      required:
+        - status
+        - requestId
+      properties:
+        status:
+          type: string
+          enum:
+            - COMPLETED_WITHIN_SLA
+            - TIMED_OUT
+            - FAILED
+        requestId:
+          type: string
+        providerStatus:
+          type: string
+        completionSource:
+          type: string
+        failureReason:
+          type: string
+        timeoutReason:
+          type: string
+      additionalProperties: true
+  start: startAsyncJob
+  states:
+    startAsyncJob:
+      type: task
+      task:
+        kind: httpCall
+        method: POST
+        url: https://provider.example.com/jobs/start
+        params:
+          headers:
+            Accept: application/json
+        body:
+          mapper:
+            lang: dataweave
+            expr: |
+              {
+                requestId: context.requestId
+              }
+        timeoutMs: 2000
+        resultVar: jobStart
+      next: recordJobContext
+
+    recordJobContext:
+      type: transform
+      transform:
+        mapper:
+          lang: dataweave
+          expr: |
+            context ++ {
+              jobId: jobStart.body.jobId,
+              slaSeconds: (context.slaSeconds default 300)
+            }
+        target:
+          kind: context
+          path: ""
+      next: callbackVsSla
+
+    callbackVsSla:
+      type: parallel
+      parallel:
+        branches:
+          - name: callbackBranch
+            start: waitForCallback
+            states:
+              waitForCallback:
+                type: webhook
+                webhook:
+                  input:
+                    schema:
+                      title: ProviderCallbackInput
+                      type: object
+                      required:
+                        - jobId
+                        - status
+                      properties:
+                        jobId:
+                          type: string
+                        status:
+                          type: string
+                          enum:
+                            - COMPLETED
+                            - FAILED
+                      additionalProperties: true
+                  response:
+                    outputVar: callbackStep
+                    schema:
+                      title: ProviderCallbackStepResponse
+                      type: object
+                      properties:
+                        status:
+                          type: string
+                        journeyPhase:
+                          type: string
+                      additionalProperties: true
+                  apply:
+                    mapper:
+                      lang: dataweave
+                      expr: |
+                        context ++ {
+                          providerCallback: payload,
+                          callbackStep: {
+                            status: payload.status,
+                            journeyPhase: "Running"
+                          }
+                        }
+                  on:
+                    - when:
+                        predicate:
+                          lang: dataweave
+                          expr: |
+                            context.outcome != null
+                      next: ignoreLateCallback
+                    - when:
+                        predicate:
+                          lang: dataweave
+                          expr: |
+                            payload.status == "COMPLETED"
+                      next: completeFromCallback
+                  default: failFromCallback
+
+              ignoreLateCallback:
+                type: transform
+                transform:
+                  mapper:
+                    lang: dataweave
+                    expr: context
+                  target:
+                    kind: context
+                    path: ""
+                next: callbackDone
+
+              completeFromCallback:
+                type: transform
+                transform:
+                  mapper:
+                    lang: dataweave
+                    expr: |
+                      context ++ {
+                        outcome: {
+                          status: "COMPLETED_WITHIN_SLA",
+                          requestId: context.requestId,
+                          providerStatus: "COMPLETED",
+                          completionSource: "CALLBACK"
+                        }
+                      }
+                  target:
+                    kind: context
+                    path: ""
+                next: callbackDone
+
+              failFromCallback:
+                type: transform
+                transform:
+                  mapper:
+                    lang: dataweave
+                    expr: |
+                      context ++ {
+                        outcome: {
+                          status: "FAILED",
+                          requestId: context.requestId,
+                          providerStatus: "FAILED",
+                          completionSource: "CALLBACK",
+                          failureReason: "Provider reported FAILED status"
+                        }
+                      }
+                  target:
+                    kind: context
+                    path: ""
+                next: callbackDone
+
+              callbackDone:
+                type: succeed
+                outputVar: outcome
+
+          - name: slaBranch
+            start: slaTimer
+            states:
+              slaTimer:
+                type: timer
+                timer:
+                  duration:
+                    mapper:
+                      lang: dataweave
+                      expr: |
+                        "PT" ++ (context.slaSeconds as String) ++ "S"
+                next: markTimedOut
+
+              markTimedOut:
+                type: transform
+                transform:
+                  mapper:
+                    lang: dataweave
+                    expr: |
+                      context ++ {
+                        outcome: {
+                          status: "TIMED_OUT",
+                          requestId: context.requestId,
+                          providerStatus: "UNKNOWN",
+                          completionSource: "SLA_TIMER",
+                          timeoutReason: "Provider callback did not arrive within SLA window"
+                        }
+                      }
+                  target:
+                    kind: context
+                    path: ""
+                next: slaDone
+
+              slaDone:
+                type: succeed
+                outputVar: outcome
+
+        join:
+          strategy: anyOf
+          errorPolicy: collectAll

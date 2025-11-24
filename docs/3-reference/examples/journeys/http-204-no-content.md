@@ -26,8 +26,8 @@ Here’s a breakdown of the steps you’ll call over the Journeys API for the pr
 
 | # | Step ID | Description | Operation ID | Parameters | Success Criteria | Outputs |
 |---:|---------|-------------|--------------|------------|------------------|---------|
-| 1 | `startJourney` | Start a new `http-204-no-content` journey instance. | `http204NoContent_start` | Body: `startRequest` as defined by JourneyStartRequest. | `$statusCode == 202` and a `journeyId` is returned. | `journeyId` for the new journey instance. |
-| 2 | `getResult` | Poll for the final journey outcome once terminal. | `http204NoContent_getResult` | Path: `journeyId` from step 1. | `$statusCode == 200` and `phase` is `Succeeded` or `Failed`. | `JourneyOutcome` for this journey. |
+| 1 | `startJourney` | Start a new `http-204-no-content` journey instance (synchronous). | `http204NoContent_start` | Body: `startRequest` as defined by JourneyStartRequest. | `$statusCode == 200`, `phase == "SUCCEEDED"` or `"FAILED"`; for the happy path, the upstream call returns 204 and the journey normalises this into `JourneyOutcome.output`. | `JourneyOutcome` for this journey. |
+| 2 | `getResult` | (Optional) Re-fetch the final journey outcome by id. | `http204NoContent_getResult` | Path: `journeyId` from step 1 (or from `JourneyOutcome.journeyId`). | `$statusCode == 200` and `phase` is `SUCCEEDED` or `FAILED`. | `JourneyOutcome` for this journey. |
 
 ## Graphical overview
 

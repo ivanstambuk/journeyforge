@@ -5,11 +5,7 @@ title b2b-purchase-order – client activity flow
 start
 
 :Client sends\nPOST /api/v1/journeys/b2b-purchase-order/start\nwith B2bPurchaseOrderStartRequest;
-
-repeat
-  :Client calls\nGET /api/v1/journeys/{journeyId}/result;
-  :Journeys API returns\nJourneyOutcome with phase/output;
-repeat while (phase == "Running" and\ncurrentState != "waitForLevel1Approval") is (creating PO)
+:Journeys API returns\nJourneyStatus at waitForLevel1Approval\n(phase = Running);
 
 if (currentState == "waitForLevel1Approval"?) then (yes)
   :Manager submits level 1 decision\nPOST /api/v1/journeys/{journeyId}/steps/approveLevel1;
@@ -24,7 +20,10 @@ if (currentState == "waitForLevel3Approval"?) then (yes)
   :Board submits level 3 decision\nPOST /api/v1/journeys/{journeyId}/steps/approveLevel3;
 endif
 
-if (phase == "Succeeded" and finalStatus == "APPROVED"?) then (approved)
+:Client calls\nGET /api/v1/journeys/{journeyId}/result;
+:Journeys API returns\nJourneyOutcome with phase/output;
+
+if (phase == "SUCCEEDED" and finalStatus == "APPROVED"?) then (approved)
   :Client records approved purchase order\nin ERP or procurement system;
   stop
 else (rejected)
@@ -33,4 +32,3 @@ else (rejected)
 endif
 
 @enduml
-

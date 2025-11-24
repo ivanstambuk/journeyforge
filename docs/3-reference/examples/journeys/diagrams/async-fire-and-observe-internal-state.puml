@@ -1,0 +1,43 @@
+@startuml
+!include journey-diagram-theme.puml
+title async-fire-and-observe – internal DSL state graph
+
+[*] --> enqueueJob
+
+state enqueueJob
+state recordJob
+state waitForNextPoll
+state fetchJobStatus
+state decideJobStatus
+state scheduleNextPoll
+state completeFromJob
+state done
+state failFromJob
+
+enqueueJob --> recordJob
+recordJob --> waitForNextPoll
+waitForNextPoll --> fetchJobStatus
+fetchJobStatus --> decideJobStatus
+
+decideJobStatus --> completeFromJob : state == COMPLETED
+decideJobStatus --> failFromJob : state == FAILED
+decideJobStatus --> scheduleNextPoll : default (still running)
+
+scheduleNextPoll --> waitForNextPoll
+
+completeFromJob --> done
+done --> [*]
+
+failFromJob --> [*]
+
+note right of enqueueJob
+  task.kind: httpCall
+  POST /async-jobs
+end note
+
+note right of fetchJobStatus
+  task.kind: httpCall
+  GET /async-jobs/{jobId}
+end note
+
+@enduml

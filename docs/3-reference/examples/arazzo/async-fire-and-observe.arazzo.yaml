@@ -1,0 +1,64 @@
+arazzo: 1.0.1
+info:
+  title: JourneyForge – async-fire-and-observe workflows
+  version: 0.1.0
+  summary: Workflows for async fire-and-observe journeys.
+  description: >
+    Workflows for starting an async-fire-and-observe journey, polling status while a background job runs,
+    and retrieving the final outcome.
+sourceDescriptions:
+  - name: asyncFireAndObserve
+    type: openapi
+    url: ../oas/async-fire-and-observe.openapi.yaml
+workflows:
+  - workflowId: async-fire-and-observe-basic
+    summary: Start a long-running async job and observe completion.
+    description: >
+      Start an async-fire-and-observe journey instance asynchronously (HTTP 202 + JourneyStartResponse),
+      poll status while the background job runs, and retrieve the final outcome once the job is completed.
+    inputs:
+      type: object
+      properties:
+        startRequest:
+          description: Initial payload for the async-fire-and-observe journey.
+          type: object
+          required:
+            - jobType
+            - correlationId
+          properties:
+            jobType:
+              type: string
+            correlationId:
+              type: string
+            pollIntervalSeconds:
+              type: integer
+          additionalProperties: true
+    steps:
+      - stepId: startJourney
+        description: Start a new async-fire-and-observe journey instance (async start).
+        operationId: asyncFireAndObserve_start
+        x-source: asyncFireAndObserve
+        requestBody:
+          contentType: application/json
+          payload: $inputs.startRequest
+        outputs:
+          journeyId: $response.body.journeyId
+      - stepId: getStatusRunning
+        description: Optional status check while the background job is running.
+        operationId: asyncFireAndObserve_getStatus
+        x-source: asyncFireAndObserve
+        parameters:
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId
+        outputs:
+          phase: $response.body.phase
+          currentState: $response.body.currentState
+      - stepId: getResult
+        description: Retrieve the final outcome once the background job is completed.
+        operationId: asyncFireAndObserve_getResult
+        x-source: asyncFireAndObserve
+        parameters:
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId

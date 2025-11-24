@@ -104,7 +104,7 @@ Conceptually, the journey is “paused at a timer”, but operationally this is 
 
 When `dueAt` is reached (or shortly after, depending on scheduler behaviour):
 - The scheduler identifies the timer record and loads the corresponding journey instance.
-- If the journey is still `Running` and its `currentState` is the same timer state:
+- If the journey is still `RUNNING` and its `currentState` is the same timer state:
   - The engine resumes execution and transitions to the configured `next` state.
 - If the journey is no longer running (for example it was cancelled or timed out globally):
   - The engine MUST treat the timer record as stale and discard it; it MUST NOT start a new run or resurrect a terminated instance.

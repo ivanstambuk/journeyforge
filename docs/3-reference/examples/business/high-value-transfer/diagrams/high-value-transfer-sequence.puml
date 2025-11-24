@@ -8,13 +8,8 @@ actor "Settlement system" as Settlement
 participant "Journeys API" as Journeys
 
 Client -> Journeys: POST /api/v1/journeys/high-value-transfer/start\nHighValueTransferStartRequest
-Journeys --> Client: 202 Accepted\nJourneyStartResponse (journeyId, ...)
-
-Client -> Journeys: GET /api/v1/journeys/{journeyId}\n(getStatusAfterChecks)
-Journeys --> Client: 200 OK\nJourneyStatus (checks completed)
-
-Client -> Journeys: GET /api/v1/journeys/{journeyId}\n(getStatusAwaitingApproval)
-Journeys --> Client: 200 OK\nJourneyStatus (currentState == waitForApproval)
+Journeys -> Journeys: Run initial fraud and sanctions checks
+Journeys --> Client: 200 OK\nJourneyStatus (phase, currentState)
 
 note over Client, Operator
   Client and operator may discuss the high-value transfer

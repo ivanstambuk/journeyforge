@@ -9,9 +9,9 @@ start
 repeat
   :Ops client calls\nGET /api/v1/journeys/{journeyId}/result;
   :Journeys API returns\nJourneyOutcome with phase/output;
-repeat while (phase == "Running") is (configuring schedule)
+repeat while (phase == "RUNNING") is (configuring schedule)
 
-if (phase == "Succeeded" and status == "SCHEDULED"?) then (scheduled)
+if (phase == "SUCCEEDED" and status == "SCHEDULED"?) then (scheduled)
   :Ops client records batch schedule parameters\nand monitors future scheduled runs\nvia platform metrics/logs;
   stop
 else (failed)
@@ -20,4 +20,3 @@ else (failed)
 endif
 
 @enduml
-

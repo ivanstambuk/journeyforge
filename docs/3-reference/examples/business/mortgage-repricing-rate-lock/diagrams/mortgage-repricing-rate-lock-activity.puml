@@ -9,7 +9,7 @@ start
 repeat
   :Client calls\nGET /api/v1/journeys/{journeyId}/result;
   :Journeys API returns\nJourneyOutcome with phase/output;
-repeat while (phase == "Running" and\ncurrentState != "waitForCustomerAcceptance") is (engine still preparing offer)
+repeat while (phase == "RUNNING" and\ncurrentState != "waitForCustomerAcceptance") is (engine still preparing offer)
 
 if (currentState == "waitForCustomerAcceptance"?) then (yes)
   :Client submits acceptance/decline\nPOST /api/v1/journeys/{journeyId}/steps/customerAcceptance;
@@ -17,7 +17,7 @@ if (currentState == "waitForCustomerAcceptance"?) then (yes)
   :Journeys API returns\nJourneyOutcome once rate lock confirmed or failed;
 endif
 
-if (phase == "Succeeded" and decision == "LOCKED"?) then (locked)
+if (phase == "SUCCEEDED" and decision == "LOCKED"?) then (locked)
   :Client applies locked rate terms\n(lockedRate, lockExpiry, lockId);
   stop
 else (expired/rejected)
@@ -26,4 +26,3 @@ else (expired/rejected)
 endif
 
 @enduml
-

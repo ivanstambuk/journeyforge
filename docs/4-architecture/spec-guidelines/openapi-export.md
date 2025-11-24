@@ -56,9 +56,9 @@ Note: the initial version only specifies `POST` for API endpoints. Future versio
 ## Schemas (canonical)
 - `JourneyStartRequest`: conceptually “initial context object”; per-journey OAS specialise this to the journey’s `spec.input.schema`.
 - `JourneyStartResponse`: `{ journeyId: string, journeyName: string, statusUrl: string, _links?: Links }`
-- `JourneyStatus`: `{ journeyId, journeyName, phase: enum[Running,Succeeded,Failed], currentState: string, updatedAt: string(date-time), _links?: Links }`
+- `JourneyStatus`: `{ journeyId, journeyName, phase: enum[RUNNING,SUCCEEDED,FAILED], currentState: string, updatedAt: string(date-time), _links?: Links }`
 - `JourneyStepRequest`: `{ eventType: string, payload?: object }`
-- `JourneyOutcome`: `{ journeyId, journeyName, phase: enum[Succeeded,Failed], output?: any, error?: { code: string, reason: string }, _links?: Links }`
+- `JourneyOutcome`: `{ journeyId, journeyName, phase: enum[SUCCEEDED,FAILED], output?: any, error?: { code: string, reason: string }, _links?: Links }`
 - `Links` (HAL-style, non-normative): `{ [rel: string]: { href: string, method?: string } }`
 
 Notes on `_links`
@@ -66,7 +66,7 @@ Notes on `_links`
   - `self` – the current resource (for example `/api/v1/journeys/{journeyId}`).
   - `result` – the final outcome resource (for example `/api/v1/journeys/{journeyId}/result`).
   - Step links – when a `wait`/`webhook` state is active, implementations MAY expose links for the relevant `/steps/{stepId}` endpoints; the link relation name MUST equal the external-input state id (for example `waitForOtp`, `confirm`).
-  - Cancel link – when a journey is `Running` and user‑cancellable (see `spec.lifecycle.cancellable`), implementations SHOULD expose `_links.cancel` pointing to the canonical cancellation step `/api/v1/journeys/{journeyId}/steps/cancel` with `method: POST`. When the journey is terminal or `cancellable == false`, `_links.cancel` MUST be omitted.
+  - Cancel link – when a journey is `RUNNING` and user‑cancellable (see `spec.lifecycle.cancellable`), implementations SHOULD expose `_links.cancel` pointing to the canonical cancellation step `/api/v1/journeys/{journeyId}/steps/cancel` with `method: POST`. When the journey is terminal or `cancellable == false`, `_links.cancel` MUST be omitted.
 - Presence is controlled per-journey via `spec.httpSurface.links.enabled`:
   - When omitted or `true`, the engine SHOULD include `_links` as described above.
   - When explicitly `false`, the engine SHOULD omit `_links` for that journey, even though the generic schema still declares `_links` as optional.

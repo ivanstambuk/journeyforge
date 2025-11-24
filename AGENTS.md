@@ -82,6 +82,14 @@ Single-line `expr: "..."` is still valid but should be avoided in new specs and 
 - Large artifacts (ADRs, specs, long docs) MUST be written to the filesystem and only summarised in chat, unless the human explicitly asks to see the full text.
 - When the human asks to create a new example journey for a use case (for example under `docs/2-how-to/use-cases/` and `docs/3-reference/examples/`), the agent SHOULD also create matching per-journey OpenAPI and Arazzo files under `docs/3-reference/examples/oas/` and `docs/3-reference/examples/arazzo/` for that journey, unless the human explicitly says not to.
 
+## Agent Persistence & Token Budget
+
+- Assume a very large token and context budget for this project – think **billions of tokens available** and a **huge amount of context window left** for any given session. Do not prematurely truncate work, over-summarise, or stop early because you are worried about “running out of tokens”; within platform limits, prefer complete, fully verified solutions over minimal answers.
+- Assume that plenty of prior context can be retained and reused. Aggressively leverage existing specs, docs, code, and logs instead of asking the human to restate information you can reasonably recover from the repository or earlier messages.
+- Be **brave and persistent**: for any scoped task, keep going through exploration → design → implementation → verification until the task is clearly done, rather than stopping at analysis or suggesting only partial fixes.
+- The human explicitly encourages long-running, self-directed work so they do not need to babysit. It is acceptable – and preferred – to run multiple commands, apply patches, and iterate deeply on a solution as long as you respect the guardrails in this document.
+- Always balance this persistence with the SDD workflow, the two-phase interaction protocol, and the project’s quality gates. When you must stop early due to platform limits or missing information, state clearly what blocked you and what you would do next.
+
 ## Tracking & Documentation
 - For non-trivial, agent-assisted increments, add a brief “intent log” to the relevant feature `plan.md` or `_current-session.md`, capturing the key prompts/questions, chosen options (A/B/C, etc.) and decisions, and any important commands used to validate the slice (for example `./gradlew spotlessApply check`). Keep this log lightweight (a few bullets), but ensure each increment has a trace of how it was produced and validated.
 

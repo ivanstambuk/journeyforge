@@ -60,6 +60,196 @@ spec:
         autoCloseReason:
           type: string
       additionalProperties: true
+  platform:
+    config:
+      slaP1Duration:
+        type: string
+        required: true
+        description: "ISO-8601 duration for P1 SLA (for example PT1H)"
+      slaP2Duration:
+        type: string
+        required: true
+        description: "ISO-8601 duration for P2 SLA (for example PT4H)"
+      slaP3Duration:
+        type: string
+        required: true
+        description: "ISO-8601 duration for P3 SLA (for example PT8H)"
+      giveUpDuration:
+        type: string
+        required: false
+        description: "ISO-8601 give-up window (default P2D when omitted)"
+  subjourneys:
+    caseLifecycle:
+      start: waitOrEscalateOrGiveUp
+      states:
+        waitOrEscalateOrGiveUp:
+          type: parallel
+          parallel:
+            branches:
+              - name: caseWorkBranch
+                start: waitForAgentUpdate
+                states:
+                  waitForAgentUpdate:
+                    type: wait
+                    wait:
+                      channel: manual
+                      input:
+                        schema:
+                          title: SupportCaseAgentUpdateInput
+                          type: object
+                          required: [status]
+                          properties:
+                            status:
+                              type: string
+                              enum: [RESOLVED]
+                            resolutionSummary:
+                              type: string
+                          additionalProperties: true
+                      apply:
+                        mapper:
+                          lang: dataweave
+                          expr: |
+                            context ++ {
+                              agentUpdate: payload
+                            }
+                      on:
+                        - when:
+                            predicate:
+                              lang: dataweave
+                              expr: |
+                                payload.status == "RESOLVED"
+                          next: markResolved
+                      default: ignoreUpdate
+
+                  ignoreUpdate:
+                    type: transform
+                    transform:
+                      mapper:
+                        lang: dataweave
+                        expr: context
+                      target:
+                        kind: context
+                        path: ""
+                    next: waitForAgentUpdate
+
+                  markResolved:
+                    type: transform
+                    transform:
+                      mapper:
+                        lang: dataweave
+                        expr: |
+                          context ++ {
+                            outcome: {
+                              status: "RESOLVED",
+                              caseId: context.caseId,
+                              customerId: context.customerId,
+                              priority: context.priority,
+                              resolvedAt: now(),
+                              resolutionSummary: context.agentUpdate.resolutionSummary
+                            }
+                          }
+                      target:
+                        kind: context
+                        path: ""
+                    next: caseResolved
+
+                  caseResolved:
+                    type: succeed
+                    outputVar: outcome
+
+              - name: slaBranch
+                start: slaTimer
+                states:
+                  slaTimer:
+                    type: timer
+                    timer:
+                      duration: "${context.slaDuration}"
+                    next: markEscalated
+
+                  markEscalated:
+                    type: transform
+                    transform:
+                      mapper:
+                        lang: dataweave
+                        expr: |
+                          context ++ {
+                            outcome: {
+                              status: "ESCALATED",
+                              caseId: context.caseId,
+                              customerId: context.customerId,
+                              priority: context.priority,
+                              escalatedAt: now()
+                            }
+                          }
+                      target:
+                        kind: context
+                        path: ""
+                    next: notifyEscalation
+
+                  notifyEscalation:
+                    type: task
+                    task:
+                      kind: httpCall
+                      method: POST
+                      url: https://escalation.example.com/cases/escalate
+                      params:
+                        headers:
+                          Accept: application/json
+                      body:
+                        mapper:
+                          lang: dataweave
+                          expr: |
+                            {
+                              caseId: context.caseId,
+                              customerId: context.customerId,
+                              priority: context.priority,
+                              escalatedAt: context.outcome.escalatedAt
+                            }
+                      timeoutMs: 2000
+                      resultVar: escalationResult
+                    next: caseEscalated
+
+                  caseEscalated:
+                    type: succeed
+                    outputVar: outcome
+
+              - name: giveUpBranch
+                start: giveUpTimer
+                states:
+                  giveUpTimer:
+                    type: timer
+                    timer:
+                      duration: "${context.giveUpDuration}"
+                    next: markAutoClosed
+
+                  markAutoClosed:
+                    type: transform
+                    transform:
+                      mapper:
+                        lang: dataweave
+                        expr: |
+                          context ++ {
+                            outcome: {
+                              status: "AUTO_CLOSED",
+                              caseId: context.caseId,
+                              customerId: context.customerId,
+                              priority: context.priority,
+                              autoClosedAt: now(),
+                              autoCloseReason: "Unresolved after give-up window"
+                            }
+                          }
+                      target:
+                        kind: context
+                        path: ""
+                    next: caseAutoClosed
+
+                  caseAutoClosed:
+                    type: succeed
+                    outputVar: outcome
+
+            join:
+              strategy: anyOf
+              errorPolicy: collectAll
   start: classifyPriority
   states:
     classifyPriority:
@@ -70,10 +260,11 @@ spec:
           expr: |
             context ++ {
               slaDuration:
-                if (context.priority == "P1") "PT1H"
-                else if (context.priority == "P2") "PT4H"
-                else "PT8H",
-              giveUpDuration: "P2D"
+                if (context.priority == "P1") platform.config.slaP1Duration
+                else if (context.priority == "P2") platform.config.slaP2Duration
+                else platform.config.slaP3Duration,
+              giveUpDuration:
+                platform.config.giveUpDuration default "P2D"
             }
         target:
           kind: context
@@ -101,173 +292,30 @@ spec:
               }
         timeoutMs: 2000
         resultVar: assignmentResult
-      next: waitOrEscalateOrGiveUp
+      next: runCaseLifecycle
 
-    waitOrEscalateOrGiveUp:
-      type: parallel
-      parallel:
-        branches:
-          - name: caseWorkBranch
-            start: waitForAgentUpdate
-            states:
-              waitForAgentUpdate:
-                type: wait
-                wait:
-                  channel: manual
-                  input:
-                    schema:
-                      title: SupportCaseAgentUpdateInput
-                      type: object
-                      required: [status]
-                      properties:
-                        status:
-                          type: string
-                          enum: [RESOLVED]
-                        resolutionSummary:
-                          type: string
-                      additionalProperties: true
-                  apply:
-                    mapper:
-                      lang: dataweave
-                      expr: |
-                        context ++ {
-                          agentUpdate: payload
-                        }
-                  on:
-                    - when:
-                        predicate:
-                          lang: dataweave
-                          expr: |
-                            payload.status == "RESOLVED"
-                      next: markResolved
-                  default: ignoreUpdate
+    runCaseLifecycle:
+      type: subjourney
+      subjourney:
+        ref: caseLifecycle
+        input:
+          mapper:
+            lang: dataweave
+            expr: |
+              {
+                caseId: context.caseId,
+                customerId: context.customerId,
+                priority: context.priority,
+                summary: context.summary,
+                slaDuration: context.slaDuration,
+                giveUpDuration: context.giveUpDuration
+              }
+        resultVar: outcome
+        resultKind: output
+        onFailure:
+          behavior: propagate
+      next: complete
 
-              ignoreUpdate:
-                type: transform
-                transform:
-                  mapper:
-                    lang: dataweave
-                    expr: context
-                  target:
-                    kind: context
-                    path: ""
-                next: waitForAgentUpdate
-
-              markResolved:
-                type: transform
-                transform:
-                  mapper:
-                    lang: dataweave
-                    expr: |
-                      context ++ {
-                        outcome: {
-                          status: "RESOLVED",
-                          caseId: context.caseId,
-                          customerId: context.customerId,
-                          priority: context.priority,
-                          resolvedAt: now(),
-                          resolutionSummary: context.agentUpdate.resolutionSummary
-                        }
-                      }
-                  target:
-                    kind: context
-                    path: ""
-                next: caseResolved
-
-              caseResolved:
-                type: succeed
-                outputVar: outcome
-
-          - name: slaBranch
-            start: slaTimer
-            states:
-              slaTimer:
-                type: timer
-                timer:
-                  duration: "${context.slaDuration}"
-                next: markEscalated
-
-              markEscalated:
-                type: transform
-                transform:
-                  mapper:
-                    lang: dataweave
-                    expr: |
-                      context ++ {
-                        outcome: {
-                          status: "ESCALATED",
-                          caseId: context.caseId,
-                          customerId: context.customerId,
-                          priority: context.priority,
-                          escalatedAt: now()
-                        }
-                      }
-                  target:
-                    kind: context
-                    path: ""
-                next: notifyEscalation
-
-              notifyEscalation:
-                type: task
-                task:
-                  kind: httpCall
-                  method: POST
-                  url: https://escalation.example.com/cases/escalate
-                  params:
-                    headers:
-                      Accept: application/json
-                  body:
-                    mapper:
-                      lang: dataweave
-                      expr: |
-                        {
-                          caseId: context.caseId,
-                          customerId: context.customerId,
-                          priority: context.priority,
-                          escalatedAt: context.outcome.escalatedAt
-                        }
-                  timeoutMs: 2000
-                  resultVar: escalationResult
-                next: caseEscalated
-
-              caseEscalated:
-                type: succeed
-                outputVar: outcome
-
-          - name: giveUpBranch
-            start: giveUpTimer
-            states:
-              giveUpTimer:
-                type: timer
-                timer:
-                  duration: "${context.giveUpDuration}"
-                next: markAutoClosed
-
-              markAutoClosed:
-                type: transform
-                transform:
-                  mapper:
-                    lang: dataweave
-                    expr: |
-                      context ++ {
-                        outcome: {
-                          status: "AUTO_CLOSED",
-                          caseId: context.caseId,
-                          customerId: context.customerId,
-                          priority: context.priority,
-                          autoClosedAt: now(),
-                          autoCloseReason: "Unresolved after give-up window"
-                        }
-                      }
-                  target:
-                    kind: context
-                    path: ""
-                next: caseAutoClosed
-
-              caseAutoClosed:
-                type: succeed
-                outputVar: outcome
-
-        join:
-          strategy: anyOf
-          errorPolicy: collectAll
+    complete:
+      type: succeed
+      outputVar: outcome

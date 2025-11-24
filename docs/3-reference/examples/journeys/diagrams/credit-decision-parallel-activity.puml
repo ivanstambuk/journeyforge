@@ -7,7 +7,7 @@ start
 :Client sends\nPOST /api/v1/journeys/credit-decision-parallel/start;
 :Client polls\nGET /api/v1/journeys/{journeyId}/result\nuntil phase != "Running";
 
-if (phase == "Succeeded"?) then (yes)
+if (phase == "SUCCEEDED"?) then (yes)
   :Client processes successful\nJourneyOutcome.output;
 else (no)
   :Client handles failure via\nJourneyOutcome.error;

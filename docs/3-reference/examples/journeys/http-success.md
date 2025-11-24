@@ -17,6 +17,7 @@ This journey issues a single `GET` request to an upstream HTTP service, checks t
 - Making an HTTP call via `task.kind: httpCall`.
 - Branching on `context.api.ok`.
 - Surfacing the HTTP envelope as the journey’s final `output`.
+ - Using `spec.platform.config` to inject an environment-specific `itemsApiBaseUrl` into the journey via `platform.config.itemsApiBaseUrl`.
 
 ## Contracts at a glance
 
@@ -35,8 +36,8 @@ Here’s a breakdown of the steps you’ll call over the Journeys API for the ha
 
 | # | Step ID | Description | Operation ID | Parameters | Success Criteria | Outputs |
 |---:|---------|-------------|--------------|------------|------------------|---------|
-| 1 | `startJourney` | Start a new `http-success` journey instance. | `httpSuccess_start` | Body: `startRequest` with `inputId`. | `$statusCode == 202` and a `journeyId` is returned. | `journeyId` for the new journey instance. |
-| 2 | `getResult` | Poll for the final journey outcome once terminal. | `httpSuccess_getResult` | Path: `journeyId` from step 1. | `$statusCode == 200`, `phase == "Succeeded"`, and `output.ok == true`. | `JourneyOutcome` with `output` matching `HttpSuccessOutput`. |
+| 1 | `startJourney` | Start a new `http-success` journey instance (synchronous). | `httpSuccess_start` | Body: `startRequest` with `inputId`. | `$statusCode == 200`, `phase == "SUCCEEDED"` or `"FAILED"`; for the happy path, `output.ok == true`. | `JourneyOutcome` with `output` matching `HttpSuccessOutput`. |
+| 2 | `getResult` | (Optional) Re-fetch the final journey outcome by id. | `httpSuccess_getResult` | Path: `journeyId` from step 1 (or from `JourneyOutcome.journeyId`). | `$statusCode == 200` and `phase` is `Succeeded` or `Failed`. | `JourneyOutcome` for this journey. |
 
 ## Graphical overview
 

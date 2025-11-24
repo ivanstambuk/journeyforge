@@ -23,13 +23,13 @@ paths:
             schema:
               $ref: "#/components/schemas/EmailVerificationStartRequest"
       responses:
-        "202":
-          description: Accepted
+        "200":
+          description: Journey status after the verification email has been sent and the journey is waiting for verification or expiry
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/JourneyStartResponse"
-      description: Start email-verification journey
+                $ref: "#/components/schemas/JourneyStatus"
+      description: Start email-verification journey (synchronous to first wait/timer branch)
   /journeys/{journeyId}:
     get:
       summary: Get journey status
@@ -147,25 +147,6 @@ components:
         code:
           type: string
       additionalProperties: true
-    JourneyStartResponse:
-      type: object
-      required:
-        - journeyId
-        - journeyName
-        - statusUrl
-      properties:
-        journeyId:
-          type: string
-        journeyName:
-          type: string
-        statusUrl:
-          type: string
-          format: uri
-        _links:
-          description: "Optional hypermedia links (HAL-style) describing related resources and next actions.\n\nPresence is controlled per-journey via spec.httpSurface.links.enabled; when enabled, the engine typically includes at least `self` and `result` links.\n"
-          type: object
-          additionalProperties:
-            $ref: "#/components/schemas/Link"
     JourneyStatus:
       type: object
       required:

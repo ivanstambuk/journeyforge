@@ -23,13 +23,13 @@ paths:
             schema:
               $ref: "#/components/schemas/RecurringPaymentStartRequest"
       responses:
-        "202":
-          description: Accepted
+        "200":
+          description: Synchronous outcome for recurring-payment
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/JourneyStartResponse"
-      description: Start recurring-payment journey
+                $ref: "#/components/schemas/JourneyOutcome"
+      description: Start recurring-payment journey (synchronous)
   /journeys/{journeyId}:
     get:
       summary: Get journey status
@@ -161,9 +161,9 @@ components:
         phase:
           type: string
           enum:
-            - Running
-            - Succeeded
-            - Failed
+            - RUNNING
+            - SUCCEEDED
+            - FAILED
         currentState:
           type: string
         updatedAt:
@@ -180,7 +180,7 @@ components:
           additionalProperties:
             type: string
         _links:
-          description: "Optional hypermedia links (HAL-style) describing related resources and next actions.\n\nWhen links are enabled for a journey, the engine SHOULD include at least `self` and `result`, and MAY include links for active step endpoints. For step links, the relation name MUST equal the external-input state id (for example `waitForApproval`, `confirm`). When the journey is Running and user-cancellable, the engine SHOULD also expose a `cancel` link pointing to the canonical cancellation step `/api/v1/journeys/{journeyId}/steps/cancel` with method POST.\n"
+          description: "Optional hypermedia links (HAL-style) describing related resources and next actions.\n\nWhen links are enabled for a journey, the engine SHOULD include at least `self` and `result`, and MAY include links for active step endpoints. For step links, the relation name MUST equal the external-input state id (for example `waitForApproval`, `confirm`). When the journey is RUNNING and user-cancellable, the engine SHOULD also expose a `cancel` link pointing to the canonical cancellation step `/api/v1/journeys/{journeyId}/steps/cancel` with method POST.\n"
           type: object
           additionalProperties:
             $ref: "#/components/schemas/Link"
@@ -199,8 +199,8 @@ components:
             phase:
               type: string
               enum:
-                - Succeeded
-                - Failed
+                - SUCCEEDED
+                - FAILED
             output: {}
             error:
               type: object

@@ -23,13 +23,13 @@ paths:
             schema:
               $ref: "#/components/schemas/JourneyStartRequest"
       responses:
-        "202":
-          description: Accepted
+        "200":
+          description: Synchronous outcome for http-content-check
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/JourneyStartResponse"
-      description: Start http-content-check journey
+                $ref: "#/components/schemas/JourneyOutcome"
+      description: Start http-content-check journey (synchronous)
   /journeys/{journeyId}:
     get:
       summary: Get journey status
@@ -125,9 +125,9 @@ components:
         phase:
           type: string
           enum:
-            - Running
-            - Succeeded
-            - Failed
+            - RUNNING
+            - SUCCEEDED
+            - FAILED
         currentState:
           type: string
         updatedAt:
@@ -172,7 +172,7 @@ components:
             the external-input state id (for example `waitForApproval`, `confirm`).
             When the journey is
 
-            Running and user-cancellable, the engine SHOULD also expose a `cancel`
+            RUNNING and user-cancellable, the engine SHOULD also expose a `cancel`
             link pointing to the
 
             canonical cancellation step `/api/v1/journeys/{journeyId}/steps/cancel`
@@ -197,8 +197,8 @@ components:
             phase:
               type: string
               enum:
-                - Succeeded
-                - Failed
+                - SUCCEEDED
+                - FAILED
             output: {}
             error:
               type: object

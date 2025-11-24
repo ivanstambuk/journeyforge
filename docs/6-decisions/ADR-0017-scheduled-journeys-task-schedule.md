@@ -177,7 +177,7 @@ Interactive journeys may still contain `wait` / `webhook` states reachable from 
   - Explicit cadence (`interval`) and bound (`maxRuns`).
   - Initial `context` (via `schedule.context` or full `context` snapshot).
   - There is no support for context-less schedules.
-- Schedule management APIs (for listing/cancelling schedules per subject) are out of scope for this ADR and are expected to be defined as part of Feature 008 and future features.
+- Schedule management APIs (for listing/cancelling schedules per subject) are out of scope for this ADR and are expected to be defined alongside the core engine and future admin features.
 
 ## Consequences
 
@@ -206,5 +206,5 @@ Negative / trade-offs:
   - This ADR assumes an engine-level scheduler; highly available, distributed scheduling is deferred to later features and may require additional design.
 
 Related artefacts:
-- **Feature 008** – Scheduled journeys (`task.kind: schedule`) – defines the feature slice, requirements, and test strategy.
+- **Feature 001** – Core HTTP Engine + DSL – includes `task.kind: schedule` support within the core engine scope.
 - **DSL reference** – updated `docs/3-reference/dsl.md` section 5 (States) to include `task.kind: schedule` shape and semantics.

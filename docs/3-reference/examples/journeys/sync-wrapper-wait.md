@@ -30,9 +30,9 @@ Here’s a breakdown of the steps you’ll call over the Journeys API for the pr
 
 | # | Step ID | Description | Operation ID | Parameters | Success Criteria | Outputs |
 |---:|---------|-------------|--------------|------------|------------------|---------|
-| 1 | `startJourney` | Start a new `sync-wrapper-wait` journey instance. | `syncWrapperWait_start` | Body: `startRequest` as defined by JourneyStartRequest. | `$statusCode == 202` and a `journeyId` is returned. | `journeyId` for the new journey instance. |
+| 1 | `startJourney` | Start a new `sync-wrapper-wait` journey instance (synchronous to the first wait step). | `syncWrapperWait_start` | Body: `startRequest` as defined by JourneyStartRequest. | `$statusCode == 200`, `phase == "RUNNING"`, and `currentState` points at `waitStep`. | `JourneyStatus` at the first external-input state. |
 | 2 | `submitCompletionEvent` | Submit a completion event for the long-running operation via the `waitStep` endpoint. | `syncWrapperWait_waitStep` | Path: `journeyId`; body: completion event payload. | `$statusCode == 200` and journey moves out of the waiting state. | Updated `JourneyStatus` after the completion event. |
-| 3 | `getResult` | Poll for the final journey outcome once terminal. | `syncWrapperWait_getResult` | Path: `journeyId` from step 1. | `$statusCode == 200` and `phase` is `Succeeded` or `Failed`. | `JourneyOutcome` for this journey. |
+| 3 | `getResult` | Poll for the final journey outcome once terminal. | `syncWrapperWait_getResult` | Path: `journeyId` from step 1. | `$statusCode == 200` and `phase` is `SUCCEEDED` or `FAILED`. | `JourneyOutcome` for this journey. |
 
 ## Graphical overview
 

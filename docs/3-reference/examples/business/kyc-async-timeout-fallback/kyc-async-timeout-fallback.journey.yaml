@@ -5,6 +5,8 @@ metadata:
   version: 0.1.0
   description: KYC check journey that starts an async primary provider, races its callback against an SLA timer, and falls back to a secondary provider after a retry-with-backoff recovery window.
 spec:
+  lifecycle:
+    startMode: async
   input:
     schema:
       title: KycAsyncTimeoutFallbackStartRequest

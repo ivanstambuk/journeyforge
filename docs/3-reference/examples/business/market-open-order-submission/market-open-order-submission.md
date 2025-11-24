@@ -42,25 +42,25 @@ Here’s a breakdown of the steps you’ll call over the Journeys API for the ma
 
 | # | Step ID | Description | Operation ID | Parameters | Success Criteria | Outputs |
 |---:|---------|-------------|--------------|------------|------------------|---------|
-| 1 | `startJourney` | Start a new `market-open-order-submission` journey instance. | `marketOpenOrderSubmission_start` | Body: `startRequest` with order details where current time is already at or after marketOpenHour. | `$statusCode == 202` and a `journeyId` is returned. | `journeyId` for the order instance. |
-| 2 | `getStatus` | Poll status shortly after start to inspect whether the order is being submitted. | `marketOpenOrderSubmission_getStatus` | Path: `journeyId` from step 1. | `$statusCode == 200`; `phase` is `Running` or already `Succeeded` depending on timing. | `JourneyStatus` with `phase` and `currentState`. |
-| 3 | `getResult` | Retrieve the final outcome once order submission has completed. | `marketOpenOrderSubmission_getResult` | Path: `journeyId` from step 1. | `$statusCode == 200`, `phase == "Succeeded"` or `phase == "Failed"`. | `JourneyOutcome` with `output.finalStatus` and `submissionMode = "IMMEDIATE"`. |
+| 1 | `startJourney` | Start a new `market-open-order-submission` journey instance. | `marketOpenOrderSubmission_start` | Body: `startRequest` with order details where current time is already at or after marketOpenHour. | `$statusCode == 200`; `JourneyStatus.phase` and `currentState` reflect progress through immediate submission. | `JourneyStatus` for the order instance. |
+| 2 | `getStatus` | (Optional) Re-fetch status shortly after start to inspect whether the order is being submitted. | `marketOpenOrderSubmission_getStatus` | Path: `journeyId` from step 1 (or from `JourneyStatus.journeyId`). | `$statusCode == 200`; `phase` is `Running` or already `Succeeded` depending on timing. | `JourneyStatus` with `phase` and `currentState`. |
+| 3 | `getResult` | Retrieve the final outcome once order submission has completed. | `marketOpenOrderSubmission_getResult` | Path: `journeyId` from step 1. | `$statusCode == 200`, `phase == "SUCCEEDED"` or `phase == "FAILED"`. | `JourneyOutcome` with `output.finalStatus` and `submissionMode = "IMMEDIATE"`. |
 
 ### Pre-open order – auto-submit at market open
 
 | # | Step ID | Description | Operation ID | Parameters | Success Criteria | Outputs |
 |---:|---------|-------------|--------------|------------|------------------|---------|
-| 1 | `startJourney` | Start a new `market-open-order-submission` journey instance before market open. | `marketOpenOrderSubmission_start` | Body: `startRequest` with order details where current time is before marketOpenHour. | `$statusCode == 202` and a `journeyId` is returned. | `journeyId` for the order instance. |
-| 2 | `getStatusDuringDeferral` | Poll status while the order is waiting for market open. | `marketOpenOrderSubmission_getStatus` | Path: `journeyId` from step 1. | `$statusCode == 200`; `phase == "Running"` and `currentState` indicates the pre-open window. | `JourneyStatus` with `phase` and `currentState`. |
-| 3 | `getResult` | Retrieve the final outcome after market has opened and the order has been submitted. | `marketOpenOrderSubmission_getResult` | Path: `journeyId` from step 1. | `$statusCode == 200`, `phase == "Succeeded"` or `phase == "Failed"`. | `JourneyOutcome` with `output.finalStatus = "SUBMITTED"` and `submissionMode = "DEFERRED"`. |
+| 1 | `startJourney` | Start a new `market-open-order-submission` journey instance before market open (synchronous to the first pre-open wait/timer branch). | `marketOpenOrderSubmission_start` | Body: `startRequest` with order details where current time is before marketOpenHour. | `$statusCode == 200`; `JourneyStatus.currentState` indicates the pre-open window (`preOpenWindow`) is active. | `JourneyStatus` for the order instance. |
+| 2 | `getStatusDuringDeferral` | Poll status while the order is waiting for market open. | `marketOpenOrderSubmission_getStatus` | Path: `journeyId` from step 1. | `$statusCode == 200`; `phase == "RUNNING"` and `currentState` indicates the pre-open window. | `JourneyStatus` with `phase` and `currentState`. |
+| 3 | `getResult` | Retrieve the final outcome after market has opened and the order has been submitted. | `marketOpenOrderSubmission_getResult` | Path: `journeyId` from step 1. | `$statusCode == 200`, `phase == "SUCCEEDED"` or `phase == "FAILED"`. | `JourneyOutcome` with `output.finalStatus = "SUBMITTED"` and `submissionMode = "DEFERRED"`. |
 
 ### Pre-open order – cancelled before market open
 
 | # | Step ID | Description | Operation ID | Parameters | Success Criteria | Outputs |
 |---:|---------|-------------|--------------|------------|------------------|---------|
-| 1 | `startJourney` | Start a new `market-open-order-submission` journey instance before market open. | `marketOpenOrderSubmission_start` | Body: `startRequest` with order details where current time is before marketOpenHour. | `$statusCode == 202` and a `journeyId` is returned. | `journeyId` for the order instance. |
+| 1 | `startJourney` | Start a new `market-open-order-submission` journey instance before market open (synchronous to the first pre-open wait/timer branch). | `marketOpenOrderSubmission_start` | Body: `startRequest` with order details where current time is before marketOpenHour. | `$statusCode == 200`; `JourneyStatus.currentState` indicates the pre-open window (`preOpenWindow`) is active. | `JourneyStatus` for the order instance. |
 | 2 | `submitPreOpenCancel` | Submit a pre-open cancel action before market open. | `marketOpenOrderSubmission_preOpenAction` | Path: `journeyId`; body: `cancelAction` (`action: "cancel"`). | `$statusCode == 200`; `JourneyStatus.phase` and `currentState` progress toward terminal state. | `PreOpenOrderActionStepResponse` with `action: "cancel"`. |
-| 3 | `getResult` | Retrieve the final outcome once the journey has completed without submitting the order. | `marketOpenOrderSubmission_getResult` | Path: `journeyId` from step 1. | `$statusCode == 200`, `phase == "Succeeded"` or `phase == "Failed"`. | `JourneyOutcome` with `output.finalStatus = "NOT_SUBMITTED"` and `submissionMode = "DEFERRED"`. |
+| 3 | `getResult` | Retrieve the final outcome once the journey has completed without submitting the order. | `marketOpenOrderSubmission_getResult` | Path: `journeyId` from step 1. | `$statusCode == 200`, `phase == "SUCCEEDED"` or `phase == "FAILED"`. | `JourneyOutcome` with `output.finalStatus = "NOT_SUBMITTED"` and `submissionMode = "DEFERRED"`. |
 
 ## Graphical overview
 

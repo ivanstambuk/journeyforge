@@ -5,6 +5,7 @@ title email-verification – client activity flow
 start
 
 :Client sends\nPOST /api/v1/journeys/email-verification/start\nwith EmailVerificationStartRequest;
+:Journeys API returns\nJourneyStatus indicating the journey\nis waiting for verification;
 
 :Client (or adapter) stores journeyId\nand constructs a magic link that\ncontains journeyId + verification code;
 

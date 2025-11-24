@@ -13,7 +13,7 @@ Journeys -> KYC: POST https://kyc.example.com/checks/start\n(customer details)
 Journeys -> KYB: POST https://kyb.example.com/checks/start\n(business details)
 Journeys -> KYB: GET https://registry.example.com/businesses/{registrationNumber}
 Journeys -> Risk: POST https://risk.example.com/onboarding/start\n(onboardingId, ids)
-Journeys --> App: 202 Accepted\nJourneyStartResponse (journeyId, ...)
+Journeys --> App: 200 OK\nJourneyStatus (phase = Running)
 
 KYC -> Journeys: POST (KYC result callback)\n(customerId, status, reasons[])
 Journeys --> KYC: 200 OK
@@ -25,4 +25,3 @@ App -> Journeys: GET /api/v1/journeys/{journeyId}/result\n(getResult)
 Journeys --> App: 200 OK\nJourneyOutcome (APPROVED / REFERRED / REJECTED)
 
 @enduml
-

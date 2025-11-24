@@ -1,0 +1,73 @@
+arazzo: 1.0.1
+info:
+  title: JourneyForge – subjourney-local-reuse workflows
+  version: 0.1.0
+  summary: Client workflow for the subjourney-local-reuse journey.
+  description: >
+    Demonstrates starting the subjourney-local-reuse journey and reading the final outcome
+    that includes results from multiple local subjourneys.
+sourceDescriptions:
+  - name: subjourneyLocalReuse
+    type: openapi
+    url: ../oas/subjourney-local-reuse.openapi.yaml
+workflows:
+  - workflowId: subjourney-local-reuse-happy-path
+    summary: Start the subjourney-local-reuse journey and read the final outcome.
+    description: Start the subjourney-local-reuse journey and read the final outcome.
+    inputs:
+      type: object
+      properties:
+        startRequest:
+          description: Initial payload for the subjourney-local-reuse journey.
+          type: object
+          required:
+            - cart
+            - customerId
+          properties:
+            cart:
+              type: object
+              properties:
+                items:
+                  type: array
+                  items:
+                    type: object
+                    required:
+                      - sku
+                      - unitPrice
+                      - quantity
+                    properties:
+                      sku:
+                        type: string
+                      unitPrice:
+                        type: number
+                      quantity:
+                        type: integer
+                    additionalProperties: false
+              additionalProperties: true
+            customerId:
+              type: string
+            segment:
+              type: string
+            simulateRiskFailure:
+              type: boolean
+            simulateProfileFailure:
+              type: boolean
+          additionalProperties: true
+    steps:
+      - stepId: startJourney
+        description: Start a new subjourney-local-reuse journey instance.
+        operationId: subjourneyLocalReuse_start
+        x-source: subjourneyLocalReuse
+        requestBody:
+          contentType: application/json
+          payload: $inputs.startRequest
+        outputs:
+          journeyId: $response.body.journeyId
+      - stepId: getResult
+        description: Retrieve the final outcome once the journey is terminal.
+        operationId: subjourneyLocalReuse_getResult
+        x-source: subjourneyLocalReuse
+        parameters:
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId

@@ -1,0 +1,53 @@
+@startuml
+!include journey-diagram-theme.puml
+title async-callback-sla – internal DSL state graph
+
+[*] --> startAsyncJob
+
+state startAsyncJob
+state recordJobContext
+state callbackVsSla
+
+state waitForCallback
+state ignoreLateCallback
+state completeFromCallback
+state failFromCallback
+state callbackDone
+
+state slaTimer
+state markTimedOut
+state slaDone
+
+startAsyncJob --> recordJobContext
+recordJobContext --> callbackVsSla
+
+callbackVsSla --> waitForCallback : callbackBranch
+callbackVsSla --> slaTimer : slaBranch
+
+waitForCallback --> ignoreLateCallback : context.outcome != null
+waitForCallback --> completeFromCallback : status == COMPLETED
+waitForCallback --> failFromCallback : status == FAILED
+
+ignoreLateCallback --> callbackDone
+completeFromCallback --> callbackDone
+failFromCallback --> callbackDone
+
+callbackDone --> [*]
+
+slaTimer --> markTimedOut
+markTimedOut --> slaDone
+slaDone --> [*]
+
+note right of waitForCallback
+  webhook state that accepts
+  ProviderCallbackInput and guards
+  against late callbacks once
+  outcome is decided
+end note
+
+note right of slaTimer
+  timer state using slaSeconds to
+  represent the callback SLA window
+end note
+
+@enduml

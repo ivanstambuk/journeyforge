@@ -6,10 +6,14 @@ actor "API client" as Client
 participant "Journeys API" as Journeys
 
 Client -> Journeys: POST /api/v1/journeys/wait-approval/start
-Journeys --> Client: 202 Accepted\nJourneyStartResponse (journeyId, ...)
+Journeys -> Journeys: Start journey and enter waitForApproval
+Journeys --> Client: 200 OK\nJourneyStatus (phase = Running,\ncurrentState = waitForApproval)
+
+Client -> Journeys: POST /api/v1/journeys/{journeyId}/steps/waitForApproval\napproval/rejection payload
+Journeys -> Journeys: Process approval decision\nand drive journey to terminal state
+Journeys --> Client: 200 OK\nJourneyStatus (phase, currentState)
 
 Client -> Journeys: GET /api/v1/journeys/{journeyId}/result
-Journeys -> Journeys: Run wait-approval journey to completion
 Journeys --> Client: 200 OK\nJourneyOutcome (phase, output, error)
 
 @enduml

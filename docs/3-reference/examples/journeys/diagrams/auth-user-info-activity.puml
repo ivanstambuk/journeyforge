@@ -5,9 +5,9 @@ title auth-user-info – client activity flow
 start
 
 :Client sends\nPOST /api/v1/journeys/auth-user-info/start;
-:Client polls\nGET /api/v1/journeys/{journeyId}/result\nuntil phase != "Running";
+:Journeys API runs\nauth-user-info journey to completion\nand returns JourneyOutcome\nwith phase and output;
 
-if (phase == "Succeeded"?) then (yes)
+if (phase == "SUCCEEDED"?) then (yes)
   :Client processes successful\nJourneyOutcome.output;
 else (no)
   :Client handles failure via\nJourneyOutcome.error;

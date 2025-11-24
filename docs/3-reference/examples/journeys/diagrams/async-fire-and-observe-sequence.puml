@@ -1,0 +1,24 @@
+@startuml
+!include journey-diagram-theme.puml
+title async-fire-and-observe – sequence
+
+actor "Client" as Client
+participant "Journeys API" as Journeys
+participant "Jobs API" as Jobs
+
+Client -> Journeys: POST /api/v1/journeys/async-fire-and-observe/start\nAsyncFireAndObserveStartRequest
+Journeys -> Jobs: POST https://jobs.example.com/async-jobs\n(jobType, correlationId)
+Jobs --> Journeys: 202 Accepted\n(jobId)
+Journeys --> Client: 202 Accepted\nJourneyStartResponse\n(journeyId, statusUrl)
+
+== Background job running ==
+
+loop While phase == "RUNNING"
+  Client -> Journeys: GET /api/v1/journeys/{journeyId}\n(getStatusRunning)
+  Journeys --> Client: 200 OK\nJourneyStatus (phase = Running,\ncurrentState = polling state)
+end
+
+Client -> Journeys: GET /api/v1/journeys/{journeyId}/result\n(getResult)
+Journeys --> Client: 200 OK\nJourneyOutcome (status = JOB_COMPLETED\nor JOB_FAILED)
+
+@enduml

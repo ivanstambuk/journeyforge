@@ -18,7 +18,7 @@ consistent vocabulary.
   - A single execution of a journey definition.
   - Created when a client calls `POST /api/v1/journeys/{journeyName}/start`.
   - Identified by a `journeyId` in the Journeys API (`JourneyStatus`, `JourneyOutcome`).
-  - Has its own `context`, tags, attributes, phase (`Running`, `Succeeded`, `Failed`), and
+  - Has its own `context`, tags, attributes, phase (`RUNNING`, `SUCCEEDED`, `FAILED`), and
     timestamps.
 
 - **Engine**

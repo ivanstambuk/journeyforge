@@ -73,7 +73,7 @@ Agent reasoning and behaviour:
 
 4. **Interpret result**
    - Use the OpenAPI `JourneyOutcome` schema to interpret the final response.
-   - Return or post-process `output` for the user, and optionally expose `error` when `phase == "Failed"`.
+   - Return or post-process `output` for the user, and optionally expose `error` when `phase == "FAILED"`.
 
 The agent does **not** need to inspect internal journey states; Arazzo plus OpenAPI is sufficient.
 
@@ -152,4 +152,3 @@ When ambiguity exists (for example, multiple applicable workflows), agents SHOUL
 
 - Ask the human for clarification, or
 - Choose the workflow with the most conservative semantics (for example, one that clearly surfaces failure modes).
-

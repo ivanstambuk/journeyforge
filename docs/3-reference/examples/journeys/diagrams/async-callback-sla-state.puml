@@ -1,0 +1,30 @@
+@startuml
+!include journey-diagram-theme.puml
+title async-callback-sla – state transitions
+
+[*] --> startAsyncJob
+
+state startAsyncJob
+state recordJobContext
+state callbackVsSla
+state waitForCallback
+state slaTimer
+state journeyCompleted
+
+startAsyncJob --> recordJobContext : POST jobs/start\nresultVar: jobStart
+recordJobContext --> callbackVsSla : store jobId + slaSeconds
+
+callbackVsSla --> waitForCallback : branch callbackBranch
+callbackVsSla --> slaTimer : branch slaBranch
+
+waitForCallback --> journeyCompleted : callback COMPLETED/FAILED\n(within SLA)
+slaTimer --> journeyCompleted : SLA window elapsed\n(no callback)
+
+journeyCompleted --> [*]
+
+note right of callbackVsSla
+  parallel state with join.strategy anyOf\nracing provider callback vs SLA timer
+end note
+
+@enduml
+

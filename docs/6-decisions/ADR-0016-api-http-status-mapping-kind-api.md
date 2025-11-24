@@ -42,7 +42,7 @@ HTTP status codes for both success and error responses via a unified rule table.
 
 - When `spec.apiResponses` is **omitted**:
   - Success responses behave as today:
-    - `phase = Succeeded` produces HTTP 200.
+    - `phase = SUCCEEDED` produces HTTP 200.
     - The response body is derived from `context.<outputVar>` when `outputVar` is set on the terminal `succeed` state
       or from the full `context` when `outputVar` is absent.
   - Error responses are driven by Problem Details (ADR-0003):
@@ -54,13 +54,13 @@ HTTP status codes for both success and error responses via a unified rule table.
       - The result of the configured `spec.errors.envelope` mapper when `format: custom` (one envelope per journey).
 - When `spec.apiResponses` is **present**:
   - Journeys can provide an ordered list of rules that match on:
-    - The terminal phase (`Succeeded`/`Failed`),
+    - The terminal phase (`SUCCEEDED`/`FAILED`),
     - Optional error type (Problem `type`), and
     - Optional DataWeave predicates over final `context` and the canonical Problem object.
   - The first matching rule determines the HTTP status code for that invocation.
   - If no rule matches, the engine falls back to phase-specific defaults:
-    - `Succeeded`: HTTP 200,
-    - `Failed`: HTTP status from the Problem `status` field, or 500 when absent.
+    - `SUCCEEDED`: HTTP 200,
+    - `FAILED`: HTTP status from the Problem `status` field, or 500 when absent.
   - The response body is still:
     - Derived from `succeed.outputVar` / `context` for success, and
     - Derived from the Problem object via `spec.errors.envelope` (or Problem itself) for errors.
@@ -86,17 +86,17 @@ spec:
   apiResponses:
     rules:
       - when:
-          phase: Failed
+          phase: FAILED
           errorType: "urn:subject-unauthenticated"
         status: 401
 
       - when:
-          phase: Failed
+          phase: FAILED
           errorType: "urn:subject-unauthorized"
         status: 403
 
       - when:
-          phase: Failed
+          phase: FAILED
           predicate:
             lang: dataweave
             expr: |
@@ -104,7 +104,7 @@ spec:
         status: 502
 
       - when:
-          phase: Succeeded
+          phase: SUCCEEDED
           predicate:
             lang: dataweave
             expr: |
@@ -114,15 +114,15 @@ spec:
           expr: context.downstream.status
 
     default:
-      Succeeded: 200                  # optional; defaults to 200 when omitted
-      Failed: fromProblemStatus       # optional; defaults to “Problem.status or 500”
+      SUCCEEDED: 200                  # optional; defaults to 200 when omitted
+      FAILED: fromProblemStatus       # optional; defaults to “Problem.status or 500”
 ```
 
 - `spec.apiResponses` is only valid for `kind: Api`; it MUST be rejected on other kinds.
 - `rules` is an ordered list; the first rule whose `when` matches controls the status for that invocation.
 - `default` contains phase-specific fallbacks; when omitted, the defaults are:
-  - `Succeeded = 200`
-  - `Failed = fromProblemStatus` (Problem `status` or 500 when absent).
+  - `SUCCEEDED = 200`
+  - `FAILED = fromProblemStatus` (Problem `status` or 500 when absent).
 
 ### Rule matching
 
@@ -130,8 +130,8 @@ Each rule has:
 
 ```yaml
 when:
-  phase: Succeeded | Failed           # required
-  errorType: <string>                 # optional; only meaningful when phase == Failed
+  phase: SUCCEEDED | FAILED           # required
+  errorType: <string>                 # optional; only meaningful when phase == FAILED
   predicate:                          # optional
     lang: dataweave
     expr: |
@@ -144,15 +144,15 @@ statusExpr:                           # optional; preferred for dynamic status
 ```
 
 - `when.phase`:
-  - MUST be either `Succeeded` or `Failed`.
+  - MUST be either `SUCCEEDED` or `FAILED`.
   - Filters rules to the terminal phase of the invocation.
 - `when.errorType`:
   - When present, the rule only matches when the canonical Problem `type` equals the given string.
-  - It MUST NOT be used on `phase: Succeeded` rules; tooling SHOULD flag this as a validation error.
+  - It MUST NOT be used on `phase: SUCCEEDED` rules; tooling SHOULD flag this as a validation error.
 - `when.predicate`:
   - When present, is a DataWeave expression evaluated with:
     - `context` bound to the final journey context, and
-    - `payload.error` bound to the canonical Problem object for `phase: Failed` (and `null` for `phase: Succeeded`).
+    - `payload.error` bound to the canonical Problem object for `phase: FAILED` (and `null` for `phase: SUCCEEDED`).
   - The expression MUST return a boolean; non-boolean results are a validation error.
 - `status` / `statusExpr`:
   - At least one of `status` or `statusExpr` MUST be present.
@@ -172,16 +172,16 @@ Matching algorithm:
      - Stop; no later rules are considered.
 3. If no rule matches:
    - Use `default[terminalPhase]`:
-     - For `Succeeded`, this is 200 when omitted.
-     - For `Failed`, this is “Problem.status or 500” when omitted.
+     - For `SUCCEEDED`, this is 200 when omitted.
+     - For `FAILED`, this is “Problem.status or 500” when omitted.
 
 ### Defaults and omission
 
 - When `spec.apiResponses` is omitted entirely:
   - `kind: Api` engines MUST behave as if:
     - `rules` were empty, and
-    - `default.Succeeded = 200`
-    - `default.Failed = fromProblemStatus`
+    - `default.SUCCEEDED = 200`
+    - `default.FAILED = fromProblemStatus`
   - This ensures that journeys that already conform to Problem Details semantics do not need any additional
     configuration.
 - When `spec.apiResponses.default` is omitted:
@@ -243,4 +243,3 @@ Negative / trade-offs:
 - API endpoints (`kind: Api`): `docs/6-decisions/ADR-0004-api-endpoints-kind-api.md`.
 - Error configuration (`spec.errors`): `docs/3-reference/dsl.md` (Error configuration section).
 - DataWeave reuse and inline-only decision: `docs/6-decisions/ADR-0015-dataweave-reuse-and-external-modules.md`.
-

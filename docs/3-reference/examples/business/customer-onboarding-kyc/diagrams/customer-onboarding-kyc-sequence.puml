@@ -10,10 +10,8 @@ actor "Risk System" as RiskSystem
 participant "Journeys API" as Journeys
 
 Client -> Journeys: POST /api/v1/journeys/customer-onboarding-kyc/start\nCustomerOnboardingKycStartRequest
-Journeys --> Client: 202 Accepted\nJourneyStartResponse (journeyId, ...)
-
-Client -> Journeys: GET /api/v1/journeys/{journeyId}\n(getStatusAfterProspect)
-Journeys --> Client: 200 OK\nJourneyStatus (waiting for KYC documents)
+Journeys -> Journeys: Create prospect and\nenter waitForKycDocuments
+Journeys --> Client: 200 OK\nJourneyStatus (phase = Running,\ncurrentState = waitForKycDocuments)
 
 CustomerUI -> Journeys: POST /api/v1/journeys/{journeyId}/steps/submitKycDocuments\nKycDocumentsInput
 Journeys --> CustomerUI: 200 OK\nKycDocumentsStepResponse
@@ -31,4 +29,3 @@ Client -> Journeys: GET /api/v1/journeys/{journeyId}/result\n(getResult)
 Journeys --> Client: 200 OK\nJourneyOutcome (APPROVED or REJECTED)
 
 @enduml
-

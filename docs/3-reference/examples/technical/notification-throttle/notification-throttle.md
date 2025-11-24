@@ -39,7 +39,7 @@ For the main workflow (`notification-throttle-send-and-call`), the steps are:
 | # | Step ID | Description | Operation ID | Parameters | Success Criteria | Outputs |
 |---:|---------|-------------|--------------|------------|------------------|---------|
 | 1 | `startJourney` | Start a new `notification-throttle` journey instance. | `notificationThrottle_start` | Body: `startRequest` with user, channel, message, and optional integration payload. | `$statusCode == 202` and a `journeyId` is returned. | `journeyId` for this pacing decision. |
-| 2 | `getResult` | Retrieve the final outcome once notification and integration decisions have been applied. | `notificationThrottle_getResult` | Path: `journeyId` from step 1. | `$statusCode == 200`, `phase == "Succeeded"` or `phase == "Failed"`. | `JourneyOutcome` with `output.notificationDecision` and `output.integrationDecision`. |
+| 2 | `getResult` | Retrieve the final outcome once notification and integration decisions have been applied. | `notificationThrottle_getResult` | Path: `journeyId` from step 1. | `$statusCode == 200`, `phase == "SUCCEEDED"` or `phase == "FAILED"`. | `JourneyOutcome` with `output.notificationDecision` and `output.integrationDecision`. |
 
 Additional runs for the same user/channel can use `nextNotificationAvailableAt` and `nextIntegrationAvailableAt` as inputs into downstream logic to decide when to re-trigger.
 

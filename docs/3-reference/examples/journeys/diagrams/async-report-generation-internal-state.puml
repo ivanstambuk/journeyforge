@@ -1,0 +1,43 @@
+@startuml
+!include journey-diagram-theme.puml
+title async-report-generation – internal DSL state graph
+
+[*] --> startReportJob
+
+state startReportJob
+state recordReportJob
+state waitForReportPoll
+state fetchReportStatus
+state decideReportStatus
+state scheduleNextReportPoll
+state completeFromReport
+state reportDone
+state failFromReport
+
+startReportJob --> recordReportJob
+recordReportJob --> waitForReportPoll
+waitForReportPoll --> fetchReportStatus
+fetchReportStatus --> decideReportStatus
+
+decideReportStatus --> completeFromReport : state == COMPLETED
+decideReportStatus --> failFromReport : state == FAILED
+decideReportStatus --> scheduleNextReportPoll : default
+
+scheduleNextReportPoll --> waitForReportPoll
+
+completeFromReport --> reportDone
+reportDone --> [*]
+
+failFromReport --> [*]
+
+note right of waitForReportPoll
+  timer controlling delay between
+  report status checks
+end note
+
+note right of fetchReportStatus
+  task.kind: httpCall
+  GET /jobs/{reportJobId}
+end note
+
+@enduml
