@@ -5,6 +5,7 @@ Decision (2025-11-19): Author journeys in YAML (1.2 subset), accept both YAML (`
 JSON Schema dialect
 - Inline schemas in the DSL (for example `spec.input.schema`, `spec.output.schema`, and step-level `*.schema` blocks) use JSON Schema 2020-12 semantics by default.
 - Authors SHOULD NOT repeat `$schema` in each inline schema; tools and engines MUST treat these blocks as 2020-12 unless a future version of the DSL introduces an explicit override.
+ - For journeys that expose a meaningful business outcome, `spec.output.schema` SHOULD include a `status` property that represents the canonical business outcome code for the run; engines mirror this to the top-level `JourneyOutcome.status` field.
 
 ## Authoring
 - Use YAML 1.2 subset; treat YAML as a friendly surface over a strict JSON data model.

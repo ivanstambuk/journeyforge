@@ -66,9 +66,11 @@ When referring to other normative docs, use a short, consistent citation style:
   - “This use case exercises parallel branches and joins (DSL §16).”
   - “For timeout semantics, see DSL §2.4.”
 - Keep example journeys, their per‑journey OpenAPI files, and Arazzo workflows in sync (see `docs/2-how-to/business-journeys/index.md` and the agent playbook for the expected layout).
+ - For journey outcomes, examples and diagrams SHOULD:
+   - Use `JourneyOutcome.phase` only for lifecycle (`RUNNING` / `SUCCEEDED` / `FAILED`).
+   - Use top‑level `JourneyOutcome.status` for business outcome codes, rather than nested `output.status`.
 
 ## 7. Status & evolution
 
 - When a style rule in this guide needs to change in a non‑trivial way (for example, changing the citation pattern), capture the rationale in an ADR and update this file to match.
 - Older docs that use slightly different citation styles or heading patterns do not need to be mass‑edited immediately, but SHOULD be normalised when you make other substantial edits to them.
-

@@ -270,44 +270,7 @@ components:
             $ref: "#/components/schemas/Link"
     JourneyOutcome:
       allOf:
-        - type: object
-          required:
-            - journeyId
-            - journeyName
-            - phase
-          properties:
-            journeyId:
-              type: string
-            journeyName:
-              type: string
-            phase:
-              type: string
-              enum:
-                - Succeeded
-                - Failed
-            output: {}
-            error:
-              type: object
-              properties:
-                code:
-                  type: string
-                reason:
-                  type: string
-            tags:
-              type: array
-              description: "Effective tags for this journey instance, repeated here for convenience when reading final outcomes.\n"
-              items:
-                type: string
-            attributes:
-              type: object
-              description: "Instance attributes such as subjectId, tenantId, channel, and correlation ids, repeated here for convenience when reading final outcomes.\n"
-              additionalProperties:
-                type: string
-            _links:
-              description: "Optional hypermedia links (HAL-style) describing related resources (for example `self`) when a journey is terminal. Presence is controlled per-journey via spec.httpSurface.links.enabled.\n"
-              type: object
-              additionalProperties:
-                $ref: "#/components/schemas/Link"
+        - $ref: "../../../openapi/journeys.openapi.yaml#/components/schemas/JourneyOutcome"
         - type: object
           properties:
             output:

@@ -55,3 +55,9 @@ Use this guide when authoring journey specs.
 ## Terminal outcomes
 - Use `succeed`/`fail` for terminal results.
 - Tasks (including HTTP) never auto‑terminate a journey; branch explicitly after tasks.
+
+## JourneyOutcome status vs phase
+- Treat `JourneyOutcome.phase` as the engine lifecycle indicator: `RUNNING`, `SUCCEEDED`, or `FAILED`.
+- Treat top‑level `JourneyOutcome.status` as the primary business outcome code for the run (for example `JOB_COMPLETED`, `REPORT_FAILED`).
+- Model the business payload under `JourneyOutcome.output` via `spec.output.schema`; include a `status` property there when the journey returns a meaningful business outcome so engines can mirror it to the top level.
+- In example payloads, docs, and Arazzo workflows, prefer reading and asserting on top‑level `status`; do not rely on `output.status` as the primary status signal.

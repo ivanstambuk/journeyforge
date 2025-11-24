@@ -2,8 +2,6 @@
 
 Date: 2025-11-22 | Status: Proposed
 
-Related: Q-001 in `docs/4-architecture/open-questions.md`
-
 ## Context
 
 JourneyForge exposes two related HTTP surfaces:
@@ -238,7 +236,6 @@ Negative / trade-offs:
 
 ## References
 
-- Q-001 – HTTP status mapping for APIs and journeys: `docs/4-architecture/open-questions.md`.
 - Error model and Problem Details: `docs/6-decisions/ADR-0003-error-model-rfc9457-problem-details.md`.
 - API endpoints (`kind: Api`): `docs/6-decisions/ADR-0004-api-endpoints-kind-api.md`.
 - Error configuration (`spec.errors`): `docs/3-reference/dsl.md` (Error configuration section).
