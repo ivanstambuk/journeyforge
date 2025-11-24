@@ -9,6 +9,7 @@ Spec‑first durable journey engine (Java 25) for user‑centric API workflows. 
 - Feature 001 (Core HTTP + DSL): [docs/4-architecture/features/001/spec.md](docs/4-architecture/features/001/spec.md)
 - Roadmap: [docs/4-architecture/roadmap.md](docs/4-architecture/roadmap.md)
 - Agent Playbook: [AGENTS.md](AGENTS.md)
+ - Engine & DSL Comparison: [docs/0-overview/comparison.md](docs/0-overview/comparison.md)
 
 ## Build
 - Requires JDK 25.

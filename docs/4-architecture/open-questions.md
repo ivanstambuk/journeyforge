@@ -13,3 +13,4 @@ Hard rules:
 
 | ID | Owner | Question | Options (A preferred) | Status | Asked | Notes |
 |----|-------|----------|------------------------|--------|-------|-------|
+| Q-001 | ivan | How should JourneyForge support modular/extensible “plugin” building blocks (new DSL tasks/blocks implemented as separate Java artifacts) while preserving the spec-first DSL model and engine simplicity? | A) Strictly curated extension points with versioned contracts and limited surface for third-party DSL blocks; B) More open plugin SDK allowing arbitrary new block types with sandboxing/validation; C) No DSL-level plugins, only engine integration patterns (external services, transforms) | Open | 2025-11-24 | Initial exploration of plugin/SDK model for new DSL vocabulary and modular interpreters. |
