@@ -51,7 +51,7 @@ spec:
     enqueueJob:
       type: task
       task:
-        kind: httpCall
+        kind: httpCall:v1
         method: POST
         url: https://jobs.example.com/async-jobs
         params:
@@ -99,7 +99,7 @@ spec:
     fetchJobStatus:
       type: task
       task:
-        kind: httpCall
+        kind: httpCall:v1
         method: GET
         url: "https://jobs.example.com/async-jobs/${context.jobId}"
         params:

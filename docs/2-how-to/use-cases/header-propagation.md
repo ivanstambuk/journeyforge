@@ -68,7 +68,7 @@ spec:
     call:
       type: task
       task:
-        kind: httpCall
+        kind: httpCall:v1
         method: GET
         url: "https://api.example.com/trace"
         headers:

@@ -103,7 +103,7 @@ spec:
     fetchProfile:
       type: task
       task:
-        kind: httpCall
+        kind: httpCall:v1
         method: GET
         url: "https://identity.example.com/customers/${context.customerId}"
         params:
@@ -127,7 +127,7 @@ spec:
     inventoryData:
       type: task
       task:
-        kind: httpCall
+        kind: httpCall:v1
         method: POST
         url: https://privacy.example.com/erasure/inventory
         params:
@@ -149,7 +149,7 @@ spec:
     notifyPrivacyDesk:
       type: task
       task:
-        kind: httpCall
+        kind: httpCall:v1
         method: POST
         url: https://privacy.example.com/erasure/notify-privacy-desk
         params:
@@ -281,7 +281,7 @@ spec:
     notifySeniorEscalation:
       type: task
       task:
-        kind: httpCall
+        kind: httpCall:v1
         method: POST
         url: https://privacy.example.com/erasure/escalate
         params:
@@ -395,7 +395,7 @@ spec:
     launchErasure:
       type: task
       task:
-        kind: httpCall
+        kind: httpCall:v1
         method: POST
         url: https://privacy.example.com/erasure/run
         params:

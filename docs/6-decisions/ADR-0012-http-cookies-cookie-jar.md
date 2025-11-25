@@ -28,7 +28,7 @@ We introduce a first-class cookie configuration in the DSL and a per-run cookie 
   - Add `spec.cookies.returnToClient` to control which cookies from the jar are emitted as `Set-Cookie` on terminal `succeed`:
     - `mode: none | allFromAllowedDomains | filtered`.
     - Optional `include.names` and `include.namePatterns` (Java regex) when `mode: filtered`.
-  - Extend HTTP tasks (`kind: httpCall`) with `task.cookies.useJar?: boolean`:
+  - Extend HTTP tasks (`kind: httpCall:v1`) with `task.cookies.useJar?: boolean`:
     - Defaults to `true` when `spec.cookies.jar` exists.
     - When `false`, the jar is not consulted for that task.
 
@@ -38,7 +38,7 @@ We introduce a first-class cookie configuration in the DSL and a per-run cookie 
     - One jar per API invocation for `kind: Api`.
     - Jars are created at run start and destroyed at terminal state; there is no cross-run sharing.
   - Population:
-    - Jar is populated only from downstream HTTP task responses (`kind: httpCall` with `mode != notify`), by parsing `Set-Cookie` headers.
+    - Jar is populated only from downstream HTTP task responses (`kind: httpCall:v1` with `mode != notify`), by parsing `Set-Cookie` headers.
     - Inbound client `Cookie` headers (start/step) are never ingested into the jar; journeys that need inbound cookies must bind and use them explicitly.
     - Effective domain and path are derived according to RFC 6265 style rules:
       - `Domain` attribute when present; otherwise request host.

@@ -77,7 +77,7 @@ spec:
               fraudCall:
                 type: task
                 task:
-                  kind: httpCall
+                  kind: httpCall:v1
                   operationRef: fraud.checkTransfer
                   params:
                     headers:
@@ -103,7 +103,7 @@ spec:
               sanctionsCall:
                 type: task
                 task:
-                  kind: httpCall
+                  kind: httpCall:v1
                   operationRef: sanctions.screenTransfer
                   params:
                     headers:
@@ -205,7 +205,7 @@ spec:
     initiateTransfer:
       type: task
       task:
-        kind: httpCall
+        kind: httpCall:v1
         operationRef: transfers.initiateHighValueTransfer
         params:
           path:
@@ -321,7 +321,7 @@ spec:
               notifySettlementTimeout:
                 type: task
                 task:
-                  kind: httpCall
+                  kind: httpCall:v1
                   operationRef: transfers.notifySettlementTimeout
                   params:
                     path:

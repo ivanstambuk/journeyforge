@@ -48,7 +48,7 @@ spec:
     checkExisting:
       type: task
       task:
-        kind: httpCall
+        kind: httpCall:v1
         operationRef: items.getItemById
         params:
           path:
@@ -83,7 +83,7 @@ spec:
     create:
       type: task
       task:
-        kind: httpCall
+        kind: httpCall:v1
         operationRef: items.createItem
         params:
           headers:

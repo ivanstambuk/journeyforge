@@ -71,7 +71,7 @@ spec:
     exchangeInitialToken:
       type: task
       task:
-        kind: httpCall
+        kind: httpCall:v1
         operationRef: oauth.tokenExchange
         params:
           headers:
@@ -113,30 +113,29 @@ spec:
     configureSchedule:
       type: task
       task:
-        kind: schedule
-        schedule:
-          start: runBatch
-          startAt:
-            mapper:
-              lang: dataweave
-              expr: context.firstRunAt
-          interval:
-            mapper:
-              lang: dataweave
-              expr: context.interval
-          maxRuns:
-            mapper:
-              lang: dataweave
-              expr: context.maxRuns
-          subjectId:
-            mapper:
-              lang: dataweave
-              expr: context.tenantId
-          context:
-            mapper:
-              lang: dataweave
-              expr: context - ["initialAccessToken"]
-          onExisting: upsert
+        kind: schedule:v1
+        start: runBatch
+        startAt:
+          mapper:
+            lang: dataweave
+            expr: context.firstRunAt
+        interval:
+          mapper:
+            lang: dataweave
+            expr: context.interval
+        maxRuns:
+          mapper:
+            lang: dataweave
+            expr: context.maxRuns
+        subjectId:
+          mapper:
+            lang: dataweave
+            expr: context.tenantId
+        context:
+          mapper:
+            lang: dataweave
+            expr: context - ["initialAccessToken"]
+        onExisting: upsert
       next: prepareConfigOutcome
 
     prepareConfigOutcome:
@@ -167,7 +166,7 @@ spec:
     runBatch:
       type: task
       task:
-        kind: httpCall
+        kind: httpCall:v1
         operationRef: oauth.refreshToken
         params:
           headers:
@@ -214,7 +213,7 @@ spec:
     prepareBatchSnapshot:
       type: task
       task:
-        kind: httpCall
+        kind: httpCall:v1
         operationRef: orders.prepareDailyBatchSnapshot
         params:
           headers:
@@ -245,7 +244,7 @@ spec:
     closeBatch:
       type: task
       task:
-        kind: httpCall
+        kind: httpCall:v1
         operationRef: orders.closeDailyBatch
         params:
           headers:

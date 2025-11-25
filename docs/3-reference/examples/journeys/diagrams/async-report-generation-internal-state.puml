@@ -36,7 +36,7 @@ note right of waitForReportPoll
 end note
 
 note right of fetchReportStatus
-  task.kind: httpCall
+  task.kind: httpCall:v1
   GET /jobs/{reportJobId}
 end note
 

@@ -85,7 +85,7 @@ spec:
       cleanupPartialSegments:
         type: task
         task:
-          kind: httpCall
+          kind: httpCall:v1
           operationRef: providers.releaseUnconfirmedSegments
           resultVar: cleanupResult
         next: done
@@ -104,7 +104,7 @@ spec:
               bookFlight:
                 type: task
                 task:
-                  kind: httpCall
+                  kind: httpCall:v1
                   operationRef: flights.createFlightBooking
                   params:
                     headers:
@@ -129,7 +129,7 @@ spec:
               bookHotel:
                 type: task
                 task:
-                  kind: httpCall
+                  kind: httpCall:v1
                   operationRef: hotels.createHotelBooking
                   params:
                     headers:
@@ -154,7 +154,7 @@ spec:
               bookCar:
                 type: task
                 task:
-                  kind: httpCall
+                  kind: httpCall:v1
                   operationRef: cars.createCarBooking
                   params:
                     headers:
@@ -257,7 +257,7 @@ spec:
     initiatePayment:
       type: task
       task:
-        kind: httpCall
+        kind: httpCall:v1
         operationRef: payments.authorizePayment
         params:
           path:

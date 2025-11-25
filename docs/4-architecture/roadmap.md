@@ -11,7 +11,7 @@ Guiding principles
 
 | ID | Name | Status | Scope Snapshot |
 |----|------|--------|----------------|
-| 001 | DSL + Core HTTP engine | Planned | Full YAML/JSON DSL surface (all state types and config blocks), including local subjourneys (`type: subjourney`, `spec.subjourneys`) and scheduled journeys (`task.kind: schedule`), plus a synchronous runner and HTTP call node. |
+| 001 | DSL + Core HTTP engine | Planned | Full YAML/JSON DSL surface (all state types and config blocks), including local subjourneys (`type: subjourney`, `spec.subjourneys`) and scheduled journeys (`task.kind: schedule:v1`), plus a synchronous runner and HTTP call node. |
 | 002 | Persistence + Journeys API | Planned | Instance store, start/query APIs |
 | 003 | OpenAPI/Arazzo integration | Planned | Import OAS, reference `operationId`, Arazzo exporter |
 | 004 | UI bridge (designer) | Planned | Graph API for React Flow/Atlas over journey/admin APIs |

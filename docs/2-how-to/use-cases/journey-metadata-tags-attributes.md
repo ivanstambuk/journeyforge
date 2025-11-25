@@ -272,8 +272,8 @@ Resulting metadata (conceptual):
     `metadata.bindings.tags`. If journey logic also needs these values in `context`, use a
     `transform` state to normalise them (for example, `context.channel`, `context.segment`).
 - **Multi-tenant + subject metadata:**
-  - Combine the header and payload patterns above with JWT-based `httpSecurity`:
-    - Use JWT policies to populate `context.auth.jwt.claims.sub`.
+  - Combine the header and payload patterns above with `jwtValidate:v1`:
+    - Use the JWT validation task plugin to populate `context.auth.jwt.claims.sub`.
     - Use a `transform` state to normalise `subjectId`, `tenantId`, `channel` into top-level `context` fields.
 
 These patterns conform to the current DSL surface and illustrate how to structure journey

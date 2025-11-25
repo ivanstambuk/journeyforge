@@ -10,7 +10,7 @@ participant "Billing API" as Billing
 == Configure and schedule ==
 
 ConfigUI -> Journeys : POST /journeys/monthly-invoicing-batch/start\n(startRequest)
-Journeys -> Journeys : configureSchedule\n(task.kind: schedule)
+Journeys -> Journeys : configureSchedule\n(task.kind: schedule:v1)
 Journeys --> ConfigUI : 200 OK (JourneyOutcome, status=SCHEDULED)
 
 ConfigUI -> Journeys : GET /journeys/{journeyId}

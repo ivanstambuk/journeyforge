@@ -49,7 +49,7 @@ spec:
     slow_call:
       type: task
       task:
-        kind: httpCall
+        kind: httpCall:v1
         method: GET
         url: "https://api.example.com/slow/${context.id}"
         headers: { Accept: application/json }

@@ -45,7 +45,7 @@ spec:
       rollback:
         type: task
         task:
-          kind: httpCall
+          kind: httpCall:v1
           operationRef: billing.cancelCharge
           resultVar: cancelResult
         next: undo_inventory
@@ -53,7 +53,7 @@ spec:
       undo_inventory:
         type: task
         task:
-          kind: httpCall
+          kind: httpCall:v1
           operationRef: inventory.releaseReservation
           resultVar: inventoryResult
         next: notify

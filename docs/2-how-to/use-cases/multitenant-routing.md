@@ -87,7 +87,7 @@ spec:
     callTenantA:
       type: task
       task:
-        kind: httpCall
+        kind: httpCall:v1
         operationRef: itemsA.getItemById
         params:
           path:
@@ -102,7 +102,7 @@ spec:
     callTenantB:
       type: task
       task:
-        kind: httpCall
+        kind: httpCall:v1
         operationRef: itemsB.getItem
         params:
           headers:

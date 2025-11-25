@@ -15,7 +15,7 @@ Short description of the problem this pattern solves and when it appears in real
 
 ## Relevant DSL features
 
-- Key JourneyForge DSL features used (for example `task.kind: httpCall`, `spec.outcomes`, `wait` / `webhook`, `parallel`, `timer`, `task.kind: schedule`).
+- Key JourneyForge DSL features used (for example `task.kind: httpCall:v1`, `spec.outcomes`, `wait` / `webhook`, `parallel`, `timer`, `task.kind: schedule:v1`).
 - Links to the relevant sections in `docs/3-reference/dsl.md`.
 
 ## Example – <journey-id>

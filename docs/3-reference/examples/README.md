@@ -60,6 +60,9 @@ semantics.
 | subject-step-guard | technical | Subject-aware step guard | sync | 200 | No |
 | auth-outbound-client-credentials | technical | Outbound client-credentials auth | sync | 200 | No |
 | auth-user-info | technical | Authenticated user-info call | sync | 200 | Yes |
+| auth-jwt-scopes | technical | JWT scopes/roles-based authZ | sync | 200 | Yes |
+| auth-mtls-only | technical | mTLS-only authentication | sync | 200 | Yes |
+| auth-jwt-mtls | technical | Combined JWT + mTLS authN/authZ | sync | 200 | Yes |
 | credit-decision-parallel | technical | Parallel credit decision branches | sync | 200 | Yes |
 | sync-wrapper-wait | technical | Sync wrapper with internal wait | sync | 200 | Yes |
 | wait-approval | technical | Manual approval via wait step | sync | 200 | Yes |

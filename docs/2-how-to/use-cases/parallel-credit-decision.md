@@ -67,7 +67,7 @@ spec:
               riskCall:
                 type: task
                 task:
-                  kind: httpCall
+                  kind: httpCall:v1
                   operationRef: risk.scoreUser
                   params:
                     headers:
@@ -83,7 +83,7 @@ spec:
               limitsCall:
                 type: task
                 task:
-                  kind: httpCall
+                  kind: httpCall:v1
                   operationRef: limits.checkLimits
                   params:
                     headers:
@@ -99,7 +99,7 @@ spec:
               kycCall:
                 type: task
                 task:
-                  kind: httpCall
+                  kind: httpCall:v1
                   operationRef: kyc.getUserById
                   params:
                     path:

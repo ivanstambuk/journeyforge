@@ -1,0 +1,111 @@
+apiVersion: v1
+kind: Journey
+metadata:
+  name: auth-jwt-scopes
+  version: 0.1.0
+spec:
+  httpBindings:
+    start:
+      headersToContext:
+        traceparent: traceparent
+      headersPassthrough:
+        - from: traceparent
+          to: traceparent
+
+  apis:
+    users: { openApiRef: apis/users.openapi.yaml }
+
+  input:
+    schema:
+      type: object
+      additionalProperties: true
+      properties:
+        traceparent:
+          type: string
+          description: Optional override for W3C traceparent header; if omitted, middleware may inject it.
+  output:
+    schema:
+      type: object
+      properties:
+        status:
+          type: integer
+        ok:
+          type: boolean
+        headers:
+          type: object
+          additionalProperties:
+            type: string
+        body: {}
+        error:
+          type: object
+          properties:
+            type:
+              type: string
+            message:
+              type: string
+          additionalProperties: true
+      additionalProperties: true
+
+  start: validateJwt
+
+  states:
+    validateJwt:
+      type: task
+      task:
+        kind: jwtValidate:v1
+        profile: default
+      next: checkScopes
+
+    checkScopes:
+      type: choice
+      choices:
+        - when:
+            predicate:
+              # Simple scope check: allow when the scope string
+              # contains either "read:users" or "admin".
+              # Real deployments SHOULD use a more robust helper.
+              lang: dataweave
+              expr: |
+                (context.auth.jwt.claims.scope default "") contains "read:users"
+                  or (context.auth.jwt.claims.scope default "") contains "admin"
+          next: fetchUser
+      default: scopeDenied
+
+    fetchUser:
+      type: task
+      task:
+        kind: httpCall:v1
+        operationRef: users.getUserById
+        params:
+          path: { userId: "${context.auth.jwt.claims.sub}" }
+          headers:
+            Accept: application/json
+            traceparent: "${context.traceparent}"
+        timeoutMs: 5000
+        resultVar: api
+      next: decide
+
+    decide:
+      type: choice
+      choices:
+        - when:
+            predicate:
+              lang: dataweave
+              expr: |
+                context.api.ok == true and context.api.status == 200
+          next: done
+      default: upstreamFailed
+
+    done:
+      type: succeed
+      outputVar: api
+
+    scopeDenied:
+      type: fail
+      errorCode: JWT_SCOPE_DENIED
+      reason: "Token does not have required scopes"
+
+    upstreamFailed:
+      type: fail
+      errorCode: USER_LOOKUP_FAILED
+      reason: "User lookup failed or did not return 200"

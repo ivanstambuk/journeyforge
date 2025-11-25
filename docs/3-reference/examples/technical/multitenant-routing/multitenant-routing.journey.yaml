@@ -64,7 +64,7 @@ spec:
     callTenantA:
       type: task
       task:
-        kind: httpCall
+        kind: httpCall:v1
         operationRef: itemsA.getItemById
         params:
           path: { id: "${context.id}" }
@@ -76,7 +76,7 @@ spec:
     callTenantB:
       type: task
       task:
-        kind: httpCall
+        kind: httpCall:v1
         operationRef: itemsB.getItem
         params:
           headers: { Accept: application/json, X-Tenant-Id: "${context.tenantId}" }

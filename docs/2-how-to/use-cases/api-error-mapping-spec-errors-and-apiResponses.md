@@ -29,7 +29,7 @@ This use case builds on:
   - `spec.input.schema` / `spec.output.schema` for request/response bodies.
   - `start` / `states` with `task`, `choice`, `transform`, `succeed`, `fail`.
 - HTTP tasks:
-  - `task.kind: httpCall`, `operationRef`, `resultVar`.
+  - `task.kind: httpCall:v1`, `operationRef`, `resultVar`.
   - `resultVar` HTTP result shape (`status`, `ok`, `headers`, `body`, `error`).
 - Error handling:
   - `spec.errors.canonicalFormat: rfc9457` (implicit default).

@@ -117,7 +117,7 @@ spec:
       cleanupPartialSegments:
         type: task
         task:
-          kind: httpCall
+          kind: httpCall:v1
           operationRef: providers.releaseUnconfirmedSegments
           resultVar: cleanupResult
         next: done

@@ -56,7 +56,7 @@ spec:
     call_api:
       type: task
       task:
-        kind: httpCall
+        kind: httpCall:v1
         method: GET
         url: "${platform.config.itemsApiBaseUrl}/items/${context.inputId}"
         headers: { Accept: application/json }

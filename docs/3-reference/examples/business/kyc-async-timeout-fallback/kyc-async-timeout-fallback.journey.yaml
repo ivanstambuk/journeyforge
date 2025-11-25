@@ -67,7 +67,7 @@ spec:
     startPrimaryKyc:
       type: task
       task:
-        kind: httpCall
+        kind: httpCall:v1
         method: POST
         url: https://kyc-primary.example.com/checks/start
         params:
@@ -294,7 +294,7 @@ spec:
               retryPrimaryHealthCheck:
                 type: task
                 task:
-                  kind: httpCall
+                  kind: httpCall:v1
                   method: GET
                   url: https://kyc-primary.example.com/health
                   params:
@@ -332,7 +332,7 @@ spec:
               startFallbackKyc:
                 type: task
                 task:
-                  kind: httpCall
+                  kind: httpCall:v1
                   method: POST
                   url: https://kyc-fallback.example.com/checks/start
                   params:

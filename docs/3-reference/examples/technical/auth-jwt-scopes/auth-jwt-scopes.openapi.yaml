@@ -1,0 +1,180 @@
+openapi: 3.1.0
+info:
+  title: "JourneyForge – auth-jwt-scopes"
+  version: 0.1.0
+  description: "JourneyForge – auth-jwt-scopes"
+  contact:
+    name: JourneyForge
+servers:
+  - url: /api/v1
+tags:
+  - name: auth-jwt-scopes
+paths:
+  /journeys/auth-jwt-scopes/start:
+    post:
+      summary: Start auth-jwt-scopes journey
+      operationId: authJwtScopes_start
+      tags:
+        - auth-jwt-scopes
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/JourneyStartRequest"
+      responses:
+        "200":
+          description: Synchronous outcome for auth-jwt-scopes
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JourneyOutcome"
+      description: Start auth-jwt-scopes journey (synchronous)
+  /journeys/{journeyId}:
+    get:
+      summary: Get journey status
+      operationId: authJwtScopes_getStatus
+      tags:
+        - auth-jwt-scopes
+      parameters:
+        - in: path
+          name: journeyId
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JourneyStatus"
+      description: Get journey status
+  /journeys/{journeyId}/result:
+    get:
+      summary: Retrieve final outcome
+      operationId: authJwtScopes_getResult
+      tags:
+        - auth-jwt-scopes
+      parameters:
+        - in: path
+          name: journeyId
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Final outcome
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/JourneyOutcome"
+        "409":
+          description: Journey not terminal yet
+      description: Retrieve final outcome
+components:
+  schemas:
+    JourneyStartRequest:
+      type: object
+      additionalProperties: true
+      properties:
+        traceparent:
+          type: string
+          description: Optional override for W3C traceparent header; if omitted, middleware
+            may inject it.
+    JourneyStartResponse:
+      type: object
+      required:
+        - journeyId
+        - journeyName
+        - statusUrl
+      properties:
+        journeyId:
+          type: string
+        journeyName:
+          type: string
+        statusUrl:
+          type: string
+          format: uri
+        _links:
+          description: "Optional hypermedia links (HAL-style) describing related resources
+            and next actions."
+          type: object
+          additionalProperties:
+            $ref: "#/components/schemas/Link"
+    JourneyStatus:
+      type: object
+      required:
+        - journeyId
+        - journeyName
+        - phase
+        - currentState
+        - updatedAt
+      properties:
+        journeyId:
+          type: string
+        journeyName:
+          type: string
+        phase:
+          type: string
+          enum:
+            - Running
+            - Succeeded
+            - Failed
+        currentState:
+          type: string
+        updatedAt:
+          type: string
+          format: date-time
+        tags:
+          type: array
+          items:
+            type: string
+        attributes:
+          type: object
+          additionalProperties:
+            type: string
+        _links:
+          description: "Optional hypermedia links (HAL-style) describing related resources
+            and next actions."
+          type: object
+          additionalProperties:
+            $ref: "#/components/schemas/Link"
+    JourneyOutcome:
+      allOf:
+        - $ref: "../../../openapi/journeys.openapi.yaml#/components/schemas/JourneyOutcome"
+        - type: object
+          properties:
+            output:
+              type: object
+              properties:
+                status:
+                  type: integer
+                ok:
+                  type: boolean
+                headers:
+                  type: object
+                  additionalProperties:
+                    type: string
+                body: {}
+                error:
+                  type: object
+                  properties:
+                    type:
+                      type: string
+                    message:
+                      type: string
+                  additionalProperties: true
+              additionalProperties: true
+    Link:
+      type: object
+      required:
+        - href
+      properties:
+        href:
+          type: string
+          description: Target URI for this link
+        method:
+          type: string
+          description: HTTP method to use when following this link (for example GET,
+            POST, DELETE)

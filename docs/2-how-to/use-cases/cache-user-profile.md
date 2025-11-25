@@ -121,7 +121,7 @@ spec:
     fetchRemote:
       type: task
       task:
-        kind: httpCall
+        kind: httpCall:v1
         operationRef: users.getUserById
         params:
           path:

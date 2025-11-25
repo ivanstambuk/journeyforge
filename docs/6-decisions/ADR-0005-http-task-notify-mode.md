@@ -4,7 +4,7 @@ Date: 2025-11-20 | Status: Proposed
 
 ## Context
 
-In the DSL, `task` states with `kind: httpCall` are defined as synchronous, request/response operations:
+In the DSL, HTTP tasks are expressed as `task` states with `kind: httpCall:v1`, defined as synchronous, request/response operations:
 - The engine sends an HTTP request, waits for a response (or timeout/error), and records a structured result object at `context.<resultVar>`.
 - Journey definitions branch on or transform this result using `choice`, `transform`, and `errorMapping`.
 
@@ -19,12 +19,12 @@ We want a way to describe this intent in the DSL without introducing a completel
 
 ## Decision
 
-We extend `task` with `kind: httpCall` to support a `mode` field:
+We extend `httpCall:v1` with a `mode` field:
 
 ```yaml
 type: task
 task:
-  kind: httpCall
+  kind: httpCall:v1
   mode: requestResponse | notify   # optional; default requestResponse
   # ...
 ```

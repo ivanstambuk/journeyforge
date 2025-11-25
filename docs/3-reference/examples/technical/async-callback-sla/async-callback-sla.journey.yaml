@@ -50,7 +50,7 @@ spec:
     startAsyncJob:
       type: task
       task:
-        kind: httpCall
+        kind: httpCall:v1
         method: POST
         url: https://provider.example.com/jobs/start
         params:

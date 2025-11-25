@@ -86,7 +86,7 @@ spec:
     createOrder:
       type: task
       task:
-        kind: httpCall
+        kind: httpCall:v1
         operationRef: orders.createOrder
         params:
           headers:
@@ -109,7 +109,7 @@ spec:
     reserveInventory:
       type: task
       task:
-        kind: httpCall
+        kind: httpCall:v1
         operationRef: inventory.reserveItemsForOrder
         params:
           headers:
@@ -198,7 +198,7 @@ spec:
     prepareShipments:
       type: task
       task:
-        kind: httpCall
+        kind: httpCall:v1
         operationRef: shipping.createShipmentsForOrder
         params:
           headers:

@@ -58,7 +58,7 @@ spec:
       rollback:
         type: task
         task:
-          kind: httpCall
+          kind: httpCall:v1
           operationRef: billing.cancelCharge
           params:
             path:
@@ -69,7 +69,7 @@ spec:
       undo_inventory:
         type: task
         task:
-          kind: httpCall
+          kind: httpCall:v1
           operationRef: inventory.releaseReservation
           params:
             path:
@@ -80,7 +80,7 @@ spec:
       notify:
         type: task
         task:
-          kind: eventPublish
+          kind: eventPublish:v1
           eventPublish:
             transport: kafka
             topic: orders.compensation
@@ -103,7 +103,7 @@ spec:
     place_order:
       type: task
       task:
-        kind: httpCall
+        kind: httpCall:v1
         operationRef: billing.authorizePayment
         params:
           body:
@@ -120,7 +120,7 @@ spec:
     reserve_inventory:
       type: task
       task:
-        kind: httpCall
+        kind: httpCall:v1
         operationRef: inventory.reserveItems
         params:
           body:

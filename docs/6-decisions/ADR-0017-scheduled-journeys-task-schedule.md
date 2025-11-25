@@ -1,4 +1,4 @@
-# ADR-0017 – Scheduled journeys (`task.kind: schedule`)
+# ADR-0017 – Scheduled journeys (`task.kind: schedule:v1`)
 
 Date: 2025-11-22 | Status: Proposed
 
@@ -32,10 +32,10 @@ Options A and B add extra kinds/resources and push scheduling semantics away fro
 
 ## Decision
 
-We adopt **Option C**: introduce a `task.kind: schedule` for `kind: Journey` that creates **schedule bindings** at runtime. A schedule binding causes the engine to start future, non-interactive runs of the same journey from a specified state with **evolving context** across runs.
+We adopt **Option C**: introduce a `task.kind: schedule` for `kind: Journey` that creates **schedule bindings** at runtime. A schedule binding causes the engine to start future, non-interactive runs of the same journey from a specified state with **evolving context** across runs. In the plugin-only DSL, this is expressed as `task.kind: schedule:v1`.
 
 High-level decision:
-- The DSL gains a new `task.kind: schedule` shape under `type: task`.
+- The DSL gains a new `task.kind: schedule` shape under `type: task` (expressed as `schedule:v1` in the plugin naming scheme).
 - Scheduling is **only** available for `kind: Journey`, not `kind: Api`.
 - Scheduling is **explicit and context-driven**: an interactive journey instance executes the schedule task, which:
   - Selects the scheduled entry state (`start`).
@@ -49,41 +49,40 @@ High-level decision:
   - After each run, updates the binding’s stored `context` with the run’s final `context`.
   - Enforces `maxRuns` and non-interactive semantics for the scheduled path.
 
-### 1. DSL shape – `task.kind: schedule`
+### 1. DSL shape – `task.kind: schedule` / `schedule:v1`
 
 We extend the `task` state with a new `kind`:
 
 ```yaml
 type: task
 task:
-  kind: schedule
-  schedule:
-    start: <stateId>                   # required – entry state for scheduled runs
+  kind: schedule:v1
+  start: <stateId>                   # required – entry state for scheduled runs
 
-    # Optional start time; omit → start as soon as possible
-    startAt: <string|mapper>           # RFC 3339 timestamp string or mapper resolving to one
+  # Optional start time; omit → start as soon as possible
+  startAt: <string|mapper>           # RFC 3339 timestamp string or mapper resolving to one
 
-    # Required cadence – coarse-grained ISO-8601 duration
-    interval: <string|mapper>          # e.g. "P1D", "P1M"
+  # Required cadence – coarse-grained ISO-8601 duration
+  interval: <string|mapper>          # e.g. "P1D", "P1M"
 
-    # Required run bound
-    maxRuns: <int|mapper>              # positive integer (literal or mapper)
+  # Required run bound
+  maxRuns: <int|mapper>              # positive integer (literal or mapper)
 
-    # Optional subject binding for listing/cancellation
-    subjectId:                         # optional but recommended
-      mapper:
-        lang: dataweave
-        expr: <expression>             # must resolve to a non-empty string when present
+  # Optional subject binding for listing/cancellation
+  subjectId:                         # optional but recommended
+    mapper:
+      lang: dataweave
+      expr: <expression>             # must resolve to a non-empty string when present
 
-    # Optional initial context snapshot for the FIRST scheduled run
-    # Later runs use the previous run's final context
-    context:
-      mapper:
-        lang: dataweave
-        expr: <expression>             # default: use full current context when omitted
+  # Optional initial context snapshot for the FIRST scheduled run
+  # Later runs use the previous run's final context
+  context:
+    mapper:
+      lang: dataweave
+      expr: <expression>             # default: use full current context when omitted
 
-    # Optional duplicate behaviour when a schedule already exists
-    onExisting: fail | upsert | addAnother
+  # Optional duplicate behaviour when a schedule already exists
+  onExisting: fail | upsert | addAnother
 next: <stateId>
 ```
 

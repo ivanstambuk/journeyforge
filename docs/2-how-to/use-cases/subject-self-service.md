@@ -48,27 +48,15 @@ metadata:
   name: subject-step-guard
   version: 0.1.0
 spec:
-  policies:
-    httpSecurity:
-      default: jwtDefault
-      definitions:
-        jwtDefault:
-          kind: jwt
-          issuer: "https://issuer.example.com"
-          audience: ["journeyforge"]
-          jwks:
-            source: jwksUrl
-            url: "https://issuer.example.com/.well-known/jwks.json"
-            cacheTtlSeconds: 3600
-            clockSkewSeconds: 60
-            requiredClaims:
-              sub: { type: string }
-            scope: { contains: ["journey:self-service"] }
+  start: validateJwt
 
-  security:
-    journeyPolicyRef: jwtDefault
-
-  start: captureOwner
+  states:
+    validateJwt:
+      type: task
+      task:
+        kind: jwtValidate:v1
+        profile: default
+      next: captureOwner
 
   states:
     captureOwner:

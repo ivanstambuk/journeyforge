@@ -54,7 +54,7 @@ spec:
     lookup:
       type: task
       task:
-        kind: httpCall
+        kind: httpCall:v1
         operationRef: users.getUserById
         params:
           path: { userId: "${context.userId}" }
@@ -77,7 +77,7 @@ spec:
     create:
       type: task
       task:
-        kind: httpCall
+        kind: httpCall:v1
         operationRef: accounts.createAccount
         params:
           headers: { Accept: application/json }

@@ -189,7 +189,7 @@ spec:
                   notifyEscalation:
                     type: task
                     task:
-                      kind: httpCall
+                      kind: httpCall:v1
                       method: POST
                       url: https://escalation.example.com/cases/escalate
                       params:
@@ -274,7 +274,7 @@ spec:
     notifyAssignment:
       type: task
       task:
-        kind: httpCall
+        kind: httpCall:v1
         method: POST
         url: https://support.example.com/cases/assign
         params:

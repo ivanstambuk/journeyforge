@@ -45,7 +45,7 @@ spec:
     purge:
       type: task
       task:
-        kind: httpCall
+        kind: httpCall:v1
         method: DELETE
         url: "https://api.example.com/cache/${context.key}"
         headers: { Accept: application/json }

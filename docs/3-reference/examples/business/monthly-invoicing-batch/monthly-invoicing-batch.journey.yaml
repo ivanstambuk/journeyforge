@@ -71,30 +71,29 @@ spec:
     configureSchedule:
       type: task
       task:
-        kind: schedule
-        schedule:
-          start: draftInvoices
-          startAt:
-            mapper:
-              lang: dataweave
-              expr: context.firstRunAt
-          interval:
-            mapper:
-              lang: dataweave
-              expr: context.interval
-          maxRuns:
-            mapper:
-              lang: dataweave
-              expr: context.maxRuns
-          subjectId:
-            mapper:
-              lang: dataweave
-              expr: context.tenantId
-          context:
-            mapper:
-              lang: dataweave
-              expr: context
-          onExisting: upsert
+        kind: schedule:v1
+        start: draftInvoices
+        startAt:
+          mapper:
+            lang: dataweave
+            expr: context.firstRunAt
+        interval:
+          mapper:
+            lang: dataweave
+            expr: context.interval
+        maxRuns:
+          mapper:
+            lang: dataweave
+            expr: context.maxRuns
+        subjectId:
+          mapper:
+            lang: dataweave
+            expr: context.tenantId
+        context:
+          mapper:
+            lang: dataweave
+            expr: context
+        onExisting: upsert
       next: prepareConfigOutcome
 
     prepareConfigOutcome:
@@ -125,7 +124,7 @@ spec:
     draftInvoices:
       type: task
       task:
-        kind: httpCall
+        kind: httpCall:v1
         operationRef: billing.draftInvoicesForBatch
         params:
           path:
@@ -148,7 +147,7 @@ spec:
     validateDrafts:
       type: task
       task:
-        kind: httpCall
+        kind: httpCall:v1
         operationRef: billing.validateInvoiceBatch
         params:
           path:
@@ -272,7 +271,7 @@ spec:
     sendInvoices:
       type: task
       task:
-        kind: httpCall
+        kind: httpCall:v1
         operationRef: billing.sendInvoiceBatch
         params:
           path:
@@ -324,7 +323,7 @@ spec:
     sendFirstReminder:
       type: task
       task:
-        kind: httpCall
+        kind: httpCall:v1
         operationRef: billing.sendInvoiceReminder
         params:
           path:
@@ -355,7 +354,7 @@ spec:
     sendFinalNotice:
       type: task
       task:
-        kind: httpCall
+        kind: httpCall:v1
         operationRef: billing.sendInvoiceFinalNotice
         params:
           path:

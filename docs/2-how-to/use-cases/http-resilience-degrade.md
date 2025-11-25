@@ -72,7 +72,7 @@ spec:
     call_upstream:
       type: task
       task:
-        kind: httpCall
+        kind: httpCall:v1
         operationRef: serviceA.unstableOperation
         params:
           headers:

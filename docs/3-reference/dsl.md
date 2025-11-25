@@ -38,7 +38,7 @@ This document normatively defines the JourneyForge journey DSL (for `kind: Journ
 - Purpose: describe small, synchronous API journeys (defined by `kind: Journey`) in a human-friendly format (YAML 1.2 subset) with a precise JSON model.
 - Files: `.journey.yaml` / `.journey.yml` or `.journey.json`.
 - States: `task` (HTTP, event publish, schedule), `choice` (branch), `transform` (DataWeave mapping), `parallel` (branches with join), `wait` (external input), `webhook` (callback input), `timer` (durable in-journey delay, journeys only), `subjourney` (local subflow call), `succeed` (terminal), `fail` (terminal).
-- Expressions & transforms: DataWeave 2.x is the canonical language for predicates and (future) transform nodes.
+- Expressions & transforms: expressions are authored via `lang`/`expr` pairs and evaluated by pluggable expression engines (see section 10 and ADR‑0027). DataWeave 2.x (`lang: dataweave`) is one supported engine; additional engines (for example JSONata, JOLT, jq) MAY be supported via the expression engine plugin model when configured.
 - Execution: starts at `spec.start`, mutates a JSON `context`, and terminates on `succeed`/`fail`, a global execution timeout (`spec.execution.maxDurationSec`), or an engine execution error. When `spec.compensation` is present, a separate compensation journey MAY run after non-successful termination and, optionally, after selected successful terminations.
 
 ### 1.1 State types and surface
@@ -47,13 +47,15 @@ The DSL surface defines the following state types and configuration blocks. All 
 
 | State type / construct                    | Description                                      | Notes in spec                                          |
 |------------------------------------------|--------------------------------------------------|--------------------------------------------------------|
-| `task` (`kind: httpCall`)                | HTTP call with structured result recording       | Fully specified, including `operationRef` and errors   |
-| `task` (`kind: eventPublish`)            | Publish events to an external transport          | Fully specified for Kafka in this version              |
-| `task` (`kind: schedule`)                | Create/update schedule bindings for future runs  | Fully specified for `kind: Journey`                   |
-| `choice`                                 | Predicate-based, data-driven branching on context | Fully specified, DataWeave predicates only             |
+| `task` (`kind: httpCall:v1`)             | HTTP call with structured result recording       | Fully specified, including `operationRef` and errors   |
+| `task` (`kind: eventPublish:v1`)         | Publish events to an external transport          | Fully specified for Kafka in this version              |
+| `task` (`kind: schedule:v1`)             | Create/update schedule bindings for future runs  | Fully specified for `kind: Journey`                    |
+| `task` (`kind: jwtValidate:v1`)          | JWT validation and claim projection              | Core task plugin; see section 18.6                     |
+| `task` (`kind: mtlsValidate:v1`)         | mTLS client certificate validation               | Core task plugin; see section 18.7                     |
+| `choice`                                 | Predicate-based, data-driven branching on context | Fully specified; predicates use pluggable expression engines via `lang` |
 | `succeed`                                | Terminal success                                 | Fully specified                                        |
 | `fail`                                   | Terminal failure with error code/reason          | Fully specified; aligned with RFC 9457 Problem Details |
-| `transform`                              | DataWeave mapping into context/vars              | Fully specified                                        |
+| `transform`                              | Expression-based mapping into context/vars       | Fully specified; uses expression engines via `lang`    |
 | `wait`                                   | Manual/external input                            | DSL shape + REST step surface defined                  |
 | `webhook`                                | Callback input                                   | DSL shape + callback surface and security hooks defined|
 | `timer`                                  | Durable time-based delay within a journey        | Journeys only; non-interactive, see section 12.3       |
@@ -237,14 +239,14 @@ spec:
       - when:
           phase: FAILED
           errorType: <string>   # optional; Problem.type to match
-          predicate:            # optional; DataWeave predicate over context + error
-            lang: dataweave
+          predicate:            # optional; expression predicate over context + error
+            lang: <engineId>    # e.g. dataweave
             expr: <expr>
         status: <integer>       # literal HTTP status code
         # or:
         # statusExpr:
-        #   lang: dataweave
-        #   expr: <expr>        # DataWeave expression that evaluates to an HTTP status code
+        #   lang: <engineId>
+        #   expr: <expr>        # expression that evaluates to an HTTP status code
     default:                    # optional; per-phase fallbacks when no rule matches
       SUCCEEDED: 200            # optional; defaults to 200 when omitted
       FAILED: fromProblemStatus # optional; defaults to Problem.status or 500 when omitted
@@ -305,10 +307,10 @@ spec:
 
 Semantics
 - `spec.defaults.http.timeoutMs`:
-  - When set, and when a `task` with `kind: httpCall` omits `timeoutMs`, engines SHOULD use this value instead of the hard-coded default (10 000 ms).
+  - When set, and when a `task` with `kind: httpCall:v1` omits `timeoutMs`, engines SHOULD use this value instead of the hard-coded default (10 000 ms).
   - If both the task-level `timeoutMs` and `spec.defaults.http.timeoutMs` are omitted, the default remains 10 000 ms as described in the HTTP task section.
 - `spec.defaults.http.headers`:
-  - For each `task` with `kind: httpCall`, the effective headers are computed as:
+  - For each `task` with `kind: httpCall:v1`, the effective headers are computed as:
     - Start with `spec.defaults.http.headers` (if present), then
     - Overlay `task.task.headers` (task-level values win on key conflicts).
   - Defaults MUST NOT override explicit task headers.
@@ -323,7 +325,7 @@ Validation
 
 ### 2.3.1 Platform configuration (spec.platform.config)
 
-Journey and API definitions may declare a per-definition configuration contract under `spec.platform.config`. At runtime, the platform injects concrete values for these keys into the read-only `platform.config` object available to DataWeave expressions.
+Journey and API definitions may declare a per-definition configuration contract under `spec.platform.config`. At runtime, the platform injects concrete values for these keys into the read-only `platform.config` object available to expressions.
 
 ```yaml
 spec:
@@ -448,15 +450,15 @@ spec:
     start: rollback              # required; compensation start state id
     alsoFor:                     # optional; success-only triggers for compensation
       - when:
-          predicate:             # optional; DataWeave, evaluated after a successful run
-            lang: dataweave
+          predicate:             # optional; expression, evaluated after a successful run
+            lang: <engineId>     # e.g. dataweave
             expr: |
               output.overallStatus == "PARTIALLY_CONFIRMED"
     states:                      # required; map<string, State> (same shapes as top-level)
       rollback:
         type: task
         task:
-          kind: httpCall
+          kind: httpCall:v1
           operationRef: billing.cancelCharge
           resultVar: cancelResult
         next: undo_inventory
@@ -464,7 +466,7 @@ spec:
       undo_inventory:
         type: task
         task:
-          kind: httpCall
+          kind: httpCall:v1
           operationRef: inventory.releaseReservation
           resultVar: inventoryResult
         next: notify
@@ -472,19 +474,18 @@ spec:
       notify:
         type: task
         task:
-          kind: eventPublish
-          eventPublish:
-            transport: kafka
-            topic: order.compensation
-            value:
-              mapper:
-                lang: dataweave
-                expr: |
-                  {
-                    orderId: context.orderId,
-                    compensation: "completed",
-                    cause: outcome
-                  }
+          kind: eventPublish:v1
+          transport: kafka
+          topic: order.compensation
+          value:
+            mapper:
+              lang: dataweave
+              expr: |
+                {
+                  orderId: context.orderId,
+                  compensation: "completed",
+                  cause: outcome
+                }
         next: done
 
       done:
@@ -513,7 +514,7 @@ Semantics
 - Context and bindings:
   - When starting the compensation journey, the engine MUST:
     - Provide `context` as a deep copy of the main journey’s context at the moment of termination.
-    - Provide an additional read‑only binding `outcome` to all DataWeave predicates and mappers in the compensation states.
+    - Provide an additional read‑only binding `outcome` to all expressions in the compensation states.
   - The `outcome` object has the conceptual shape:
     ```json
     {
@@ -886,19 +887,22 @@ Validation
 - Arrays: the DSL does not support array indexing in paths (no `a[0]`). Future versions may add it.
 
 <a id="dsl-4-interpolation"></a>
-## 4. Interpolation
+## 4. Interpolation and expression engines
 - String fields annotated as “interpolated” support `${context.<dotPath>}` placeholders.
 - Interpolation is supported in HTTP `url`, `headers` values, and `body` (when `body` is a string). Interpolation of non‑string values coerces to JSON string.
 - Unknown/missing variables produce a validation error (not an empty string).
+- Wherever the DSL embeds expressions using a `lang`/`expr` pair (for example `choice.when.predicate`, `transform`, mappers under tasks/`wait`/`webhook`/`schedule`, and error mappers), `lang` selects an expression engine:
+  - Example engines: `dataweave` (DataWeave 2.x; see ADR-0002), `jsonata`, `jolt`, `jq` – pure JSON expression engines selectable via `lang` when enabled in engine configuration.
+- Engines are resolved by id at load time via the expression engine plugin model (see Feature 012 and ADR-0027); if a spec references a `lang` value with no registered engine, validation MUST fail.
 
 <a id="dsl-5-states"></a>
 ## 5. States
 
-### 5.1 `task` (HTTP call)
+### 5.1 `task` (HTTP call – `httpCall:v1`)
 ```yaml
 type: task
 task:
-  kind: httpCall                # only supported `task.kind` for HTTP in this version
+  kind: httpCall:v1             # core HTTP plugin (type httpCall, major 1)
   mode: requestResponse         # optional; requestResponse (default) | notify
   # Choose exactly one of the following bindings:
   # (A) OpenAPI operation binding
@@ -920,7 +924,7 @@ task:
   errorMapping:                     # optional – conditional transform for error results
     when: nonOk                     # only nonOk is supported (result.ok == false)
     mapper:
-      lang: dataweave
+      lang: <engineId>              # e.g. dataweave
       expr: <expression>            # same shape as transform.mapper
     target:                         # same shape/semantics as transform.target
       kind: context                 # context | var
@@ -958,7 +962,7 @@ Semantics
   - After constructing and storing the HTTP result object at `context.<resultVar>`, if `errorMapping` is present and `when: nonOk`, the engine conceptually evaluates `errorMapping.mapper` only when `context.<resultVar>.ok == false`.
   - The mapper evaluates with:
     - `context` bound to the current journey context, and
-    - `result` bound to the structured HTTP result object stored at `context.<resultVar>`.
+    - `payload` bound to the structured HTTP result object stored at `context.<resultVar>`, with `error` set to `null` and `platform` available as for other expression sites.
   - The mapper result is then written according to `errorMapping.target` and `errorMapping.resultVar` using the same rules as the `transform` state:
     - `target.kind == context` and `target.path` set → assign at `context.<path>`.
     - `target.kind == var` and `resultVar` set → assign at `context.<resultVar>`.
@@ -976,6 +980,7 @@ Semantics
   ```
 
 Validation
+- `task.kind` for HTTP calls MUST be `httpCall:v1` in this version.
 - `method` and `url` are required; `url` must be absolute (`http://` or `https://`).
 - `body` present with `GET` → validation error.
 - `resultVar` must match `[A-Za-z_][A-Za-z0-9_]*` when `mode` is `requestResponse`.
@@ -988,119 +993,117 @@ Validation
   - When absent, and when `spec.policies.httpClientAuth.default` is set, the engine MAY use the default policy as if `auth.policyRef` were set to that id.
   - When neither a task-level `auth.policyRef` nor a usable default can be resolved, the request is sent without additional outbound auth (subject to implementation defaults).
 - HTTP outcomes (status/timeouts) do not terminate execution; you must branch explicitly. In `notify` mode the journey instance cannot branch on call outcomes because they are not observable.
-### 5.2 `task` (event publish)
+### 5.2 `task` (event publish – `eventPublish:v1`)
 
 In addition to HTTP calls, `task` can publish events to external transports such as Kafka.
 
 ```yaml
 type: task
 task:
-  kind: eventPublish
-  eventPublish:
-    transport: kafka                 # initial implementation: only "kafka" is supported
-    topic: orders.events             # required
-    key:                             # optional – mapper for Kafka key
-      mapper:
-        lang: dataweave
-        expr: <expression>
-    value:                           # required – mapper for event payload
-      mapper:
-        lang: dataweave
-        expr: <expression>
-    headers:                         # optional – Kafka record headers
-      <k>: <string|interpolated>
-    keySchemaRef: <string>           # optional – JSON Schema for the key
-    valueSchemaRef: <string>         # optional but recommended – JSON Schema for the payload
+  kind: eventPublish:v1
+  transport: kafka                 # initial implementation: only "kafka" is supported
+  topic: orders.events             # required
+  key:                             # optional – mapper for Kafka key
+    mapper:
+      lang: <engineId>             # e.g. dataweave
+      expr: <expression>
+  value:                           # required – mapper for event payload
+    mapper:
+      lang: <engineId>             # e.g. dataweave
+      expr: <expression>
+  headers:                         # optional – Kafka record headers
+    <k>: <string|interpolated>
+  keySchemaRef: <string>           # optional – JSON Schema for the key
+  valueSchemaRef: <string>         # optional but recommended – JSON Schema for the payload
 next: <stateId>
 ```
 
 Semantics
 - Transport and topic:
-  - `eventPublish.transport` identifies the event transport; in the initial implementation it MUST be `kafka`.
-  - `eventPublish.topic` is the Kafka topic name; cluster/connection details are provided out of band by the engine and its configuration.
+  - `transport` identifies the event transport; in the initial implementation it MUST be `kafka`.
+  - `topic` is the Kafka topic name; cluster/connection details are provided out of band by the engine and its configuration.
 - Key and value:
-  - `eventPublish.key.mapper` (when present) is evaluated with `context` bound to the current journey context; the result is serialised according to engine configuration (typically string/bytes) and used as the Kafka record key.
-  - `eventPublish.value.mapper` is required and produces the event payload object; engines typically serialise this as JSON.
+  - `key.mapper` (when present) is evaluated with `context` bound to the current journey context; the result is serialised according to engine configuration (typically string/bytes) and used as the Kafka record key.
+  - `value.mapper` is required and produces the event payload object; engines typically serialise this as JSON.
 - Headers:
-  - `eventPublish.headers` is an optional map from header name to interpolated string value; values are evaluated against `context` and attached as Kafka record headers.
+  - `headers` is an optional map from header name to interpolated string value; values are evaluated against `context` and attached as Kafka record headers.
 - Schemas:
-  - `eventPublish.keySchemaRef` (optional) points to a JSON Schema that describes the logical shape of the key. Engine implementations and tooling MAY use this for validation or schema registry integration.
-  - `eventPublish.valueSchemaRef` (optional but recommended) points to a JSON Schema that describes the event payload. When present, engines SHOULD validate the mapped payload against this schema before publishing and MAY register it with an event/schema registry.
+  - `keySchemaRef` (optional) points to a JSON Schema that describes the logical shape of the key. Engine implementations and tooling MAY use this for validation or schema registry integration.
+  - `valueSchemaRef` (optional but recommended) points to a JSON Schema that describes the event payload. When present, engines SHOULD validate the mapped payload against this schema before publishing and MAY register it with an event/schema registry.
 - Control flow:
   - Publishing is fire-and-forget from the journey’s perspective: the task does not write a `resultVar`, and no control-flow decisions are based on publish outcomes.
   - On publish failures after any configured retries, implementations MAY treat this as an engine execution error (failing the journey/API call); the DSL does not surface partial success states.
 
 Validation
-- `task.kind` may be `httpCall`, `eventPublish`, or `schedule`.
-- For `kind: eventPublish`:
-  - `eventPublish.transport` is required and must be `kafka`.
-  - `eventPublish.topic` is required and must be a non-empty string.
-  - `eventPublish.value` is required and must contain a `mapper` object with `lang: dataweave` and an inline `expr`.
-  - `eventPublish.key` (when present) must contain a `mapper` object with `lang: dataweave` and an inline `expr`.
-  - `eventPublish.headers` (when present) must be a map of header names to string or interpolated string values.
-  - `eventPublish.keySchemaRef` and `eventPublish.valueSchemaRef` (when present) must be non-empty strings referring to JSON Schema documents.
-- `resultVar`, `errorMapping`, and `resiliencePolicyRef` MUST NOT be used with `kind: eventPublish`; event publishes do not produce structured results for branching or error mapping.
+- `task.kind` for event publish MUST be `eventPublish:v1` in this version.
+- For `eventPublish:v1`:
+  - `transport` is required and must be `kafka`.
+  - `topic` is required and must be a non-empty string.
+  - `value` is required and must contain a `mapper` object with `lang` set to a supported expression engine id (for example `dataweave`) and an inline `expr`.
+  - `key` (when present) must contain a `mapper` object with `lang` set to a supported expression engine id and an inline `expr`.
+  - `headers` (when present) must be a map of header names to string or interpolated string values.
+  - `keySchemaRef` and `valueSchemaRef` (when present) must be non-empty strings referring to JSON Schema documents.
+- `resultVar`, `errorMapping`, and `resiliencePolicyRef` MUST NOT be used with `eventPublish:v1`; event publishes do not produce structured results for branching or error mapping.
 
-### 5.3 `task` (schedule)
+### 5.3 `task` (schedule – `schedule:v1`)
 
-`task.kind: schedule` allows an interactive journey instance to create or update a **schedule binding** that will trigger future, non-interactive runs of the same journey starting from a specific state, with evolving `context` across runs.
+`task.kind: schedule:v1` allows an interactive journey instance to create or update a **schedule binding** that will trigger future, non-interactive runs of the same journey starting from a specific state, with evolving `context` across runs.
 
 ```yaml
 type: task
 task:
-  kind: schedule
-  schedule:
-    start: scheduledStart            # required – entry state for scheduled runs
+  kind: schedule:v1
+  start: scheduledStart            # required – entry state for scheduled runs
 
-    # Optional start time – omit ⇒ "start as soon as possible"
-    startAt: "2025-01-01T00:00:00Z"  # RFC 3339 timestamp string
-    # or:
-    # startAt:
-    #   mapper:
-    #     lang: dataweave
-    #     expr: context.billing.firstRunAt
+  # Optional start time – omit ⇒ "start as soon as possible"
+  startAt: "2025-01-01T00:00:00Z"  # RFC 3339 timestamp string
+  # or:
+  # startAt:
+  #   mapper:
+  #     lang: <engineId>           # e.g. dataweave
+  #     expr: context.billing.firstRunAt
 
-    # Required cadence – ISO-8601 duration
-    interval: "P1D"                  # once per day
-    # or:
-    # interval:
-    #   mapper:
-    #     lang: dataweave
-    #     expr: context.billing.interval
+  # Required cadence – ISO-8601 duration
+  interval: "P1D"                  # once per day
+  # or:
+  # interval:
+  #   mapper:
+  #     lang: <engineId>           # e.g. dataweave
+  #     expr: context.billing.interval
 
-    # Required run bound
-    maxRuns: 12
-    # or:
-    # maxRuns:
-    #   mapper:
-    #     lang: dataweave
-    #     expr: context.billing.maxRuns
+  # Required run bound
+  maxRuns: 12
+  # or:
+  # maxRuns:
+  #   mapper:
+  #     lang: <engineId>           # e.g. dataweave
+  #     expr: context.billing.maxRuns
 
-    # Optional subject binding
-    subjectId:
-      mapper:
-        lang: dataweave
-        expr: context.userId
+  # Optional subject binding
+  subjectId:
+    mapper:
+      lang: <engineId>             # e.g. dataweave
+      expr: context.userId
 
-    # Optional initial context snapshot for the FIRST scheduled run;
-    # later runs use the previous run's final context
-    context:
-      mapper:
-        lang: dataweave
-        expr: context - ["sensitiveStuff"]
+  # Optional initial context snapshot for the FIRST scheduled run;
+  # later runs use the previous run's final context
+  context:
+    mapper:
+      lang: <engineId>             # e.g. dataweave
+      expr: context - ["sensitiveStuff"]
 
-    # Optional behaviour when a schedule already exists for this journey/subject/start
-    # fail (default), upsert, or addAnother
-    onExisting: fail | upsert | addAnother
+  # Optional behaviour when a schedule already exists for this journey/subject/start
+  # fail (default), upsert, or addAnother
+  onExisting: fail | upsert | addAnother
 next: <stateId>
 ```
 
 Semantics
 - Scope:
-  - `task.kind: schedule` is only allowed in `kind: Journey` specs.
+  - `task.kind: schedule:v1` is only allowed in `kind: Journey` specs.
   - It MUST NOT be used in `kind: Api` specs.
 - Creation and update:
-  - When a journey executes a `task.kind: schedule` state, the engine evaluates the `schedule` block against the current `context`:
+  - When a journey executes a `task.kind: schedule:v1` state, the engine evaluates the scheduling fields against the current `context`:
     - `start` MUST resolve to a valid state id in `spec.states`.
     - `startAt`:
       - When omitted, the effective start time is “as soon as possible” according to the scheduler.
@@ -1148,30 +1151,92 @@ Semantics
   - When `runsExecuted >= maxRuns`, the scheduler MUST NOT start further runs for that binding.
 
 - Non-interactive path constraint:
-  - For each `task.kind: schedule`, engines and tools MUST verify that all states reachable from `schedule.start` are non-interactive:
+  - For each `task.kind: schedule:v1`, engines and tools MUST verify that all states reachable from `start` are non-interactive:
     - No `type: wait` states.
     - No `type: webhook` states.
   - Specs that violate this rule SHOULD be rejected at validation time, with errors that reference the offending state ids.
   - If static validation is not available and a scheduled run reaches a `wait` or `webhook` at runtime, the engine MUST treat this as an internal engine error and fail the run.
 
 Validation
-- `task.kind` may be `httpCall`, `eventPublish`, or `schedule`.
-- For `kind: schedule`:
-  - `schedule.start` is required and MUST be a state id in `spec.states`.
-  - `schedule.interval` is required and MUST be either:
+- `task.kind` for scheduling MUST be `schedule:v1` in this version.
+- For `schedule:v1`:
+  - `start` is required and MUST be a state id in `spec.states`.
+  - `interval` is required and MUST be either:
     - A string representing a supported ISO-8601 duration, or
     - A `mapper` that evaluates to such a string.
-  - `schedule.maxRuns` is required and MUST be either:
+  - `maxRuns` is required and MUST be either:
     - A positive integer literal, or
     - A `mapper` that evaluates to a positive integer.
-  - `schedule.startAt`, when present, MUST be either:
+  - `startAt`, when present, MUST be either:
     - A string representing an RFC 3339 timestamp, or
     - A `mapper` that evaluates to such a string.
-  - `schedule.subjectId`, when present, MUST be a `mapper` object with `lang: dataweave` and an inline `expr`.
-  - `schedule.context`, when present, MUST be a `mapper` object with `lang: dataweave` and an inline `expr`.
-  - `schedule.onExisting`, when present, MUST be one of `fail`, `upsert`, or `addAnother`.
-  - `task.kind: schedule` MUST NOT be used in `kind: Api` specs.
-  - Engines and tools SHOULD perform a reachability check from `schedule.start` and reject specs where reachable states include `wait` or `webhook`.
+  - `subjectId`, when present, MUST be a `mapper` object with `lang` set to a supported expression engine id (for example `dataweave`) and an inline `expr`.
+  - `context`, when present, MUST be a `mapper` object with `lang` set to a supported expression engine id and an inline `expr`.
+  - `onExisting`, when present, MUST be one of `fail`, `upsert`, or `addAnother`.
+  - `task.kind: schedule:v1` MUST NOT be used in `kind: Api` specs.
+  - Engines and tools SHOULD perform a reachability check from `start` and reject specs where reachable states include `wait` or `webhook`.
+
+#### Task plugins
+
+All `task` states are implemented via plugins. The DSL expresses both core behaviours (`httpCall:v1`, `eventPublish:v1`, `schedule:v1`) and custom behaviours (for example `jwtValidate:v1`) using the same `task.kind: <pluginType>:v<major>` pattern.
+
+```yaml
+type: task
+task:
+  kind: jwtValidate:v1          # plugin id + major version
+  source: header:Authorization  # plugin-defined field
+  requiredScopes:               # plugin-defined field
+    - accounts:read
+next: <stateId>
+```
+
+Shape
+- All tasks use the same `type: task` wrapper and `task` block.
+- `task.kind`:
+  - MUST have the form `<pluginType>:v<major>` where:
+    - `<pluginType>` is a non-empty identifier chosen by the plugin provider (for example `httpCall`, `eventPublish`, `schedule`, `jwtValidate`, `mtlsValidate`).
+    - `<major>` is a positive integer (major version). Minor and patch versions are handled by engine/plugin wiring and are not expressed in the DSL.
+  - Core plugin types for this version are:
+    - `httpCall:v1` – HTTP call with structured result recording (section 5.1).
+    - `eventPublish:v1` – Event publish to Kafka (section 5.2).
+    - `schedule:v1` – Schedule binding creation/update (section 5.3).
+    - `jwtValidate:v1` – JWT validation task plugin (section 18.6).
+    - `mtlsValidate:v1` – mTLS client certificate validation task plugin (section 18.7).
+- All other fields directly under `task` (for example `method`, `url`, `operationRef` for `httpCall:v1`, or `source`, `requiredScopes` for `jwtValidate:v1`) are **plugin-defined configuration fields**:
+  - Their names, types, and semantics are defined by the plugin’s own contract, not by this DSL reference, except where explicitly documented for core plugins.
+  - The DSL does not reserve additional field names for plugins in this version; engines MAY introduce platform-specific validation for particular plugins.
+- Plugin-backed tasks are allowed in both `kind: Journey` and `kind: Api` specs; they obey the same control-flow rules as other `task` states (they execute once and then transition to `next`).
+
+Semantics
+- From the DSL’s perspective, `task` states are opaque operations with constrained behaviour:
+  - They MAY read from the current journey `context`.
+  - They MAY update `context`, but only via explicit, plugin-defined write targets that are visible in the DSL surface (for example `resultVar` or a documented plugin namespace such as `jwt` or `auth`).
+  - They MUST NOT change control-flow wiring (`next` is always taken on successful engine execution) and MUST NOT introduce implicit external-input pauses; long-lived waits remain the domain of `wait`/`webhook`/`timer` and schedule bindings.
+  - They execute synchronously with respect to the enclosing state: each time a `task` state is entered, the plugin runs once to completion; asynchronous waiting MUST be modelled via `wait`/`webhook`/`timer`/`schedule` states, not hidden inside plugins.
+- Engines and tooling:
+  - MUST resolve `task.kind` values of the form `<pluginType>:v<major>` to a configured plugin runtime.
+  - MUST fail validation when `task.kind` uses a plugin id for which no corresponding plugin is available in the runtime configuration.
+
+Bindings available to plugin implementations (runtime note)
+- When executing a task plugin, engines MUST provide plugin implementations with at least:
+  - The current journey context JSON object (`context`).
+  - The `platform` binding as a structured view, with the same fields and semantics as expressions see under `platform` (see ADR‑0022).
+  - Journey definition metadata (`apiVersion`, `kind`, `metadata.name`, `metadata.version`).
+  - The current journey instance identity when available (for example `journeyId` for `kind: Journey` runs).
+  - The logical state id of the task (so plugins can emit diagnostics that reference the DSL).
+  - For `kind: Api` synchronous invocations, the incoming HTTP request context when available (method, path, headers; body when applicable).
+- Engines MAY provide additional runtime information (for example correlation ids, platform-specific user identity) but this is outside the scope of the DSL reference.
+
+Error handling
+- Task plugins MUST integrate with the canonical error model defined in this document:
+  - On success, plugins behave as normal task states and the run continues to `next`.
+  - On plugin-reported failure, plugins surface errors in terms of RFC 9457 Problem Details; the engine maps these into `JourneyOutcome` and HTTP responses according to the error model and HTTP-mapping ADRs. Engines MUST treat `context` as unchanged on this branch.
+  - Engines MUST treat unhandled exceptions or violations in plugin code as internal engine errors, not journey-authored failures; these are mapped to a stable internal Problem type and HTTP 500 for `kind: Api`.
+
+Configuration, security, and observability
+- Plugin behaviour is configured primarily via the DSL `task` block; when a plugin supports engine-defined profiles, omission of a profile selector in the DSL MUST be treated as selecting a well-defined `"default"` profile from engine configuration.
+- Plugins MAY cause external side effects (for example HTTP calls, event publishes), but from the DSL’s perspective these effects are always mediated by engine-provided connectors and infrastructure; plugin DSL surfaces MUST NOT assume direct access to arbitrary sockets, databases, or filesystem paths.
+- Data available to plugins via `context` and HTTP request bindings MAY contain PII and secrets; plugins and engines MUST honour the project’s security posture (for example cookie and secret-handling rules from ADR-0012 and observability guardrails from ADR-0025/ADR-0026) and MUST NOT use the DSL to expose or log raw secret values. Logging levels and telemetry detail for plugins are controlled via deployment configuration (`observability.plugins.*`), not per-journey DSL fields.
 
 ### 5.4 `choice` (branch)
 Choice states enable data-driven branching: tasks and other states write results into `context`, and predicates over that data decide which `next` state is taken.
@@ -1181,7 +1246,7 @@ type: choice
 choices:
   - when:
       predicate:
-        lang: dataweave
+        lang: <engineId>               # e.g. dataweave
         expr: |
           context.item.status == 'OK' and context.item.price < 100
     next: <stateId>
@@ -1190,8 +1255,8 @@ default: <stateId>              # optional but recommended
 
 Semantics
 - Evaluate branches in order; the first predicate that evaluates to `true` wins.
-- DataWeave predicate: evaluate `when.predicate.expr` with `context` bound to the current journey context. The expression must return a boolean; non‑boolean results are a validation error at spec validation / compile time.
-- Predicate runtime errors: when evaluating `when.predicate.expr` raises a DataWeave runtime error at execution time, the engine MUST treat this as an internal engine error (not a journey‑authored failure):
+- Predicate: evaluate `when.predicate.expr` with `context` bound to the current journey context using the selected expression engine (`lang`). The expression must return a boolean; non‑boolean results are a validation error at spec validation / compile time.
+- Predicate runtime errors: when evaluating `when.predicate.expr` raises a runtime error at execution time, the engine MUST treat this as an internal engine error (not a journey‑authored failure):
   - The run terminates as a failure with a canonical internal error code (for example a Problem Details `type` such as `urn:journeyforge:error:internal`) and HTTP status 500 for externally visible APIs.
   - For `kind: Journey`, the resulting `JourneyOutcome` MUST have `phase = FAILED` and `error.code` set to the same internal error identifier; platform logging and telemetry SHOULD carry more detailed diagnostics.
   - For `kind: Api`, the HTTP response MUST use the same internal error identifier as the Problem `type` / `JourneyOutcome.error.code` and status 500.
@@ -1272,13 +1337,13 @@ The `spec.errors` block allows journeys to centralise, per journey, how they nor
 	    normalisers:
 	      httpDefault:
 	        mapper:
-	          lang: dataweave
+	          lang: dataweave       # baseline engine
 	          expr: |
 	            // HTTP result → Problem Details
 	            ...
 	      ordersApi:
 	        mapper:
-	          lang: dataweave
+	          lang: dataweave       # baseline engine
 	          expr: |
 	            // Orders API error → Problem Details
 	            ...
@@ -1299,14 +1364,14 @@ The `spec.errors` block allows journeys to centralise, per journey, how they nor
 	- `canonicalFormat`:
 	  - When present, MUST be the string `rfc9457`.
 	  - When omitted, it implicitly defaults to `rfc9457`; other values are reserved for future versions.
-	- `normalisers`:
+	  - `normalisers`:
 	  - Optional map of ids to mapper objects that convert low‑level error data (for example HTTP result objects) into Problem Details objects.
-	  - Each mapper MUST declare `lang: dataweave` and an inline `expr`.
+	  - Each mapper MUST declare `lang` set to a supported expression engine id (for example `dataweave`) and an inline `expr`.
 	- `envelope`:
 	  - Optional single configuration that defines the external error envelope for the journey.
 	  - `format` controls the envelope:
 	    - When omitted or set to `problemDetails`, the externally visible error structure for the journey MUST be the Problem Details shape.
-	    - When set to `custom`, the `envelope` block MUST include a `mapper` that transforms Problem Details objects into a single, stable error body structure for this journey.
+	    - When set to `custom`, the `envelope` block MUST include a `mapper` that transforms Problem Details objects into a single, stable error body structure for this journey; the mapper MUST declare `lang` set to a supported expression engine id and an inline `expr`.
 	  - The DSL does not allow multiple envelopes per journey; there is at most one `envelope` block.
 	
 	Semantics
@@ -1326,7 +1391,7 @@ The `spec.errors` block allows journeys to centralise, per journey, how they nor
 	- `canonicalFormat`, when present, MUST be the string `rfc9457`.
 	- `normalisers` must be a map of ids to mapper objects with the same shape as `transform.mapper` entries (`lang`, inline `expr` only).
 	- `envelope.format`, when present, MUST be either `problemDetails` or `custom`.
-	- When `envelope.format` is `custom`, `envelope.mapper` MUST be present and must declare `lang: dataweave` and an inline `expr`.
+	- When `envelope.format` is `custom`, `envelope.mapper` MUST be present and must declare `lang` set to a supported expression engine id (for example `dataweave`) and an inline `expr`.
 	- Tools SHOULD flag references to unknown normaliser ids from HTTP tasks or other configuration as validation errors.
 
 ### 5.8 `subjourney` (local intra-spec reuse)
@@ -1337,7 +1402,7 @@ subjourney:
   ref: collectShipping
   input:
     mapper:
-      lang: dataweave
+      lang: <engineId>                   # e.g. dataweave
       expr: |
         {
           cart: context.cart,
@@ -1359,7 +1424,7 @@ Semantics
   - Subjourneys are **not visible across specs** in this version; there is no cross-spec `journeyRef`.
 - Input context:
   - When `input.mapper` is present:
-    - Evaluate the DataWeave expression with `context` bound to the parent journey/API context.
+    - Evaluate the expression with `context` bound to the parent journey/API context, using the selected expression engine (`lang`).
     - The result MUST be a JSON object; it becomes the subjourney’s initial `context`.
   - When `input` is omitted:
     - The subjourney’s initial `context` is `{}` (empty object). Authors SHOULD declare explicit input mappers for reusable subjourneys so contracts are visible.
@@ -1425,7 +1490,7 @@ spec:
     call_api:
       type: task
       task:
-        kind: httpCall
+        kind: httpCall:v1
         method: GET
         url: "https://api.example.com/items/${context.inputId}"
         headers:
@@ -1439,7 +1504,7 @@ spec:
       choices:
         - when:
           predicate:
-            lang: dataweave
+            lang: <engineId>               # e.g. dataweave
             expr: |
               context.item.ok == true
           next: success
@@ -1460,7 +1525,7 @@ spec:
 - Terminal success/failure are explicit via `succeed`/`fail`; tasks never auto‑terminate a journey.
 - Enforcement for retries, circuit breakers, bulkheads, or authentication policies is not defined here; only configuration via resilience policies is specified.
 - Engine feature slices MAY implement only a subset of the DSL surface at any given time. When a state type or construct (for example `wait`, `webhook`, `timer`, `parallel`, `subjourney`, cache operations, or scheduling) is not yet supported by a given engine, specs using it SHOULD be rejected or explicitly documented as unsupported until the corresponding feature spec is implemented.
-- No array indexing in dot‑paths (no `a[0]`), and no alternate expression languages (all predicates/mappers are DataWeave).
+- No array indexing in dot‑paths (no `a[0]`), and no alternate expression languages beyond those explicitly supported by the expression engine plugin model.
 - No generic environment-variable lookup or direct secret access from expressions; secrets only appear as opaque `secretRef` identifiers in dedicated policy/task configuration surfaces.
 - No persistence/resume across process restarts.
 - No dynamic parallel loops / map state: the DSL does not support runtime‑determined fan‑out into N parallel branches or step endpoints (for example “callback‑0 … callback‑N‑1”). Patterns such as “wait for N callbacks” are expressed via a single external‑input state (`wait`/`webhook`) that can be revisited in a loop, using counters/aggregates in `context` to decide when all expected callbacks have been processed. See ADR‑0021 for rationale and loop pattern examples.
@@ -1475,13 +1540,17 @@ Secrets & `secretRef`: Secrets in the DSL are referenced only via `secretRef` fi
 <a id="dsl-9-forward-compatibility-notes"></a>
 ## 9. Forward-compatibility notes
 - Policies block (auth/resiliency) will be added in a future feature.
-- DataWeave is the canonical expression language. Future convenience operators (e.g., `in`, numeric comparisons) may be added as sugar and compiled to DataWeave.
+
 
 <a id="dsl-10-dataweave"></a>
-## 10. DataWeave – Expressions & Mappers
-- Language: DataWeave 2.x (expressions authored inline via `expr`; v1 does not support DSL-level references to external `.dwl` modules; see ADR-0015 and Q-003).
+## 10. Expressions & Mappers
+- Expression engines: expressions are authored inline via `expr` and evaluated by pluggable expression engines selected via `lang: <engineId>`; DataWeave 2.x (`lang: dataweave`) is one supported engine (see Feature 013 and ADR‑0002). v1 does not support DSL-level references to external `.dwl` modules; see ADR-0015.
+- `lang` is required at every expression site that uses `expr`; the DSL does not define a default expression engine. Engine availability and limits are controlled by configuration and engine registration, not by implicit defaults in specs.
+- Additional engines: JSONata, JOLT, jq MAY be supported as pure expression engines via the expression engine plugin model; when enabled, they can be selected via `lang: jsonata` / `lang: jolt` / `lang: jq` at any expression site.
 - Bindings:
   - `context` variable is bound to the current journey context JSON value.
+  - `payload` variable is bound to the “current payload” when the expression is associated with a body or step payload (for example HTTP request/response bodies, external-input step submissions); when there is no such payload for the expression site, `payload` is `null` or absent.
+  - `error` variable is bound only in error-handling contexts (for example `spec.errors` mappers, error-aware `apiResponses` rules) and represents the low-level error being normalised; for all other expression sites `error` is `null` or absent.
   - `platform` variable is bound to a read-only JSON object that exposes platform metadata and configuration for the current run:
     - `platform.environment` – logical environment identifier (for example `dev`, `staging`, `prod-eu`).
     - `platform.journey` – metadata for the current definition:
@@ -1494,11 +1563,101 @@ Secrets & `secretRef`: Secrets in the DSL are referenced only via `secretRef` fi
       - `traceparent` – W3C Trace Context `traceparent` value associated with this run, taken from the last inbound request (when available).
     - `platform.config` – per-journey configuration object populated from `spec.platform.config` (see section 2.3.1).
 - Predicates: used in `choice` branches via `when.predicate`. The expression must evaluate to a boolean.
-- Transforms: `transform` states use DataWeave to compute values written into `context` or into variables under `context.<resultVar>`, according to the semantics in the Transform state section.
+- Transforms: `transform` states use the selected expression engine (for example DataWeave) to compute values written into `context` or into variables under `context.<resultVar>`, according to the semantics in the Transform state section.
 - Determinism & safety: expressions must be pure (no I/O); the evaluator must enforce timeouts and resource limits.
-- Validation and tooling: journey compilers and linters SHOULD validate DataWeave expressions (including `choice` predicates and mappers) against any declared schemas (`spec.context.schema`, `spec.input.schema`, step‑level `*.schema`, etc.) when available, and MUST fail fast at spec validation / compile time when an expression can be statically determined to:
+- Validation and tooling: journey compilers and linters SHOULD validate expressions (including `choice` predicates and mappers) against any declared schemas (`spec.context.schema`, `spec.input.schema`, step‑level `*.schema`, etc.) when available, and MUST fail fast at spec validation / compile time when an expression can be statically determined to:
   - Use invalid or non-existent paths, or
   - Produce a non‑boolean result where a predicate is required.
+
+#### 10.0 Examples – engine snippets
+
+When additional engines such as DataWeave, JSONata, JOLT, or jq are configured, authors can select them via `lang` at any expression site. The bindings (`context`, `payload`, `error`, `platform`) remain the same; only the expression syntax changes.
+
+Example – `choice` predicate using DataWeave:
+
+```yaml
+type: choice
+choices:
+  - when:
+      predicate:
+        lang: dataweave
+        expr: |
+          context.amount < 100 and context.status == "PENDING"
+    next: smallOrder
+default: largeOrNonPending
+```
+
+Example – `choice` predicate using JSONata:
+
+```yaml
+type: choice
+choices:
+  - when:
+      predicate:
+        lang: jsonata
+        expr: "context.amount < 100 and context.status = 'PENDING'"
+    next: smallOrder
+default: largeOrNonPendingOrOther
+```
+
+Example – `transform` mapper using JOLT:
+
+```yaml
+type: transform
+transform:
+  mapper:
+    lang: jolt
+    expr: |
+      [
+        {
+          "operation": "shift",
+          "spec": {
+            "context": {
+              "user": "user",
+              "cart": "cart"
+            }
+          }
+        }
+      ]
+  target:
+    kind: var
+  resultVar: projected
+next: nextState
+```
+
+Example – `transform` mapper using jq:
+
+```yaml
+type: transform
+transform:
+  mapper:
+    lang: jq
+    expr: |
+      { id: .context.id, total: .context.cart.total }
+  target:
+    kind: var
+  resultVar: summary
+next: nextState
+```
+
+### 10.2 Bindings per expression context
+
+Across all expression sites that use `lang`/`expr`, engines provide a consistent set of bindings:
+- `context` and `platform` are always available.
+- `payload` is available when the expression is associated with a request/response body or external-input payload; otherwise it is `null` or absent.
+- `error` is available only in error-handling contexts; otherwise it is `null` or absent.
+
+Specific contexts use these bindings as follows:
+
+| Expression site                                          | Description                                           | `context` | `payload`                                | `error`                            | `platform` |
+|----------------------------------------------------------|-------------------------------------------------------|-----------|------------------------------------------|------------------------------------|-----------|
+| `choice.when.predicate` (all states)                    | Branching based on current state of the journey      | ✅        | ✅ when a current payload is in scope    | ❌ (`null`/absent)                 | ✅        |
+| `transform.expr` / `transform.mapper`                   | Transform state expressions and reusable mappers     | ✅        | ✅ when associated with a body/payload   | ❌ (`null`/absent)                 | ✅        |
+| Task/step mappers (`task.*.mapper`, `wait`/`webhook`)   | Request/response shaping and external-input updates  | ✅        | ✅ (HTTP bodies, step payloads, etc.)    | ❌ (`null`/absent)                 | ✅        |
+| Scheduler mappers (`schedule.*.mapper`)                 | Mapping schedule attributes (`startAt`, `subjectId`) | ✅        | ✅ when a payload is defined for mapping | ❌ (`null`/absent)                 | ✅        |
+| Error mappers (`spec.errors.normalisers` and envelope)  | Error normalisation and envelope mapping             | ✅        | ✅ when a payload is part of the error   | ✅ (low-level error being handled) | ✅        |
+| API response predicates (`apiResponses.when.predicate`) | HTTP mapping conditions for `kind: Api`             | ✅        | ✅ when the outcome/payload is available | ✅ for error-phase rules           | ✅        |
+| API `statusExpr` (`apiResponses.statusExpr.expr`)       | Expression producing HTTP status codes               | ✅        | ✅ when the outcome/payload is available | ✅ for error-phase rules           | ✅        |
 
 ### 10.1 Reusable mappers (`spec.mappers` and `mapperRef`)
 
@@ -1536,7 +1695,7 @@ Semantics
 - A state MUST NOT mix `mapper` and `mapperRef` in the same location; this is a validation error.
 
 Validation
-- `spec.mappers` must be a map of ids to mapper objects; each mapper must declare `lang: dataweave` and an inline `expr`.
+- `spec.mappers` must be a map of ids to mapper objects; each mapper must declare `lang` set to a supported expression engine id (for example `dataweave`) and an inline `expr`.
 - `mapperRef` values must be non-empty strings that resolve to an existing entry in `spec.mappers`.
 
 <a id="dsl-11-schemas"></a>
@@ -1608,13 +1767,13 @@ Usage notes
 - Use `spec.input.schema` for what callers must send at start.
 - Use `spec.output.schema` for what successful journeys return as `JourneyOutcome.output`, including the canonical business `status`.
 - Use `spec.output.response` when clients benefit from having selected business fields (for example `status`, `overallStatus`, `reportId`) available as top-level fields on `JourneyOutcome` in addition to the nested `output`.
-- Use `spec.context.schema` to describe the full, evolving shape of `context` (including internal fields like `remote`, `cachedUser`, `problem`), so linters and editors can validate `context.<path>` usage in DataWeave expressions.
+- Use `spec.context.schema` to describe the full, evolving shape of `context` (including internal fields like `remote`, `cachedUser`, `problem`), so linters and editors can validate `context.<path>` usage in expressions.
 
 ### OpenAPI operation binding (operationRef)
 - `operationRef`: resolves `<apiName>` in `spec.apis` and `<operationId>` in the referenced OAS.
 - Server selection: the first OAS server is used by default; future features may allow server variables/overrides.
 - Params mapping: `params.path/query/headers` provide values for OAS params by name. Missing required params is a validation error.
-- Body mapping: if `body` is a string, it is sent as-is; if an object, it is JSON-encoded; if a `mapper` object with `lang: dataweave` and `expr` is provided, the mapper result becomes the JSON body.
+- Body mapping: if `body` is a string, it is sent as-is; if an object, it is JSON-encoded; if a `mapper` object with `lang` set to a supported expression engine id (for example `dataweave`) and `expr` is provided, the mapper result becomes the JSON body.
 - `accept` selects the response media type; default `application/json`.
 - Cannot mix `operationRef` with raw `method`/`url` in the same task.
 
@@ -1625,7 +1784,7 @@ External-input and timer states pause the journey instance and resume it later, 
 
 External-input states (`wait`, `webhook`) expose a step surface: they require a step submission to continue. Submissions are sent to `/journeys/{journeyId}/steps/{stepId}` where `stepId` equals the state id.
 
-Bindings available to DataWeave expressions during external-input step handling:
+Bindings available to expressions during external-input step handling:
 - `context`: the current journey context JSON object.
 - `payload`: the submitted step input JSON (validated against the state’s `input.schema`, when present).
 
@@ -1641,12 +1800,12 @@ wait:
     schema: <JsonSchema>                # JSON Schema for the additional top-level fields
   apply:                                # optional – update context before branching
     mapper:
-      lang: dataweave
+      lang: <engineId>                   # e.g. dataweave
       expr
   on:                                     # ordered branch evaluation
     - when:
         predicate:
-          lang: dataweave
+          lang: <engineId>               # e.g. dataweave
           expr: |
             payload.decision == 'approved'
       next: approved
@@ -1693,12 +1852,12 @@ webhook:
     secretRef: secret://webhook/<name>
   apply:
     mapper:
-      lang: dataweave
-      expr
+      lang: <engineId>                   # e.g. dataweave
+      expr: <expr>
   on:
     - when:
         predicate:
-          lang: dataweave
+          lang: <engineId>               # e.g. dataweave
           expr: |
             payload.status == 'OK'
       next: success
@@ -1739,7 +1898,7 @@ Semantics
   - Exactly one of `timer.duration` or `timer.until` MUST be present.
   - Both fields, when present, MAY be either:
     - A literal string, or
-    - A `mapper` object with `lang: dataweave` and `expr` that evaluates to the effective string at runtime.
+    - A `mapper` object with `lang` set to a supported expression engine id (for example `dataweave`) and `expr` that evaluates to the effective string at runtime.
 - `duration`:
   - When a literal, MUST be an ISO-8601 duration string (for example `PT5M`, `PT1H`, `P1D`).
   - When a mapper, MUST evaluate to such a duration string at runtime.
@@ -1847,7 +2006,7 @@ Usage from an HTTP task:
 stateId:
   type: task
   task:
-    kind: httpCall
+    kind: httpCall:v1
     operationRef: service.someOperation
     resiliencePolicyRef: standard
 ```
@@ -1892,16 +2051,32 @@ next: <stateId>
 
 Semantics
 - `mapper` evaluates with `context` bound to the current journey context and returns a JSON value.
-- If `target.kind == context` (default) and `target.path` is provided, the value is written at `context.<path>` (overwriting any existing value).
-- If `target.kind == var`, the value is stored under `context.<resultVar>`; other context fields remain unchanged.
-- If neither `target.path` nor `resultVar` is set, the mapper result replaces the entire `context`.
+- When `target.kind == context` (default):
+  - If `target.path` is provided, the mapper result MUST be a JSON object; it is written at `context.<path>` (overwriting any existing value).
+  - If neither `target.path` nor `resultVar` is set, the mapper result MUST be a JSON object and replaces the entire `context`.
+- When `target.kind == var`, the mapper result MAY be any JSON value (object, array, string, number, boolean, or null) and is stored under `context.<resultVar>`; other context fields remain unchanged.
 
 Validation
-- `transform.mapper.lang` must be `dataweave`.
+- `transform.mapper.lang` must be set to a supported expression engine id (for example `dataweave`).
 - Exactly one of (`target.path`, `resultVar`) may be omitted; if both are omitted, `context` replacement semantics apply.
 - `resultVar`, when used, must match `[A-Za-z_][A-Za-z0-9_]*`.
 
-Example – normalising an HTTP error into RFC 9457 Problem Details:
+### 14.1 Transform & expression style guidance
+
+- Prefer **object-returning** transforms when updating `context`:
+  - Use `target.kind: context` with a `path` when you are updating a specific subtree.
+  - Avoid whole-context replacement except when the mapper is clearly modelling “new logical context”.
+- Use `target.kind: var` for **scalars/arrays or temporary values**:
+  - Map intermediate values into `context.<resultVar>` and read them from predicates or subsequent transforms.
+  - This keeps `context` structured and avoids repeatedly reshaping the root.
+- Keep expressions **pure** and focused:
+  - All side effects (HTTP calls, events, cache writes, schedules) belong in task plugins, not expressions.
+  - Use transforms and mappers only to compute values; do not model external I/O or retries in expressions.
+- Keep predicates **small and stable**:
+  - Prefer short, readable predicates in `choice` states that test a handful of fields.
+  - For more complex logic, factor the mapping into a named mapper under `spec.mappers` and reuse it via `mapperRef` or write the value into `context` in a prior `transform` state, then branch on that value.
+
+Example – normalising an HTTP error into RFC 9457 Problem Details (using DataWeave):
 
 ```yaml
 normalise_error:
@@ -1958,7 +2133,7 @@ task:
   cacheRef: defaultCache
   key:
     mapper:
-      lang: dataweave
+      lang: <engineId>           # e.g. dataweave
       expr: |
         context.userId
   resultVar: cachedUser            # value stored at context.cachedUser
@@ -1972,12 +2147,12 @@ otherState:
     cacheRef: defaultCache
     key:
       mapper:
-        lang: dataweave
+        lang: <engineId>         # e.g. dataweave
         expr: |
           context.userId
     value:
       mapper:
-        lang: dataweave
+        lang: <engineId>         # e.g. dataweave
         expr: |
           context.profile
     ttlSeconds: 600                # optional override
@@ -2031,7 +2206,7 @@ parallel:
         limitsCall:
           type: task
           task:
-            kind: httpCall
+            kind: httpCall:v1
             operationRef: core.checkLimits
             params:
               path:
@@ -2049,7 +2224,7 @@ parallel:
         riskCall:
           type: task
           task:
-            kind: httpCall
+            kind: httpCall:v1
             operationRef: risk.scoreUser
             params:
               path:
@@ -2177,7 +2352,7 @@ Notes
 <a id="dsl-18-http-security-policies"></a>
 ## 18. HTTP Security Policies (Auth)
 
-HTTP security policies define reusable authentication constraints for inbound HTTP requests (start and step calls). They are configured under `spec.policies.httpSecurity` and attached via `securityPolicyRef` at journey and step levels.
+HTTP security policies define reusable authentication constraints for inbound HTTP requests (start and step calls) for mechanisms that are not modelled as task plugins. In this version, JWT validation is expressed via the `jwtValidate:v1` task plugin (section 18.6); HTTP security policies cover mTLS and API key validation only. They are configured under `spec.policies.httpSecurity` and attached via `securityPolicyRef` at journey and step levels.
 
 ### 18.1 Policy definitions
 
@@ -2185,33 +2360,8 @@ HTTP security policies define reusable authentication constraints for inbound HT
 spec:
   policies:
     httpSecurity:
-      default: jwtDefault      # optional default policy id
+      default: apiKeyDefault      # optional default policy id
       definitions:
-        jwtDefault:
-          kind: jwt
-          mode: required                  # optional; required (default) | optional
-          issuer: "https://issuer.example.com"
-          audience: ["journeyforge"]
-          jwks:
-            source: jwksUrl
-            url: "https://issuer.example.com/.well-known/jwks.json"
-            cacheTtlSeconds: 3600
-          clockSkewSeconds: 60
-          requiredClaims:
-            sub:
-              type: string
-            scope:
-              contains: ["journeys:read"]
-          anonymousSubjects:              # optional; subjects considered "anonymous"
-            - "00000000-0000-0000-0000-000000000000"
-        clientCertDefault:
-          kind: mtls
-          trustAnchors:
-            - pemRef: trust/roots/root-ca.pem
-            - pemRef: trust/roots/sub-ca.pem
-          allowSubjects:
-            - "CN=journey-client,OU=Journeys,O=Example Corp,L=Zagreb,C=HR"
-          requireClientCert: true
         apiKeyDefault:
           kind: apiKey
           location: header        # header | query
@@ -2221,19 +2371,6 @@ spec:
 ```
 
 Kinds
-- `jwt` – JSON Web Token validation policy.
-  - `mode`: controls whether credentials are required for this endpoint:
-    - `required` (default): a missing or invalid token MUST cause the request to be rejected (for example, 401/403); the journey instance does not start.
-    - `optional`: a missing token is allowed and treated as anonymous; an invalid token MUST still cause rejection. When no token is present, `context.auth.jwt` remains unset and no subject is derived.
-  - `issuer`, `audience`: expected issuer and audience(s).
-  - `jwks`: where to obtain verification keys (JWKS URL or static key set).
-  - `clockSkewSeconds`: allowed skew when validating `exp`/`nbf`.
-  - `requiredClaims`: shape and constraints for specific claims (implementation-defined schema).
-  - `anonymousSubjects`: optional list of subject values that should be treated as anonymous even when the token is otherwise valid (for example, an all-zero UUID used by some gateways). When `sub` matches one of these values, the engine MUST NOT derive a canonical owner (`attributes.subjectId`) from it.
-- `mtls` – client certificate policy.
-  - `trustAnchors`: list of root/sub-CA PEM refs to trust.
-  - `allowSubjects`: list of allowed subject DNs; certificate chain must validate against `trustAnchors` and subject must match one of these.
-  - `requireClientCert`: whether a client certificate is mandatory.
 - `apiKey` – API key policy.
   - `location`: where to read the key (header or query).
   - `name`: header or query parameter name.
@@ -2244,9 +2381,9 @@ Kinds
 ```yaml
 spec:
   security:
-    journeyPolicyRef: jwtDefault          # applied to all inbound endpoints by default
+    journeyPolicyRef: apiKeyDefault       # applied to all inbound endpoints by default
     start:
-      securityPolicyRef: jwtDefault      # optional override for start
+      securityPolicyRef: apiKeyDefault   # optional override for start
     steps:
       waitForCallback:
         securityPolicyRef: clientCertDefault
@@ -2261,15 +2398,15 @@ Semantics
 ### 18.3 Validation
 - `spec.policies.httpSecurity.definitions` must be a map of ids to policy objects.
 - Any `journeyPolicyRef` / `securityPolicyRef` must refer to an existing id in `definitions` (or to a platform-level policy); unknown ids are a validation error.
-- JWT policies must configure a JWKS or key source; client-certificate policies must specify at least one `trustAnchors` entry.
+- API key policies (`kind: apiKey`) must configure a location, header/query name, and at least one key entry; client-certificate policies (`kind: mtls`, when supported) must specify at least one `trustAnchors` entry.
 
 ### 18.4 Usage guidance
 - Use HTTP security policies when:
-  - You need specs to be explicit about how journeys are authenticated (JWT, mTLS, API keys).
+  - You need specs to be explicit about how journeys are authenticated via mTLS and API keys.
   - You want the same authentication behaviour reused across multiple journeys or steps.
 - Combine with `httpBindings` when:
-  - You also need to project authentication metadata into `context` (for example, userId from a JWT claim) or forward headers downstream.
-  - `httpSecurity` enforces *who* can call; `httpBindings` controls *how* inbound metadata is made available to the journey instance and downstream calls.
+  - You also need to project authentication metadata into `context` (for example, subject ids or key identifiers) or forward headers downstream.
+  - `httpSecurity` enforces *who* can call for mTLS/API-key mechanisms; `jwtValidate:v1` and `mtlsValidate:v1` are used as explicit task states for JWT/mTLS authentication, and `httpBindings` controls *how* inbound metadata is made available to the journey instance and downstream calls.
 
 Notes
 - This section defines the configuration model only; enforcement belongs to the security implementation in the engine and is out of scope for the DSL reference.
@@ -2363,9 +2500,13 @@ Notes
 
 ### 18.5 Mapping auth into journey context
 
-After successful policy validation, the engine MUST populate one of the following views under `context.auth` so DataWeave expressions and `transform` states can use authentication data:
+Authentication data becomes available to journeys via:
+- JWT validation task plugin `jwtValidate:v1` (section 18.6), which writes into `context.auth.jwt.*` or a caller-configured namespace when validation succeeds.
+- HTTP security policies for mTLS and API keys, which write into `context.auth.mtls.*` / `context.auth.apiKey.*` after successful validation.
 
-- JWT policies (`kind: jwt`):
+The engine MUST populate the following views under `context.auth` so DataWeave expressions and `transform` states can use authentication data:
+
+- JWT validation (`jwtValidate:v1` with default target):
   - `context.auth.jwt.header` – JOSE header (non-sensitive fields only, for example `alg`, `kid`, `typ`).
   - `context.auth.jwt.claims` – decoded claims object as JSON (e.g., `sub`, `scope`, `aud`, `iss`).
 - mTLS policies (`kind: mtls`):
@@ -2407,7 +2548,213 @@ mtls-normalise:
   next: nextState
 ```
 
-This keeps `context` as the canonical place for data that influences journey behaviour, while `httpSecurity` governs authentication and `httpBindings` governs how inbound metadata becomes available to the journey instance and downstream calls.
+This keeps `context` as the canonical place for data that influences journey behaviour, while:
+- `jwtValidate:v1` and `mtlsValidate:v1` govern JWT and mTLS authentication, and
+- `httpSecurity` governs API key validation, and
+- `httpBindings` governs how inbound metadata becomes available to the journey instance and downstream calls.
+
+### 18.6 JWT validation task plugin (`jwtValidate:v1`)
+
+Journeys use the `jwtValidate:v1` task plugin to perform JWT validation as part of the state graph. This is useful for:
+- Enforcing JWT-based authentication for entry paths and internal steps (for example as the first state on a journey/API).
+- Applying additional, step-level JWT checks beyond mTLS/API-key policies.
+- Extracting claims into `context` to drive downstream logic.
+
+Shape (under a `type: task` state):
+
+```yaml
+checkAuth:
+  type: task
+  task:
+    kind: jwtValidate:v1
+
+    # Optional profile selector – when omitted, defaults to "default"
+    profile: default
+
+    # Optional source override; when omitted, the profile’s source is used
+    # source:
+    #   location: header       # header | query | cookie
+    #   name: Authorization
+    #   scheme: Bearer        # optional; strip this prefix when present
+
+    # Optional override for where to store auth data
+    # - when omitted, plugin writes under context.auth.jwt.*
+    # - when set, plugin writes under context.<authVar>.jwt.*
+    authVar: auth
+  next: mainFlow
+```
+
+Fields
+- `profile`:
+  - Optional string; when omitted, the effective profile name is `"default"`.
+  - Profiles are defined in engine configuration under a plugin-specific subtree (for example `plugins.jwtValidate.profiles.<name>`); they typically capture issuer/audience/JWKS settings, clock skew, required claims, and default token source.
+- `source` (optional override):
+  - `location`: where to read the token from:
+    - `header` – read from an HTTP header.
+    - `query` – read from a query parameter.
+    - `cookie` – read from a cookie.
+  - `name`: header, query parameter, or cookie name.
+  - `scheme` (optional): string prefix to strip from the raw value (for example `Bearer` for `Authorization` headers).
+  - When `source` is omitted in the DSL, the plugin uses the source configured for the selected `profile`. If neither the DSL nor the profile provides a usable source, the configuration is invalid and MUST be treated as an internal configuration error.
+- `authVar` (optional override):
+  - When omitted, successful validation populates `context.auth.jwt.header` and `context.auth.jwt.claims` as described in section 18.5.
+  - When set to a non-empty string (for example `auth`), successful validation populates `context.<authVar>.jwt.header` and `context.<authVar>.jwt.claims`. Engines MAY still mirror selected fields into `context.auth` for compatibility, but the primary write target MUST be the configured namespace.
+
+Semantics
+- Execution:
+  - `jwtValidate:v1` executes synchronously as a normal `task` state and MUST NOT introduce implicit waits; it reads the current HTTP request context (when available) and the current `context`.
+  - It MAY be used in both `kind: Journey` and `kind: Api` specs. When no HTTP request binding is available (for example in a purely internal state), the plugin behaves as if the token were missing.
+- Token sourcing:
+  - The effective token source is determined by:
+    1. `task.source` when present; otherwise
+    2. The configured `source` for the selected `profile`.
+  - The plugin reads the raw token value from the effective source and, when `scheme` is present, strips the `"<scheme> "` prefix (case-insensitive) before validation.
+- Validation:
+  - Validation behaviour (issuer, audience, key material, claim constraints, clock skew) is driven by the selected profile and engine configuration, not by the DSL.
+  - On successful validation, the plugin MUST populate:
+    - `*.header` with non-sensitive JOSE header fields (for example `alg`, `kid`, `typ`).
+    - `*.claims` with the decoded claims object (for example `sub`, `scope`, `aud`, `iss`).
+  - The plugin MUST honour privacy rules from ADR-0025 and MUST NOT log raw token values or embed them in `context`.
+- Authorisation:
+  - `jwtValidate:v1` is responsible only for authentication (validating the token and projecting claims into `context.auth.jwt.*` or `context.<authVar>.jwt.*`); journeys express authorisation rules explicitly via predicates and `choice`/`fail` states over `context` and `context.auth.*`.
+  - Common patterns include:
+    - Normalising subject and scopes/roles into business fields (for example `context.userId`, `context.scopes`) via `transform` states, and
+    - Using `choice` predicates to enforce scopes/roles/subject-based rules (for example self-service checks as in `subject-step-guard`).
+
+Error handling
+- On failure, `jwtValidate:v1` returns a Problem Details object; the engine maps this into `JourneyOutcome` and HTTP responses according to the error model and HTTP-mapping ADRs.
+- The plugin MUST use the following stable, fine-grained error codes for its primary business failure modes so journeys can branch on them or map them via `apiResponses`/`spec.errors`:
+  - `JWT_TOKEN_MISSING` – no token present at the configured source.
+  - `JWT_TOKEN_MALFORMED` – token cannot be parsed as a valid JWT.
+  - `JWT_SIG_INVALID` – signature validation failed.
+  - `JWT_KID_NOT_FOUND` – key id not found in the configured key set.
+  - `JWT_EXPIRED` – token `exp` is in the past (beyond allowed clock skew).
+  - `JWT_NOT_YET_VALID` – token `nbf` is in the future (beyond allowed clock skew).
+  - `JWT_AUDIENCE_MISMATCH` – token `aud` does not match expected audience(s).
+  - `JWT_ISSUER_MISMATCH` – token `iss` does not match expected issuer.
+  - `JWT_CLAIMS_INVALID` – required claim constraints are not satisfied.
+- These error codes are conveyed via Problem Details using both:
+  - A stable `code` extension member set to the exact error code string (for example `"JWT_SIG_INVALID"`), and
+  - A stable `type` URI that is 1:1 with the code (for example `https://journeyforge.dev/problem/plugins/jwt/sig-invalid`).
+  Journeys SHOULD treat unknown codes as generic JWT validation failures.
+- Misconfiguration and engine-side issues (for example missing profile or unusable token source) are considered internal configuration errors and MUST surface as internal Problems with separate `JWT_CONFIG_*` codes (for example `JWT_CONFIG_PROFILE_MISSING`, `JWT_CONFIG_KEYS_UNUSABLE`, `JWT_CONFIG_INVALID`), not as journey-authored business failures.
+### 18.7 mTLS validation task plugin (`mtlsValidate:v1`)
+
+Journeys use the `mtlsValidate:v1` task plugin to validate client TLS certificates as part of the state graph. This is useful for:
+- Enforcing mTLS-based authentication for entry paths (for example as the first state on a journey/API).
+- Applying additional, step-level mTLS checks beyond gateway enforcement.
+- Extracting certificate metadata into `context` to drive downstream logic.
+
+Shape (under a `type: task` state):
+
+```yaml
+checkClientCert:
+  type: task
+  task:
+    kind: mtlsValidate:v1
+
+    # Optional profile selector – when omitted, defaults to "default"
+    profile: default
+
+    # Optional override for trusted roots – inline PEMs, no external refs
+    # trustAnchors:
+    #   - pem: |
+    #       -----BEGIN CERTIFICATE-----
+    #       ...
+    #       -----END CERTIFICATE-----
+    #   - pem: |
+    #       -----BEGIN CERTIFICATE-----
+    #       ...
+    #       -----END CERTIFICATE-----
+
+    # Optional global rule: how to treat certificates that chain to trustAnchors
+    # When omitted, the profile’s setting is used.
+    # allowAnyFromTrusted: true | false
+
+    # Optional filters; when provided, all present filters use AND semantics.
+    # If omitted, profile defaults apply; if both profile and task omit filters,
+    # behaviour falls back to allowAnyFromTrusted.
+    # allowSubjects:
+    #   - "CN=journey-client,OU=Journeys,O=Example Corp,L=Zagreb,C=HR"
+    # allowSans:
+    #   - dns: api.example.com
+    #   - dns: callbacks.example.com
+    # allowSerials:
+    #   - "01AB..."
+
+    # Optional override for where to store auth data
+    # - when omitted, plugin writes under context.auth.mtls.*
+    # - when set, plugin writes under context.<authVar>.mtls.*
+    authVar: auth
+  next: nextState
+```
+
+Fields
+- `profile`:
+  - Optional string; when omitted, the effective profile name is `"default"`.
+  - Profiles are defined in engine configuration under a plugin-specific subtree (for example `plugins.mtlsValidate.profiles.<name>`); they typically capture default `trustAnchors`, `allowAnyFromTrusted`, and optional default filters.
+- `trustAnchors` (optional override):
+  - List of inline PEM-encoded certificates under `pem`.
+  - When present, overrides the profile’s `trustAnchors` for this task.
+- `allowAnyFromTrusted` (optional override):
+  - Boolean; when set, overrides the profile’s default for this task.
+  - Controls whether certificates that chain to one of the `trustAnchors` are accepted even when no additional filters are configured.
+- `allowSubjects` (optional):
+  - List of allowed subject distinguished names (strings).
+  - When present, the validated certificate’s subject DN MUST match one of these entries.
+- `allowSans` (optional):
+  - List of allowed Subject Alternative Names; each entry MAY specify:
+    - `dns`: allowed DNS name.
+    - `ip`: allowed IP address (string form).
+    - `uri`: allowed URI SAN.
+  - When present, at least one SAN on the validated certificate MUST match one of these entries.
+- `allowSerials` (optional):
+  - List of allowed certificate serial numbers, expressed as strings (for example hex).
+  - When present, the validated certificate’s serial number MUST match one of these entries.
+- `authVar` (optional override):
+  - When omitted, successful validation populates `context.auth.mtls.subjectDn`, `context.auth.mtls.issuerDn`, and `context.auth.mtls.fingerprintSha256` as described in section 18.5.
+  - When set to a non-empty string (for example `auth`), successful validation populates `context.<authVar>.mtls.*` with the same fields. Engines MAY still mirror selected fields into `context.auth.mtls` for compatibility, but the primary write target MUST be the configured namespace.
+
+Semantics
+- Execution:
+  - `mtlsValidate:v1` executes synchronously as a normal `task` state and MUST NOT introduce implicit waits; it reads the current HTTP request context (when available) and the current `context`.
+  - It MAY be used in both `kind: Journey` and `kind: Api` specs. When no client certificate binding is available, the plugin behaves as if the certificate were missing.
+- Certificate sourcing:
+  - The plugin reads the client certificate chain (when present) from the HTTP request context provided by the engine; the exact binding is engine-defined and not surfaced in the DSL.
+- Validation:
+  - The effective `trustAnchors`, `allowAnyFromTrusted`, and filter sets are computed by taking the selected profile and applying any task-level overrides.
+  - The plugin MUST:
+    - Verify that the presented certificate chain is valid and roots in one of the effective `trustAnchors`.
+    - Enforce all present filters:
+      - If `allowSubjects` is set, the subject DN MUST match one of the entries.
+      - If `allowSans` is set, at least one SAN on the certificate MUST match an entry.
+      - If `allowSerials` is set, the certificate serial MUST match an entry.
+  - When no filters are configured (neither in profile nor task), the effective behaviour falls back to `allowAnyFromTrusted`:
+    - If `true`, any certificate that chains to a trusted anchor is accepted.
+    - If `false`, a certificate that chains correctly but has no matching filters is rejected.
+  - On successful validation, the plugin MUST populate:
+    - `*.subjectDn` – subject distinguished name of the validated client certificate.
+    - `*.issuerDn` – issuer distinguished name (optional).
+    - `*.fingerprintSha256` – certificate fingerprint (optional, for correlation/logging).
+  - The plugin MUST honour privacy rules from ADR-0025 and MUST NOT log raw certificate bytes.
+- Authorisation:
+  - `mtlsValidate:v1` is responsible only for validating client certificates and projecting selected metadata into `context.auth.mtls.*` or `context.<authVar>.mtls.*`; journeys express any additional authorisation rules (for example subject-based access, per-tenant SAN policies) via predicates and `choice`/`fail` states over `context` and `context.auth.*`.
+
+Error handling
+- On failure, `mtlsValidate:v1` returns a Problem Details object; the engine maps this into `JourneyOutcome` and HTTP responses according to the error model and HTTP-mapping ADRs.
+- The plugin MUST use the following stable, fine-grained error codes for its primary business failure modes so journeys can branch on them or map them via `apiResponses`/`spec.errors`:
+  - `MTLS_CERT_MISSING` – no client certificate was presented.
+  - `MTLS_CERT_UNPARSEABLE` – certificate could not be parsed.
+  - `MTLS_CERT_UNTRUSTED` – certificate chain does not validate against the effective `trustAnchors`.
+  - `MTLS_CERT_REVOKED` – certificate is known to be revoked (when revocation checking is enabled and fails).
+  - `MTLS_SUBJECT_DENIED` – subject DN does not match any `allowSubjects` entry.
+  - `MTLS_SAN_DENIED` – no SAN on the certificate matches any `allowSans` entry.
+  - `MTLS_SERIAL_DENIED` – serial number does not match any `allowSerials` entry.
+- These error codes are conveyed via Problem Details using both:
+  - A stable `code` extension member set to the exact error code string (for example `"MTLS_CERT_UNTRUSTED"`), and
+  - A stable `type` URI that is 1:1 with the code (for example `https://journeyforge.dev/problem/plugins/mtls/cert-untrusted`).
+  Journeys SHOULD treat unknown codes as generic mTLS validation failures.
+- Misconfiguration and engine-side issues (for example missing profile or unusable `trustAnchors` configuration) are considered internal configuration errors and MUST surface as internal Problems with separate `MTLS_CONFIG_*` codes (for example `MTLS_CONFIG_PROFILE_MISSING`, `MTLS_CONFIG_TRUST_ANCHORS_INVALID`, `MTLS_CONFIG_INVALID`), not as journey-authored business failures.
 
 <a id="dsl-20-named-outcomes"></a>
 ## 20. Named Outcomes (spec.outcomes)
@@ -2521,7 +2868,7 @@ Validation
 Validation
 - Outcome ids must be unique strings.
 - `when.phase` must be either `SUCCEEDED` or `FAILED`.
-- If `when.predicate` is present, it must declare `lang: dataweave` and the expression must return boolean.
+- If `when.predicate` is present, it must declare `lang` set to a supported expression engine id (for example `dataweave`) and the expression must return boolean.
 
 Usage notes
 - Use outcomes to give names to common scenarios such as “SucceededWithCacheHit”, “SucceededWithoutCache”, “FailedUpstream”, “RejectedByPolicy”.
@@ -2593,7 +2940,7 @@ Validation
 For specs with `spec.cookies.jar` present, the engine maintains a per‑run cookie jar that is populated from downstream HTTP task responses only.
 
 Sources
-- HTTP task responses (`kind: httpCall`, non‑notify):
+- HTTP task responses (`kind: httpCall:v1`, non‑notify):
   - For each response, the engine:
     - Parses all `Set-Cookie` headers.
     - Computes the effective `domain` and `path` using HTTP cookie rules (RFC 6265 style):
@@ -2610,7 +2957,7 @@ Sources
     - When a downstream cookie denotes deletion (for example via `Max-Age=0` or an `Expires` value in the past), the jar removes any existing cookie with the same `(domain, path, name)` and records that a deletion has occurred so that response shaping can emit a deleting `Set-Cookie` if configured.
 
 Notify mode
-- HTTP tasks with `kind: httpCall` and `mode: notify` (see §5.1 and ADR‑0005) do not populate the cookie jar:
+- HTTP tasks with `kind: httpCall:v1` and `mode: notify` (see §5.1 and ADR‑0005) do not populate the cookie jar:
   - Responses to `notify` calls are ignored for jar purposes.
   - Jar cookies may still be attached to `notify` outbound requests (see §22.3).
 
@@ -2631,7 +2978,7 @@ states:
   callBackend:
     type: task
     task:
-      kind: httpCall
+      kind: httpCall:v1
       operationRef: backend.getOrder
       cookies:
         useJar: false            # optional; default true
@@ -2640,7 +2987,7 @@ states:
 ```
 
 Shape
-- `task.cookies` is allowed only when `task.kind: httpCall`.
+- `task.cookies` is allowed only when `task.kind: httpCall:v1`.
 - `task.cookies.useJar?: boolean` – when present:
   - `true`: enable jar attachment for this task (default when `spec.cookies.jar` exists and no explicit `Cookie` header overrides).
   - `false`: disable jar attachment for this task.

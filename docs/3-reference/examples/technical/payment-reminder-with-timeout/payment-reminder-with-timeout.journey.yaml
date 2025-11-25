@@ -50,7 +50,7 @@ spec:
     sendReminder:
       type: task
       task:
-        kind: httpCall
+        kind: httpCall:v1
         operationRef: payments.sendPaymentReminder
         params:
           path:

@@ -142,7 +142,7 @@ processItems:
     - callService:
         type: task
         task:
-          kind: httpCall
+          kind: httpCall:v1
           operationRef: backend.processItem
           body:
             mapper:
@@ -190,7 +190,7 @@ loopCheck:
 processOne:
   type: task
   task:
-    kind: httpCall
+    kind: httpCall:v1
     operationRef: backend.processItem
     body:
       mapper:
@@ -288,4 +288,3 @@ This pattern:
 This ADR does not permanently forbid loop or map states in all future versions of the DSL. It does, however, set a clear expectation for v1:
 - New specs and examples SHOULD use DataWeave + explicit control flow (and subjourneys) for loop-like patterns.
 - Contributors SHOULD NOT introduce a loop/for/map state lightly; any future proposal must clearly justify the added complexity with concrete, recurring use cases that are not well served by existing patterns.
-

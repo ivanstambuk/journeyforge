@@ -21,7 +21,7 @@ state scheduledDone
 
 exchangeInitialToken --> storeInitialTokens : oauth.tokenExchange\n(access + refresh tokens)
 storeInitialTokens --> configureSchedule : persist oauth tokens in context
-configureSchedule --> prepareConfigOutcome : task.kind: schedule\nstart = runBatch
+configureSchedule --> prepareConfigOutcome : task.kind: schedule:v1\nstart = runBatch
 prepareConfigOutcome --> completeConfigured
 completeConfigured --> [*]
 

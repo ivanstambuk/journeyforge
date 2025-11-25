@@ -131,7 +131,7 @@ spec:
     notifyAndReenter:
       type: task
       task:
-        kind: httpCall
+        kind: httpCall:v1
         operationRef: notifications.sendApprovalReminder
         timeoutMs: 5000
         resultVar: reminder
@@ -207,7 +207,7 @@ spec:
     poll:
       type: task
       task:
-        kind: httpCall
+        kind: httpCall:v1
         operationRef: jobs.getStatus
         params:
           path:
@@ -276,6 +276,6 @@ Here, loops are:
 ## Variations
 
 The same pattern applies to:
-- **Document collection loops** – model `waitForDocumentUpload` (as a `wait`/`webhook` state) → `validateDocument` (as a `task`/`transform` state) → `choice` on validation result. When documents are missing or invalid, send a "fix your document" email/notification (`task.httpCall` or `eventPublish`), increment `context.documentAttempts`, and loop back to `waitForDocumentUpload` until attempts are exhausted or an overall timeout fires, then fail with a clear error.
-- **Notification retry loops** – model `sendNotification` as a `task` (HTTP call or `eventPublish`) followed by a `choice` on `context.notificationResult.ok` (or an ack payload when present). On failure branches, increment `context.notifyAttempts`, optionally record the last error, and loop back into `sendNotification` up to a small, explicit cap before either failing the journey/API call or handing off to compensation.
+- **Document collection loops** – model `waitForDocumentUpload` (as a `wait`/`webhook` state) → `validateDocument` (as a `task`/`transform` state) → `choice` on validation result. When documents are missing or invalid, send a "fix your document" email/notification (`task.kind: httpCall:v1` or `eventPublish:v1`), increment `context.documentAttempts`, and loop back to `waitForDocumentUpload` until attempts are exhausted or an overall timeout fires, then fail with a clear error.
+- **Notification retry loops** – model `sendNotification` as a `task` (HTTP call or `eventPublish:v1`) followed by a `choice` on `context.notificationResult.ok` (or an ack payload when present). On failure branches, increment `context.notifyAttempts`, optionally record the last error, and loop back into `sendNotification` up to a small, explicit cap before either failing the journey/API call or handing off to compensation.
 - **Multi-step customer interactions** – use `waitForCustomerInput` (`wait`) → `applyChanges` (`transform` / `task`) → `choice` on the requested action. Let `change` / `edit` loop back to `waitForCustomerInput` (incrementing `context.iteration`), and treat `confirm` / `cancel` paths as terminal exits. Guard the loop with a maximum iterations counter and `spec.execution.maxDurationSec` so a stuck client cannot hold the journey open indefinitely.

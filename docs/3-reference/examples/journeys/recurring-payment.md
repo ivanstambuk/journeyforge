@@ -1,6 +1,6 @@
 # Journey – recurring-payment
 
-> Recurring payment journey that lets a user configure periodic charges once and then runs non-interactive scheduled payments using `task.kind: schedule`.
+> Recurring payment journey that lets a user configure periodic charges once and then runs non-interactive scheduled payments using `task.kind: schedule:v1`.
 
 ## Quick links
 
@@ -15,7 +15,7 @@
 This journey models a simple recurring payment pattern:
 
 - It starts with an interactive run that receives recurring payment configuration (user id, payment method reference, amount, currency, interval, and number of runs).
-- The interactive run uses `task.kind: schedule` to create or update a schedule binding that will start future, non-interactive runs at a dedicated state.
+- The interactive run uses `task.kind: schedule:v1` to create or update a schedule binding that will start future, non-interactive runs at a dedicated state.
 - Each scheduled run executes an outbound payment call and updates internal context with basic run metadata (for example `lastRunAt`, `lastStatus`), while the interactive run immediately returns a summary of the schedule configuration.
 
 Scheduled runs are non-interactive: once the schedule is in place, payments execute in the background without additional step calls, aligned with ADR-0017.
@@ -58,7 +58,7 @@ Subsequent scheduled runs are started by the engine based on the created schedul
 
 ## Implementation notes
 
-- The interactive path (`configureAndSchedule` → `prepareStartOutcome` → `completeConfigured`) reads schedule parameters from `context`, calls `task.kind: schedule` to create or update a schedule binding (using `subjectId: context.userId`), and then returns a `RecurringPaymentStartOutcome`.
+- The interactive path (`configureAndSchedule` → `prepareStartOutcome` → `completeConfigured`) reads schedule parameters from `context`, calls `task.kind: schedule:v1` to create or update a schedule binding (using `subjectId: context.userId`), and then returns a `RecurringPaymentStartOutcome`.
 - The scheduled path starts at `runPayment`, which calls `payments.authorizePayment` with the configured `paymentMethodRef`, `amount`, and `currency`, recording the HTTP result in `context.payment`.
 - `updateScheduledState` updates `context` with `lastRunAt`, `lastStatus`, and `lastOk` based on the latest run, and `scheduledDone` completes the scheduled instance.
-- The journey relies on ADR-0017 semantics: scheduled runs are non-interactive, evolve `context` across runs, and are bounded by `maxRuns`; scheduling configuration lives entirely in the `task.kind: schedule` state.
+- The journey relies on ADR-0017 semantics: scheduled runs are non-interactive, evolve `context` across runs, and are bounded by `maxRuns`; scheduling configuration lives entirely in the `task.kind: schedule:v1` state.

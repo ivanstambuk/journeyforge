@@ -38,7 +38,7 @@ spec:
     emitEvent:
       type: task
       task:
-        kind: eventPublish
+        kind: eventPublish:v1
         eventPublish:
           transport: kafka
           topic: orders.events

@@ -121,7 +121,7 @@ spec:
               requestAppointments:
                 type: task
                 task:
-                  kind: httpCall
+                  kind: httpCall:v1
                   method: POST
                   url: https://scheduler.example.com/referrals/search-appointments
                   params:
@@ -230,7 +230,7 @@ spec:
               bookConfirmedAppointment:
                 type: task
                 task:
-                  kind: httpCall
+                  kind: httpCall:v1
                   method: POST
                   url: https://scheduler.example.com/appointments/book
                   params:

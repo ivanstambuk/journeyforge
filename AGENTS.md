@@ -72,11 +72,18 @@ Single-line `expr: "..."` is still valid but should be avoided in new specs and 
 - For any non-trivial change to specs, ADRs, DSL/docs, or code, the agent MUST follow a **two-phase interaction**:
   - **Phase 1 – Clarifications (questions only).**
     1. Restate the task briefly to confirm understanding.
-    2. Ask numbered clarification questions (1., 2., 3.) and wait for the human’s answers; do not propose options, solutions, or implementation plans in this message.
+    2. Ask numbered clarification questions (1., 2., 3.) and wait for the human’s answers; do not propose options, solutions, or implementation plans in this message, **except when reasonable options with pros/cons and a clear recommendation can already be presented.**
     3. For design/architecture topics, record at least one `Q-xxx` entry in `docs/4-architecture/open-questions.md` before asking those questions; when that question is resolved and its outcome is captured in an ADR/spec/doc, remove the corresponding row from `open-questions.md` as part of the same slice of work.
   - **Phase 2 – Options & decision.**
-    4. After the human has answered the clarification questions, present 2–4 options labelled A, B, C, … with short pros/cons, and explicitly ask the human to choose or refine.
+    4. After the human has answered the clarification questions (when any are needed), present 2–4 options labelled A, B, C, … with short pros/cons, and explicitly ask the human to choose or refine.
     5. Only after the human confirms a choice may the agent draft or modify ADRs, specs, DSL/docs, or code, and it MUST mention the relevant `Q-xxx` ID in its chat summary for that change (do not embed `Q-xxx` IDs in normative specs/ADRs/docs; see `docs/4-architecture/open-questions.md`).
+
+### Owner preference – options-first for design
+
+- For medium/high-impact design/spec questions (ADRs, feature specs, DSL changes, engine/task design, etc.), the default preference for this repository’s maintainer is:
+  - The agent SHOULD present 2–4 concrete options with pros/cons and a clear recommendation for each decision point, instead of sending a “questions-only” message when reasonable options are already apparent.
+  - The agent MAY still ask short clarifying questions, but should avoid a separate “Phase 1 – questions only” message unless a blocking ambiguity makes options meaningless.
+  - This options-first behaviour is a standing explicit override for design work in this repo and does not need to be restated by the human in each session.
 - **Low-impact/self-serve changes.** Trivial, obviously mechanical edits (typos, purely local renames, formatting-only fixes) may be performed directly after restating the task, without a full two-phase exchange, unless the human explicitly asks to follow the two-phase protocol.
 - **Explicit overrides.** If the human explicitly says to skip clarifications or options (for example, “skip questions, just propose options now” or “just implement X as described”), the agent may follow that instruction but should briefly acknowledge that it is deviating from the default two-phase protocol for this interaction.
 - Large artifacts (ADRs, specs, long docs) MUST be written to the filesystem and only summarised in chat, unless the human explicitly asks to see the full text.

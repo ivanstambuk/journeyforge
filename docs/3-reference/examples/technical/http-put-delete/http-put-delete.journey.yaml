@@ -45,7 +45,7 @@ spec:
     update:
       type: task
       task:
-        kind: httpCall
+        kind: httpCall:v1
         operationRef: items.updateItemById
         params:
           path: { id: "${context.id}" }
@@ -75,7 +75,7 @@ spec:
     delete:
       type: task
       task:
-        kind: httpCall
+        kind: httpCall:v1
         method: DELETE
         url: "https://api.example.com/items/${context.id}"
         headers: { Accept: application/json }

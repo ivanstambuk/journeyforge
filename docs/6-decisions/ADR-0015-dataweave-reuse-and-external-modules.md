@@ -54,7 +54,7 @@ states:
   call_upstream:
     type: task
     task:
-      kind: httpCall
+      kind: httpCall:v1
       operationRef: orders.getOrder
       resultVar: httpResult
       errorMapping:
@@ -136,7 +136,7 @@ states:
   call_orders:
     type: task
     task:
-      kind: httpCall
+      kind: httpCall:v1
       operationRef: orders.getOrder
       resultVar: ordersResult
       errorMapping:
@@ -215,7 +215,7 @@ states:
   call_orders:
     type: task
     task:
-      kind: httpCall
+      kind: httpCall:v1
       operationRef: orders.getOrder
       resultVar: ordersHttp
     next: project_order

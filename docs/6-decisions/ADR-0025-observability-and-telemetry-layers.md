@@ -61,7 +61,7 @@ The core layer:
 Beyond the core, additional observability is provided via **extension packs** that can be enabled or disabled per deployment via engine/connector/CLI configuration. Examples include:
 
 - **HTTP client pack**
-  - Per-call spans and metrics for outbound HTTP tasks (`task.kind: httpCall`), including:
+  - Per-call spans and metrics for outbound HTTP tasks (`task.kind: httpCall:v1`), including:
     - `http.method`, `http.status_code`, target host, retry count, resilience policy id.
   - Counts and latencies of HTTP calls per journey/task id.
 - **Connector packs**
@@ -124,6 +124,22 @@ The platform uses a **generic OpenTelemetry-style model**:
 - Attribute keys follow OpenTelemetry conventions when they overlap (for example `http.method`, `http.status_code`, `exception.type`), and JourneyForge-specific attributes use a `journey.*` or `journeyforge.*` prefix.
 - The implementation MAY use different concrete exporters (Prometheus, OTLP/HTTP, OTLP/gRPC, logging-only) without changing the logical contract described in this ADR.
 
+### 6. Expression telemetry
+
+Expression evaluations are observable only via engine/connector telemetry packs; the DSL does not expose expression-level telemetry controls.
+
+- When an expression evaluation is instrumented (for example via an engine telemetry pack), spans/logs/Metrics MAY include:
+  - `expr.code` – stable, engine-specific error/result code as defined by expression engine features (for example `DW_PARSE_ERROR`, `JN_PATH_NOT_FOUND`, `JQ_MAX_EVAL_TIME_EXCEEDED`).
+  - `expr.site` – optional coarse site label such as `predicate`, `transform`, `mapper`, `errorMapper`, or `statusExpr`.
+  - `expr.duration_ms` – wall-clock evaluation time in milliseconds.
+  - `expr.input_bytes` – approximate size of the input data made available to the expression (for example serialised `context`/`payload`/`error`).
+  - `expr.output_bytes` – approximate size of the materialised result when available.
+  - `expr.limit_hit` – optional boolean indicating that a configured expression limit was enforced.
+  - `expr.limit_kind` – optional string describing the limit kind (for example `time` or `resultSize`) when `expr.limit_hit == true`.
+- Expression telemetry MUST obey the same privacy and redaction rules as other telemetry:
+  - Implementations MUST NOT record expression source text or sampled input/output values in telemetry by default.
+  - Only structural metadata (codes, timings, sizes, coarse site labels) is allowed; any additional attributes are subject to the `observability.attributes.allowed` and `observability.attributes.redactAlways` rules.
+
 ## Consequences
 
 Positive:
@@ -145,6 +161,5 @@ Follow-ups:
 - Introduce a concise Observability & Telemetry section in the engine/connector/CLI design docs that:
   - Enumerates core metrics and attributes.
   - Lists available extension packs and their attribute vocabularies.
-  - Documents configuration keys for enabling packs and managing allowlists.
+  - Documents configuration keys for enabling packs, managing allowlists, and tuning plugin log levels (see ADR-0026 for plugin logging rules and `observability.plugins.*` configuration).
 - Ensure future feature specs (for example persistence, admin plane) refer to this ADR when defining telemetry expectations instead of inventing new ad-hoc telemetry semantics.
-

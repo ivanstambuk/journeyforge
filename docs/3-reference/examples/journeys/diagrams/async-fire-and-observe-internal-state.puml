@@ -31,12 +31,12 @@ done --> [*]
 failFromJob --> [*]
 
 note right of enqueueJob
-  task.kind: httpCall
+  task.kind: httpCall:v1
   POST /async-jobs
 end note
 
 note right of fetchJobStatus
-  task.kind: httpCall
+  task.kind: httpCall:v1
   GET /async-jobs/{jobId}
 end note
 

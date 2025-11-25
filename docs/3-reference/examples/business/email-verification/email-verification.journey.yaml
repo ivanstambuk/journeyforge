@@ -66,7 +66,7 @@ spec:
     sendVerificationEmail:
       type: task
       task:
-        kind: httpCall
+        kind: httpCall:v1
         method: POST
         url: https://notifications.example.com/email/verification
         params:
@@ -165,7 +165,7 @@ spec:
               sendFirstReminder:
                 type: task
                 task:
-                  kind: httpCall
+                  kind: httpCall:v1
                   method: POST
                   url: https://notifications.example.com/email/verification/reminder
                   params:
@@ -208,7 +208,7 @@ spec:
               sendSecondReminder:
                 type: task
                 task:
-                  kind: httpCall
+                  kind: httpCall:v1
                   method: POST
                   url: https://notifications.example.com/email/verification/reminder
                   params:
@@ -271,7 +271,7 @@ spec:
               notifyExpired:
                 type: task
                 task:
-                  kind: httpCall
+                  kind: httpCall:v1
                   method: POST
                   url: https://notifications.example.com/email/verification/expired
                   params:

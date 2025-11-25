@@ -76,7 +76,7 @@ spec:
     lookup:
       type: task
       task:
-        kind: httpCall
+        kind: httpCall:v1
         operationRef: users.getUserById
         params:
           path:
@@ -101,7 +101,7 @@ spec:
     create:
       type: task
       task:
-        kind: httpCall
+        kind: httpCall:v1
         operationRef: accounts.createAccount
         params:
           headers:
@@ -198,7 +198,7 @@ spec:
     call_a:
       type: task
       task:
-        kind: httpCall
+        kind: httpCall:v1
         method: GET
         url: "https://api.example.com/serviceA/${context.id}"
         headers:
@@ -210,7 +210,7 @@ spec:
     call_b:
       type: task
       task:
-        kind: httpCall
+        kind: httpCall:v1
         method: GET
         url: "https://api.example.com/serviceB/${context.id}"
         headers:
@@ -312,7 +312,7 @@ spec:
     call_default:
       type: task
       task:
-        kind: httpCall
+        kind: httpCall:v1
         operationRef: items.createItem
         params:
           headers:
@@ -332,7 +332,7 @@ spec:
     call_beta:
       type: task
       task:
-        kind: httpCall
+        kind: httpCall:v1
         method: POST
         url: "https://beta.api.example.com/items"
         headers:

@@ -1,0 +1,50 @@
+apiVersion: v1
+kind: Journey
+metadata:
+  name: auth-mtls-only
+  version: 0.1.0
+spec:
+  input:
+    schema:
+      type: object
+      additionalProperties: true
+
+  output:
+    schema:
+      type: object
+      properties:
+        subjectDn:
+          type: string
+      additionalProperties: true
+
+  start: validateMtls
+
+  states:
+    validateMtls:
+      type: task
+      task:
+        kind: mtlsValidate:v1
+        profile: default
+      next: checkSubject
+
+    checkSubject:
+      type: choice
+      choices:
+        - when:
+            predicate:
+              # Example policy: only allow client certificates whose subject DN
+              # contains "OU=Journeys".
+              lang: dataweave
+              expr: |
+                (context.auth.mtls.subjectDn default "") contains "OU=Journeys"
+          next: done
+      default: subjectDenied
+
+    done:
+      type: succeed
+      outputVar: auth
+
+    subjectDenied:
+      type: fail
+      errorCode: MTLS_SUBJECT_DENIED
+      reason: "Client certificate subject not allowed"

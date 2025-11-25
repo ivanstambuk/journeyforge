@@ -17,7 +17,7 @@ Emit domain events to Kafka from a journey so other systems can react asynchrono
 
 ## Relevant DSL Features
 
-- `task` with `kind: eventPublish` for Kafka event emission.
+- `task` with `kind: eventPublish:v1` for Kafka event emission.
 - `eventPublish.transport: kafka` and `eventPublish.topic` to define the target topic.
 - DataWeave mappers for `eventPublish.key.mapper` and `eventPublish.value.mapper`.
 - Optional `eventPublish.headers` for record headers (for example `traceparent`, source, etc.).
@@ -58,7 +58,7 @@ spec:
     emitEvent:
       type: task
       task:
-        kind: eventPublish
+        kind: eventPublish:v1
         eventPublish:
           transport: kafka
           topic: orders.events

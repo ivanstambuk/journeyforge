@@ -97,7 +97,7 @@ spec:
     sendNotification:
       type: task
       task:
-        kind: httpCall
+        kind: httpCall:v1
         operationRef: notifications.sendNotification
         params:
           headers:
@@ -172,7 +172,7 @@ spec:
     callIntegration:
       type: task
       task:
-        kind: httpCall
+        kind: httpCall:v1
         operationRef: integrations.callThrottledEndpoint
         params:
           headers:

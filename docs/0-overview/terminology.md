@@ -46,7 +46,7 @@ consistent vocabulary.
   - Behaviour that is directly and visibly configured in a journey definition or in
     documented configuration objects:
     - Example: a `transform` state that sets `context.orderId`.
-    - Example: `spec.policies.httpSecurity` entries that declare JWT or mTLS policies.
+    - Example: auth task plugins (`jwtValidate:v1`, `mtlsValidate:v1`) or `spec.policies.httpSecurity` entries that declare API key policies.
     - Example: `MetadataLimits` values for tag/attribute caps.
   - When we say “explicit”, we mean “clearly encoded in DSL/config and visible in the spec”.
 
@@ -55,8 +55,8 @@ consistent vocabulary.
     hold, even if there is no per-journey block for it, but which is still documented in the
     DSL or ADRs.
   - Examples:
-    - Deriving `attributes.subjectId` from a validated JWT subject when a JWT policy is
-      configured and the subject is not listed as anonymous.
+    - Deriving `attributes.subjectId` from a validated JWT subject when `jwtValidate:v1`
+      succeeds and the subject is not listed as anonymous in its effective configuration.
     - Enforcing execution deadlines from `spec.execution.maxDurationSec`.
   - These invariants are not optional “magic”; they are part of the documented semantics of
     the engine. They should be described using clear requirements (for example, “the engine

@@ -48,7 +48,7 @@ spec:
     call_item:
       type: task
       task:
-        kind: httpCall
+        kind: httpCall:v1
         operationRef: items.getItemById
         params:
           path: { id: "${context.id}" }

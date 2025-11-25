@@ -1,0 +1,39 @@
+arazzo: 1.0.1
+info:
+  title: JourneyForge – auth-mtls-only workflows
+  version: 0.1.0
+  summary: Workflows for mTLS-only authentication.
+  description: Workflows for mTLS-only authentication.
+sourceDescriptions:
+  - name: authMtlsOnly
+    type: openapi
+    url: auth-mtls-only.openapi.yaml
+workflows:
+  - workflowId: auth-mtls-only-happy-path
+    summary: Start an auth-mtls-only journey and retrieve the final outcome.
+    description: Start an auth-mtls-only journey and retrieve the final outcome.
+    inputs:
+      type: object
+      properties:
+        startRequest:
+          description: Initial payload for the auth-mtls-only journey.
+          type: object
+          additionalProperties: true
+    steps:
+      - stepId: startJourney
+        description: Start a new auth-mtls-only journey instance.
+        operationId: authMtlsOnly_start
+        x-source: authMtlsOnly
+        requestBody:
+          contentType: application/json
+          payload: $inputs.startRequest
+        outputs:
+          journeyId: $response.body.journeyId
+      - stepId: getResult
+        description: Retrieve the final outcome once the journey is terminal.
+        operationId: authMtlsOnly_getResult
+        x-source: authMtlsOnly
+        parameters:
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId

@@ -28,7 +28,7 @@ spec:
     notify:
       type: task
       task:
-        kind: httpCall
+        kind: httpCall:v1
         mode: notify
         method: POST
         url: "https://api.example.com/audit"

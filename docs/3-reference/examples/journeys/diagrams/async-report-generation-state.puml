@@ -31,7 +31,7 @@ reportDone --> [*]
 failFromReport --> [*]
 
 note right of startReportJob
-  task.kind: httpCall
+  task.kind: httpCall:v1
   starts background report job
 end note
 

@@ -7,7 +7,7 @@ Date: 2025-11-23 | Status: Proposed
 JourneyForge already has a fairly rich DSL surface:
 - State types such as `task` (HTTP, event publish, schedule), `choice`, `transform`, `wait`, `webhook`, `parallel`, `timer`, `succeed`, and `fail`.
 - Top-level journeys and APIs (`kind: Journey` / `kind: Api`) with explicit semantics for context, schemas, HTTP bindings, execution deadlines, and global compensation (`spec.compensation`, ADR-0008).
-- Scheduled journeys (`task.kind: schedule`, ADR-0017) and in-journey timers (`type: timer`, ADR-0018).
+- Scheduled journeys (`task.kind: schedule:v1`, ADR-0017) and in-journey timers (`type: timer`, ADR-0018).
 
 However, there is no first-class notion of **subjourneys/subflows** in the DSL. Authors who want to:
 - Factor out reusable fragments (for example, authentication, KYC, risk evaluation),

@@ -84,7 +84,7 @@ spec:
     createPurchaseOrder:
       type: task
       task:
-        kind: httpCall
+        kind: httpCall:v1
         operationRef: purchaseOrders.createPurchaseOrder
         params:
           headers:

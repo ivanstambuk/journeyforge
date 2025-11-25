@@ -68,26 +68,25 @@ spec:
     configureAndSchedule:
       type: task
       task:
-        kind: schedule
-        schedule:
-          start: runPayment
-          interval:
-            mapper:
-              lang: dataweave
-              expr: context.interval
-          maxRuns:
-            mapper:
-              lang: dataweave
-              expr: context.maxRuns
-          subjectId:
-            mapper:
-              lang: dataweave
-              expr: context.userId
-          context:
-            mapper:
-              lang: dataweave
-              expr: context
-          onExisting: upsert
+        kind: schedule:v1
+        start: runPayment
+        interval:
+          mapper:
+            lang: dataweave
+            expr: context.interval
+        maxRuns:
+          mapper:
+            lang: dataweave
+            expr: context.maxRuns
+        subjectId:
+          mapper:
+            lang: dataweave
+            expr: context.userId
+        context:
+          mapper:
+            lang: dataweave
+            expr: context
+        onExisting: upsert
       next: prepareStartOutcome
 
     prepareStartOutcome:
@@ -119,7 +118,7 @@ spec:
     runPayment:
       type: task
       task:
-        kind: httpCall
+        kind: httpCall:v1
         operationRef: payments.authorizePayment
         params:
           path:

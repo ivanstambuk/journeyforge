@@ -67,7 +67,7 @@ Scheduled runs are triggered by the scheduler according to the configured `first
 
 - `exchangeInitialToken` calls `oauth.tokenExchange` using the caller's access token (conceptually provided in `context.initialAccessToken` from the Authorization header) to obtain an access token and a refresh token.
 - `storeInitialTokens` writes `oauth.accessToken` and `oauth.refreshToken` into `context`.
-- `configureSchedule` uses `task.kind: schedule` to configure daily non-interactive runs starting at `firstRunAt` (for example 23:00) with cadence `interval` (for example `P1D`) and bound `maxRuns`; it passes the current `context` (minus the initial access token) as the context snapshot for the first scheduled run.
+- `configureSchedule` uses `task.kind: schedule:v1` to configure daily non-interactive runs starting at `firstRunAt` (for example 23:00) with cadence `interval` (for example `P1D`) and bound `maxRuns`; it passes the current `context` (minus the initial access token) as the context snapshot for the first scheduled run.
 - `prepareConfigOutcome` and `completeConfigured` build and return the configuration outcome for the interactive run.
 - `runBatch` is the entry state for scheduled runs; it calls `oauth.refreshToken` using `context.oauth.refreshToken` to obtain fresh tokens, then updates `context.oauth`.
 - `waitForUpstream` is a timer that waits `upstreamWaitDuration` (default `PT15M`) after the scheduled start time to give upstream systems time to finish their own end-of-day work.

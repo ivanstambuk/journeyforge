@@ -67,7 +67,7 @@ spec:
     createProspect:
       type: task
       task:
-        kind: httpCall
+        kind: httpCall:v1
         operationRef: customers.createCustomer
         params:
           headers:
@@ -156,7 +156,7 @@ spec:
               startKyc:
                 type: task
                 task:
-                  kind: httpCall
+                  kind: httpCall:v1
                   operationRef: kycChecks.startKycCheck
                   params:
                     headers:
@@ -182,7 +182,7 @@ spec:
               startAml:
                 type: task
                 task:
-                  kind: httpCall
+                  kind: httpCall:v1
                   operationRef: amlScreening.startAmlScreening
                   params:
                     headers:
@@ -396,7 +396,7 @@ spec:
     createAccount:
       type: task
       task:
-        kind: httpCall
+        kind: httpCall:v1
         operationRef: accounts.createAccount
         params:
           headers:

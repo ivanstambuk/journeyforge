@@ -93,7 +93,7 @@ spec:
     lookup:
       type: task
       task:
-        kind: httpCall
+        kind: httpCall:v1
         operationRef: users.getUserById
         params:
           path:
@@ -115,7 +115,7 @@ spec:
     create:
       type: task
       task:
-        kind: httpCall
+        kind: httpCall:v1
         operationRef: accounts.createAccount
         body:
           mapper:

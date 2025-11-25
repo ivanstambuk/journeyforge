@@ -94,7 +94,7 @@ spec:
     notifyAndReenter:
       type: task
       task:
-        kind: httpCall
+        kind: httpCall:v1
         operationRef: notifications.sendApprovalReminder
         timeoutMs: 5000
         resultVar: reminder

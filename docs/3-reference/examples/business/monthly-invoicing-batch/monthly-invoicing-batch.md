@@ -15,7 +15,7 @@
 
 This journey models a per-tenant monthly invoicing batch with explicit finance approval:
 
-- An interactive run starts the journey for a tenant and batch id, configures the first run time and cadence, and uses `task.kind: schedule` to create a schedule binding for future monthly runs.
+- An interactive run starts the journey for a tenant and batch id, configures the first run time and cadence, and uses `task.kind: schedule:v1` to create a schedule binding for future monthly runs.
 - Each scheduled run drafts invoices for the current billing period, validates the draft batch, and then pauses for a finance operator to approve or reject the batch.
 - When approved, the journey sends invoices, waits for a grace period, and then triggers reminder and final-notice calls using timers; each run records a compact outcome in `context.lastRun`.
 
@@ -80,7 +80,7 @@ Internal view of the journey’s DSL (`spec.states`), showing the configuration 
 
 ## Implementation notes
 
-- `configureSchedule` uses `task.kind: schedule` to configure monthly non-interactive runs starting at `draftInvoices` with cadence `interval` (for example `P1M`) and bound `maxRuns`; it passes the current `context` as the context snapshot for scheduled runs.
+- `configureSchedule` uses `task.kind: schedule:v1` to configure monthly non-interactive runs starting at `draftInvoices` with cadence `interval` (for example `P1M`) and bound `maxRuns`; it passes the current `context` as the context snapshot for scheduled runs.
 - `draftInvoices` calls `billing.draftInvoicesForBatch` to create invoice drafts for the configured batch; `validateDrafts` calls `billing.validateInvoiceBatch` and routes to `waitForFinanceApproval` or `recordValidationFailure` based on `validationResult.ok`.
 - `waitForFinanceApproval` exposes the `approveInvoiceBatch` step, storing the decision and optional comment in `context.approval` and projecting a compact `InvoiceBatchApprovalStepResponse` into the step response.
 - `sendInvoices` calls `billing.sendInvoiceBatch` with `tenantId` and `channel`; `recordSendOutcome` writes `context.lastRun` with `status = "SENT"` or `"SEND_FAILED"` plus counts from the billing API.

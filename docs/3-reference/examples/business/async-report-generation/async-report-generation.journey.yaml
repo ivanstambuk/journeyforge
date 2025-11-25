@@ -62,7 +62,7 @@ spec:
     startReportJob:
       type: task
       task:
-        kind: httpCall
+        kind: httpCall:v1
         method: POST
         url: https://reports.example.com/jobs
         params:
@@ -112,7 +112,7 @@ spec:
     fetchReportStatus:
       type: task
       task:
-        kind: httpCall
+        kind: httpCall:v1
         method: GET
         url: "https://reports.example.com/jobs/${context.reportJobId}"
         params:

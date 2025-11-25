@@ -61,7 +61,7 @@ spec:
     call_api:
       type: task
       task:
-        kind: httpCall
+        kind: httpCall:v1
         method: GET
         url: "https://api.example.com/missing/${context.inputId}"
         headers:
@@ -133,7 +133,7 @@ spec:
     slow_call:
       type: task
       task:
-        kind: httpCall
+        kind: httpCall:v1
         method: GET
         url: "https://api.example.com/slow/${context.id}"
         headers:
@@ -197,7 +197,7 @@ spec:
     call_api:
       type: task
       task:
-        kind: httpCall
+        kind: httpCall:v1
         operationRef: items.getItemById
         params:
           path:
@@ -288,4 +288,3 @@ This pattern:
 ## Implementation notes
 
 - When using `errorCode` values derived from Problem `type`, keep them stable over time for easier reporting and alerting.
-

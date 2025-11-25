@@ -21,7 +21,7 @@ This feature extends the DSL and engine behaviour for *outbound* HTTP only; inbo
 
 ## Goals
 - Add a `spec.policies.httpClientAuth` block to the DSL to configure outbound HTTP auth policies.
-- Allow HTTP `task` (`kind: httpCall`) states to reference outbound auth policies via a small `auth` sub‑block.
+- Allow HTTP `task` (`kind: httpCall:v1`) states to reference outbound auth policies via a small `auth` sub‑block.
 - Define policy kinds for:
   - Static bearer tokens sourced from a secret.
   - OAuth2 client‑credentials flows with flexible form payloads and multiple token endpoint auth methods (client secret, mTLS).
@@ -79,7 +79,7 @@ spec:
     createOrder:
       type: task
       task:
-        kind: httpCall
+        kind: httpCall:v1
         operationRef: orders.create
         auth:
           policyRef: backendDefault

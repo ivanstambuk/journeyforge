@@ -246,9 +246,6 @@ Response:
 ### DSL / Spec
 - `metadata.tags: string[]` on `kind: Journey` and `kind: Api`.
 - `spec.metadata.bindings.tags` and `spec.metadata.bindings.attributes` for sourcing tags/attributes from payload, headers, and `baggage`.
-- `spec.policies.httpSecurity.definitions[<id>].kind: jwt` extended with:
-  - `mode: required|optional`.
-  - `anonymousSubjects: string[]`.
 
 ### Configuration
 - `apiVersion: v1`, `kind: MetadataLimits` document controlling:

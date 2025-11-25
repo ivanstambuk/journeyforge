@@ -36,28 +36,6 @@ metadata:
   version: 0.1.0
 spec:
   # Security policies: the engine validates JWT on start requests
-  policies:
-    httpSecurity:
-      default: jwtDefault
-      definitions:
-        jwtDefault:
-          kind: jwt
-          issuer: "https://issuer.example.com"
-          audience: ["journeyforge"]
-          jwks:
-            source: jwksUrl
-            url: "https://issuer.example.com/.well-known/jwks.json"
-            cacheTtlSeconds: 3600
-          clockSkewSeconds: 60
-          requiredClaims:
-            sub:
-              type: string
-            scope:
-              contains: ["user:read"]
-
-  security:
-    journeyPolicyRef: jwtDefault
-
   # Bind relevant headers into context for tracing/correlation
   httpBindings:
     start:
@@ -97,9 +75,16 @@ spec:
           additionalProperties: true
       additionalProperties: true
 
-  start: normaliseAuth
+  start: validateJwt
 
   states:
+    validateJwt:
+      type: task
+      task:
+        kind: jwtValidate:v1
+        profile: default
+      next: normaliseAuth
+
     normaliseAuth:
       type: transform
       transform:
@@ -118,7 +103,7 @@ spec:
     fetchUser:
       type: task
       task:
-        kind: httpCall
+        kind: httpCall:v1
         operationRef: users.getUserById
         params:
           path:
@@ -196,7 +181,7 @@ spec:
     callBackend:
       type: task
       task:
-        kind: httpCall
+        kind: httpCall:v1
         operationRef: backend.getOrder
         auth:
           policyRef: backendDefault

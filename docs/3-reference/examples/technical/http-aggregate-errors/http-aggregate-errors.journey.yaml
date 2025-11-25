@@ -50,7 +50,7 @@ spec:
     call_a:
       type: task
       task:
-        kind: httpCall
+        kind: httpCall:v1
         method: GET
         url: "https://api.example.com/serviceA/${context.id}"
         headers: { Accept: application/json }
@@ -61,7 +61,7 @@ spec:
     call_b:
       type: task
       task:
-        kind: httpCall
+        kind: httpCall:v1
         method: GET
         url: "https://api.example.com/serviceB/${context.id}"
         headers: { Accept: application/json }

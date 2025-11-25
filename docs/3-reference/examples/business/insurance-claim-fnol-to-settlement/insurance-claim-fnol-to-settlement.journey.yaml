@@ -75,7 +75,7 @@ spec:
     createClaim:
       type: task
       task:
-        kind: httpCall
+        kind: httpCall:v1
         operationRef: claims.createClaim
         params:
           headers:
@@ -259,7 +259,7 @@ spec:
                         notifyAdjusterSlaBreach:
                           type: task
                           task:
-                            kind: httpCall
+                            kind: httpCall:v1
                             operationRef: claims.notifyAdjusterSlaBreach
                             params:
                               path:
@@ -377,7 +377,7 @@ spec:
                         notifyProviderSlaBreach:
                           type: task
                           task:
-                            kind: httpCall
+                            kind: httpCall:v1
                             operationRef: claims.notifyProviderSlaBreach
                             params:
                               path:
@@ -476,7 +476,7 @@ spec:
     recordSettlement:
       type: task
       task:
-        kind: httpCall
+        kind: httpCall:v1
         operationRef: claims.recordSettlementDecision
         params:
           path:
@@ -500,7 +500,7 @@ spec:
     initiatePayment:
       type: task
       task:
-        kind: httpCall
+        kind: httpCall:v1
         operationRef: payments.authorizePayment
         params:
           path:

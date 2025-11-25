@@ -209,7 +209,7 @@ spec:
     submitOrder:
       type: task
       task:
-        kind: httpCall
+        kind: httpCall:v1
         operationRef: orders.createOrder
         params:
           headers:

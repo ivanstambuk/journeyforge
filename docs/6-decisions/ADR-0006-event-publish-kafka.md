@@ -9,7 +9,7 @@ JourneyForge journeys sometimes need to emit events to external systems (for exa
 - Emit audit or activity events.
 - Drive other services via event-driven architectures.
 
-Today, the DSL supports HTTP side effects via `task` with `kind: httpCall` (including `mode: notify` for fire-and-forget HTTP). However:
+Today, the DSL supports HTTP side effects via `task` with `kind: httpCall:v1` (including `mode: notify` for fire-and-forget HTTP). However:
 - HTTP is not always the right transport; many teams use Kafka or other brokers as their primary integration channel.
 - Modelling event emission as an HTTP call to a gateway is possible but hides intent and couples the journey to a particular HTTP façade.
 
@@ -19,29 +19,28 @@ We want a first-class way to describe “publish an event to Kafka” while:
 
 ## Decision
 
-We extend `task` to support a new `kind: eventPublish` with Kafka as the initial transport.
+We extend `task` to support a new `kind: eventPublish:v1` with Kafka as the initial transport.
 
 Shape:
 
 ```yaml
 type: task
 task:
-  kind: eventPublish
-  eventPublish:
-    transport: kafka                 # initial implementation: only "kafka"
-    topic: orders.events             # required
-    key:                             # optional – mapper for Kafka key
-      mapper:
-        lang: dataweave
-        expr: <expression>
-    value:                           # required – mapper for event payload
-      mapper:
-        lang: dataweave
-        expr: <expression>
-    headers:                         # optional – Kafka record headers
-      <k>: <string|interpolated>
-    keySchemaRef: <string>           # optional – JSON Schema for the key
-    valueSchemaRef: <string>         # optional but recommended – JSON Schema for the payload
+  kind: eventPublish:v1
+  transport: kafka                 # initial implementation: only "kafka"
+  topic: orders.events             # required
+  key:                             # optional – mapper for Kafka key
+    mapper:
+      lang: dataweave
+      expr: <expression>
+  value:                           # required – mapper for event payload
+    mapper:
+      lang: dataweave
+      expr: <expression>
+  headers:                         # optional – Kafka record headers
+    <k>: <string|interpolated>
+  keySchemaRef: <string>           # optional – JSON Schema for the key
+  valueSchemaRef: <string>         # optional but recommended – JSON Schema for the payload
 next: <stateId>
 ```
 
@@ -63,15 +62,15 @@ Schema integration:
 - `eventPublish.keySchemaRef` plays the same role for the key when used.
 
 Validation rules:
-- `task.kind` may be `httpCall` or `eventPublish`.
-- For `kind: eventPublish`:
-  - `eventPublish.transport` is required and must be `kafka` in the initial version.
-  - `eventPublish.topic` is required and non-empty.
-  - `eventPublish.value.mapper` is required with `lang: dataweave` and an inline `expr`.
-  - `eventPublish.key.mapper` (when present) must follow the same mapper rules.
-  - `eventPublish.headers` (when present) is a map from header name to string/interpolated value.
-  - `eventPublish.keySchemaRef` / `eventPublish.valueSchemaRef` (when present) must be non-empty strings.
-- `resultVar`, `errorMapping`, and `resiliencePolicyRef` MUST NOT be used with `kind: eventPublish`.
+- `task.kind` for event publishing MUST be `eventPublish:v1` in this version.
+- For `eventPublish:v1`:
+  - `transport` is required and must be `kafka` in the initial version.
+  - `topic` is required and non-empty.
+  - `value.mapper` is required with `lang: dataweave` and an inline `expr`.
+  - `key.mapper` (when present) must follow the same mapper rules.
+  - `headers` (when present) is a map from header name to string/interpolated value.
+  - `keySchemaRef` / `valueSchemaRef` (when present) must be non-empty strings.
+- `resultVar`, `errorMapping`, and `resiliencePolicyRef` MUST NOT be used with `eventPublish:v1`.
 
 ## Consequences
 

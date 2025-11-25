@@ -1,0 +1,43 @@
+arazzo: 1.0.1
+info:
+  title: JourneyForge – auth-jwt-scopes workflows
+  version: 0.1.0
+  summary: Workflows for JWT scopes/roles-based user lookup.
+  description: Workflows for JWT scopes/roles-based user lookup.
+sourceDescriptions:
+  - name: authJwtScopes
+    type: openapi
+    url: auth-jwt-scopes.openapi.yaml
+workflows:
+  - workflowId: auth-jwt-scopes-happy-path
+    summary: Start an auth-jwt-scopes journey and retrieve the final outcome.
+    description: Start an auth-jwt-scopes journey and retrieve the final outcome.
+    inputs:
+      type: object
+      properties:
+        startRequest:
+          description: Initial payload for the auth-jwt-scopes journey.
+          type: object
+          additionalProperties: true
+          properties:
+            traceparent:
+              type: string
+              description: Optional override for W3C traceparent header; if omitted, middleware may inject it.
+    steps:
+      - stepId: startJourney
+        description: Start a new auth-jwt-scopes journey instance.
+        operationId: authJwtScopes_start
+        x-source: authJwtScopes
+        requestBody:
+          contentType: application/json
+          payload: $inputs.startRequest
+        outputs:
+          journeyId: $response.body.journeyId
+      - stepId: getResult
+        description: Retrieve the final outcome once the journey is terminal.
+        operationId: authJwtScopes_getResult
+        x-source: authJwtScopes
+        parameters:
+          - name: journeyId
+            in: path
+            value: $steps.startJourney.outputs.journeyId

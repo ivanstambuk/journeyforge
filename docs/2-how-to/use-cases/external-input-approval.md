@@ -54,7 +54,7 @@ spec:
     submit:
       type: task
       task:
-        kind: httpCall
+        kind: httpCall:v1
         operationRef: items.createItem
         params:
           headers:
@@ -153,7 +153,7 @@ spec:
     authorize:
       type: task
       task:
-        kind: httpCall
+        kind: httpCall:v1
         operationRef: payments.authorizePayment
         params:
           headers:

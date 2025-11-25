@@ -17,7 +17,7 @@ Emit an HTTP notification as a side effect without blocking on the response or b
 
 ## Relevant DSL Features
 
-- `task` with `kind: httpCall` and `mode: notify` for fire-and-forget semantics.
+- `task` with `kind: httpCall:v1` and `mode: notify` for fire-and-forget semantics.
 - `body.mapper` with DataWeave to build the notification payload from `context`.
 - `succeed` to complete the journey without depending on the HTTP result.
 - `spec.input.schema` / `spec.output.schema` to validate the incoming context and shape the output.
@@ -53,7 +53,7 @@ spec:
     notify:
       type: task
       task:
-        kind: httpCall
+        kind: httpCall:v1
         mode: notify
         method: POST
         url: "https://api.example.com/audit"

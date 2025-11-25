@@ -119,7 +119,7 @@ spec:
     fetchOrder:
       type: task
       task:
-        kind: httpCall
+        kind: httpCall:v1
         operationRef: upstream.getOrder
         resultVar: httpResult
       next: handleResult

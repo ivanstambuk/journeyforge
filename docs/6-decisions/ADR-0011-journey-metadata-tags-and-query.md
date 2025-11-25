@@ -165,35 +165,26 @@ spec:
   start request for a `kind: Journey` journey, and uses them to populate `journey.tags` and
   `journey.attributes` subject to `MetadataLimits`.
 
-### 4. Mixed-mode JWT policies and anonymous subjects
+### 4. Mixed-mode JWT validation and anonymous subjects
 
-To support journeys that can be invoked both with and without JWTs, we extend `kind: jwt`
-HTTP security policies with:
+To support journeys that can be invoked both with and without JWTs, JWT validation is modelled via the `jwtValidate:v1` task plugin and engine configuration profiles rather than `kind: jwt` HTTP security policies.
 
-- `mode`:
-    - `required` (default): a missing or invalid token MUST cause the request to be rejected
-    (for example, 401/403); the journey does not start.
-  - `optional`: a missing token is allowed and treated as anonymous; an invalid token is
-    still rejected. When no token is present, `context.auth.jwt` remains unset and no subject
-    is derived.
-- `anonymousSubjects`:
-  - Optional list of subject values that should be treated as anonymous even when the token
-    is otherwise valid (for example, a nil UUID subject injected by some gateways).
-      - When the JWT `sub` matches one of these values, the engine MUST NOT derive
-        `attributes.subjectId` from it.
+- JWT validation profiles define the default issuer/audience/JWKS settings and may carry defaults for:
+  - `mode`:
+    - `required` (default): a missing or invalid token SHOULD cause the request to be rejected (for example, 401/403); journeys and APIs typically place a `jwtValidate:v1` state at the start of each entry path and treat failures as authentication errors.
+    - `optional`: a missing token is allowed and treated as anonymous; an invalid token is still rejected. When no token is present, `context.auth.jwt` remains unset and no subject is derived.
+  - `anonymousSubjects`:
+    - Optional list of subject values that should be treated as anonymous even when the token is otherwise valid (for example, a nil UUID subject injected by some gateways).
+    - When the JWT `sub` matches one of these values, the engine MUST NOT derive `attributes.subjectId` from it.
 
 Subject mapping for journeys:
-      - When a JWT policy is attached:
-        - If the token is valid, `mode` is satisfied, and `sub` is not in `anonymousSubjects`,
-          the engine derives `attributes.subjectId` from the subject claim.
-  - If there is no token (and `mode` is `optional`) or only an “anonymous” token, then
-    `attributes.subjectId` remains unset.
+- When JWT validation succeeds (via `jwtValidate:v1` and the configured profile) and `sub` is not in `anonymousSubjects`, the engine derives `attributes.subjectId` from the subject claim.
+- If there is no token (and the effective `mode` is `optional`) or only an “anonymous” token, then `attributes.subjectId` remains unset.
 - This ensures:
   - Mixed-mode endpoints work without errors when called anonymously.
   - Anonymous tokens never pollute “my journeys” views or per-subject limits.
 
-This builds on ADR-0010 by still avoiding a first-class subject field and instead using
-generic attributes and HTTP security configuration.
+This builds on ADR-0010 by still avoiding a first-class subject field and instead using generic attributes and JWT validation configuration.
 
 ### 5. `MetadataLimits` configuration document
 

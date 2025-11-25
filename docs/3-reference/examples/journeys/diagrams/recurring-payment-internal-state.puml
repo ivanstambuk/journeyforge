@@ -11,7 +11,7 @@ state runPayment
 state updateScheduledState
 state scheduledDone
 
-configureAndSchedule --> prepareStartOutcome : task.kind: schedule\ncreates/updates schedule\n(start = runPayment)
+configureAndSchedule --> prepareStartOutcome : task.kind: schedule:v1\ncreates/updates schedule\n(start = runPayment)
 prepareStartOutcome --> completeConfigured : build startOutcome
 completeConfigured --> [*]
 
@@ -34,4 +34,3 @@ note right of runPayment
 end note
 
 @enduml
-

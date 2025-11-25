@@ -61,7 +61,7 @@ spec:
     requestOffer:
       type: task
       task:
-        kind: httpCall
+        kind: httpCall:v1
         operationRef: mortgages.requestRepricingOffer
         params:
           path:
@@ -149,7 +149,7 @@ spec:
     initiateRateLock:
       type: task
       task:
-        kind: httpCall
+        kind: httpCall:v1
         operationRef: mortgages.lockRate
         params:
           path:

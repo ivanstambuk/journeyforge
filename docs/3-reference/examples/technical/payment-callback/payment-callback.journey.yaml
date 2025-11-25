@@ -42,7 +42,7 @@ spec:
     authorize:
       type: task
       task:
-        kind: httpCall
+        kind: httpCall:v1
         operationRef: payments.authorizePayment
         params:
           path: { paymentId: "${context.paymentId}" }

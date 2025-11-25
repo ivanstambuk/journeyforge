@@ -159,7 +159,7 @@ spec:
               startKyc:
                 type: task
                 task:
-                  kind: httpCall
+                  kind: httpCall:v1
                   method: POST
                   url: https://kyc.example.com/checks/start
                   params:
@@ -186,7 +186,7 @@ spec:
               startKyb:
                 type: task
                 task:
-                  kind: httpCall
+                  kind: httpCall:v1
                   method: POST
                   url: https://kyb.example.com/checks/start
                   params:
@@ -208,7 +208,7 @@ spec:
               registryLookup:
                 type: task
                 task:
-                  kind: httpCall
+                  kind: httpCall:v1
                   method: GET
                   url: "https://registry.example.com/businesses/${context.business.registrationNumber}"
                   params:
@@ -225,7 +225,7 @@ spec:
               startCreditAndCompliance:
                 type: task
                 task:
-                  kind: httpCall
+                  kind: httpCall:v1
                   method: POST
                   url: https://risk.example.com/onboarding/start
                   params:

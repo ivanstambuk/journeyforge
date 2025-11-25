@@ -205,6 +205,21 @@ observability:
       - "token"
       - "authorization"
       - "cookie"
+
+  plugins:
+    default:
+      logLevel: error                 # error | warn | info | debug
+    byType:
+      jwtValidate:
+        logLevel: error
+      mtlsValidate:
+        logLevel: warn
+    byJourney:
+      auth-user-info:
+        logLevel: info
+    byState:
+      auth-user-info.validateJwt:
+        logLevel: debug
 ```
 
 ### 3.3 Production
@@ -246,5 +261,41 @@ observability:
 
 - Implementation MUST treat this runbook as a guide; the authoritative behavioural rules are in ADR-0025.
 - When adding new telemetry packs or attributes, update ADR-0025 (if the core set changes) and extend this runbook with example configuration keys.
+- Plugin logging behaviour and error detail are controlled via the `observability.plugins.*` keys illustrated above and MUST follow the logging policy in ADR-0025/ADR-0026; no plugin-specific telemetry knobs are exposed in the DSL.
 - Tooling and docs SHOULD avoid referencing internal configuration file formats where possible and instead refer to logical keys (for example `observability.core.enabled`, `observability.packs.httpClient.enabled`).
 
+## 5. Expressions telemetry
+
+Expression evaluation telemetry is governed by ADR‑0025 and ADR‑0027 and is exposed via the same `observability` tree. Engines SHOULD emit spans and/or metrics for expression evaluations when expression packs are enabled; a representative configuration shape:
+
+```yaml
+observability:
+  packs:
+    expressions:
+      enabled: true
+      attributes:
+        include:
+          - "expr.engine"          # e.g. "dataweave", "jsonata", "jolt", "jq"
+          - "expr.site"            # e.g. "predicate", "transform", "mapper", "errorMapper", "statusExpr"
+          - "expr.code"            # engine-specific error code on failures (e.g. DW_*, JN_*, JQ_*)
+          - "expr.limit_hit"       # boolean – true when a configured limit was hit
+          - "expr.limit_kind"      # e.g. "maxEvalMs", "maxOutputBytes"
+          - "expr.duration_ms"     # evaluation duration (coarse-grained)
+          - "expr.input_bytes"     # approximate size of materialised inputs
+          - "expr.output_bytes"    # approximate size of materialised output
+```
+
+Guidance:
+- Packs:
+  - Expression telemetry SHOULD be disabled by default in very small deployments and enabled selectively in staging/production when needed for debugging or optimisation.
+  - When enabled, it SHOULD respect the same sampling settings as core journey traces unless operators configure a more aggressive sample rate for specific journeys.
+- Attributes:
+  - `expr.engine` is the engine id used at the expression site (`dataweave`, `jsonata`, `jolt`, `jq`, etc.).
+  - `expr.site` is a coarse label for the expression context (for example `predicate`, `transform`, `mapper`, `errorMapper`, `statusExpr`); engines MAY choose not to emit it for all sites.
+  - `expr.code` is REQUIRED on failed evaluations and MUST match the engine-specific error code defined in the corresponding engine feature (for example `DW_PARSE_ERROR`, `JN_PATH_NOT_FOUND`).
+  - `expr.duration_ms`, `expr.input_bytes`, and `expr.output_bytes` SHOULD be coarse-grained to avoid leaking precise payload sizes where this is considered sensitive, and MAY be omitted entirely if not needed.
+  - `expr.limit_hit` and `expr.limit_kind` are OPTIONAL and used to signal when evaluations terminate due to configured limits (`maxEvalMs`, `maxOutputBytes`).
+- Privacy:
+  - Expression source text (`expr`) and materialised input/output values MUST NOT be recorded in telemetry by default.
+  - Engines MAY record coarse structural metadata (for example expression length buckets) but MUST NOT log raw expression strings or payloads as attributes or log messages.
+  - All expression telemetry is still subject to `observability.attributes.allowed` and `observability.attributes.redactAlways`; if any attribute key collides with a `redactAlways` entry, the engine MUST drop or redact it.

@@ -14,7 +14,7 @@
 
 This journey issues a single `GET` request to an upstream HTTP service, checks that the call succeeded, and then returns a structured HTTP result object to the caller. It is the smallest end-to-end example of:
 
-- Making an HTTP call via `task.kind: httpCall`.
+- Making an HTTP call via `task.kind: httpCall:v1`.
 - Branching on `context.api.ok`.
 - Surfacing the HTTP envelope as the journey’s final `output`.
  - Using `spec.platform.config` to inject an environment-specific `itemsApiBaseUrl` into the journey via `platform.config.itemsApiBaseUrl`.

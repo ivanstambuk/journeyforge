@@ -21,7 +21,7 @@ Model an async external process where:
 
 ## Relevant DSL features
 
-- `task.kind: httpCall` – start async jobs, probe health, and call fallback providers.
+- `task.kind: httpCall:v1` – start async jobs, probe health, and call fallback providers.
 - `webhook` – accept async callbacks for job completion.
 - `timer` – represent SLA windows and backoff delays.
 - `parallel` – race callback branches against SLA timers using `join.strategy: anyOf`.
@@ -169,7 +169,7 @@ waitBeforeRetry:
 retryPrimaryHealth:
   type: task
   task:
-    kind: httpCall
+    kind: httpCall:v1
     method: GET
     url: https://primary.example.com/health
     timeoutMs: 2000
@@ -206,4 +206,3 @@ The fallback path then starts a second async job and uses a `webhook` to complet
     - SLA-driven timeouts vs provider-driven failures.
 - Idempotence:
   - Providers should treat repeated start calls and callbacks as idempotent when possible; journeys should avoid assuming exactly-once delivery of callbacks.
-
