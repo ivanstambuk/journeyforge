@@ -35,10 +35,10 @@ HTTP codes, or overloaded `spec.outcomes` with concerns that are specific to `ki
 
 ## Decision
 
-For `kind: Api`, the DSL introduces an optional `spec.apiResponses` block that allows journeys to declaratively control
+For `kind: Api`, the DSL introduces an optional `spec.bindings.http.apiResponses` block that allows journeys to declaratively control
 HTTP status codes for both success and error responses via a unified rule table.
 
-- When `spec.apiResponses` is **omitted**:
+- When `spec.bindings.http.apiResponses` is **omitted**:
   - Success responses behave as today:
     - `phase = SUCCEEDED` produces HTTP 200.
     - The response body is derived from `context.<outputVar>` when `outputVar` is set on the terminal `succeed` state
@@ -50,7 +50,7 @@ HTTP status codes for both success and error responses via a unified rule table.
     - The response body MUST be:
       - Problem Details itself when `spec.errors.envelope` is omitted or `format: problemDetails`, or
       - The result of the configured `spec.errors.envelope` mapper when `format: custom` (one envelope per journey).
-- When `spec.apiResponses` is **present**:
+- When `spec.bindings.http.apiResponses` is **present**:
   - Journeys can provide an ordered list of rules that match on:
     - The terminal phase (`SUCCEEDED`/`FAILED`),
     - Optional error type (Problem `type`), and
@@ -73,7 +73,7 @@ This design:
   envelope via `spec.errors.envelope`), even when HTTP status varies per error.
 - Leaves the generic Journeys API contract unchanged.
 
-## Details – `spec.apiResponses` (kind: Api only)
+## Details – `spec.bindings.http.apiResponses` (kind: Api only)
 
 ### Shape
 
@@ -116,7 +116,7 @@ spec:
       FAILED: fromProblemStatus       # optional; defaults to “Problem.status or 500”
 ```
 
-- `spec.apiResponses` is only valid for `kind: Api`; it MUST be rejected on other kinds.
+- `spec.bindings.http.apiResponses` is only valid for `kind: Api`; it MUST be rejected on other kinds.
 - `rules` is an ordered list; the first rule whose `when` matches controls the status for that invocation.
 - `default` contains phase-specific fallbacks; when omitted, the defaults are:
   - `SUCCEEDED = 200`
@@ -175,14 +175,14 @@ Matching algorithm:
 
 ### Defaults and omission
 
-- When `spec.apiResponses` is omitted entirely:
+- When `spec.bindings.http.apiResponses` is omitted entirely:
   - `kind: Api` engines MUST behave as if:
     - `rules` were empty, and
     - `default.SUCCEEDED = 200`
     - `default.FAILED = fromProblemStatus`
   - This ensures that journeys that already conform to Problem Details semantics do not need any additional
     configuration.
-- When `spec.apiResponses.default` is omitted:
+- When `spec.bindings.http.apiResponses.default` is omitted:
   - Engines MUST apply the same implicit defaults as above.
 
 ### Interaction with `spec.errors` and error envelopes
@@ -191,23 +191,23 @@ Matching algorithm:
   - Engines MUST continue to treat RFC 9457 Problem Details as the canonical internal error model for `kind: Api`,
     consistent with ADR-0003 and the `spec.errors` section of the DSL reference.
 - `spec.errors.envelope`:
-  - `spec.apiResponses` only controls HTTP status; it does **not** change the shape of the error body.
+  - `spec.bindings.http.apiResponses` only controls HTTP status; it does **not** change the shape of the error body.
   - The error response body for `kind: Api` MUST follow the same rules as for journeys:
     - When `spec.errors.envelope` is omitted or `format: problemDetails`, the error body is the Problem object itself.
     - When `spec.errors.envelope.format: custom` is present, the error body is the result of that mapper applied to the
       canonical Problem object.
   - Engines MUST NOT vary the error envelope per caller or per rule; only the HTTP status may vary at runtime via
-    `spec.apiResponses`.
+    `spec.bindings.http.apiResponses`.
 
 ### Interaction with journeys and OpenAPI export
 
 - Journeys (`kind: Journey`):
-  - `spec.apiResponses` has no effect on the generic Journeys API; paths such as `/journeys/{journeyName}/start`,
+  - `spec.bindings.http.apiResponses` has no effect on the generic Journeys API; paths such as `/journeys/{journeyName}/start`,
     `/journeys/{journeyId}`, and `/journeys/{journeyId}/result` keep their existing status code semantics.
-  - Wrappers that adapt a journey outcome to an HTTP API MAY reuse the same `spec.apiResponses` pattern, but that is
+  - Wrappers that adapt a journey outcome to an HTTP API MAY reuse the same `spec.bindings.http.apiResponses` pattern, but that is
     out of scope for this ADR.
 - OpenAPI export (`kind: Api`):
-  - OpenAPI exporters MAY use `spec.apiResponses` to:
+  - OpenAPI exporters MAY use `spec.bindings.http.apiResponses` to:
     - Document the primary success status code(s) for the API endpoint.
     - Document common error status codes (for example 401, 403, 502) alongside the Problem-based or custom error
       envelope.
@@ -229,7 +229,7 @@ Positive:
 
 Negative / trade-offs:
 
-- `spec.apiResponses` introduces another configuration surface for authors to learn and tooling to validate.
+- `spec.bindings.http.apiResponses` introduces another configuration surface for authors to learn and tooling to validate.
 - Incorrect or overly complex rule sets could make it harder to reason about the exact status code an API will return
   for a given condition.
 - The mapping remains per journey; there is no cross-journey global policy layer in this ADR.

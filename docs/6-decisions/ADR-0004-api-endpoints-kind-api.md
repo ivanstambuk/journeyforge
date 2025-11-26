@@ -53,7 +53,7 @@ Shape:
 Execution semantics (`kind: Api`):
 - One HTTP request creates an ephemeral `context`, executes the state machine from `spec.start` until a terminal state, and returns a single HTTP response.
 - No `journeyId` is created or exposed; there are no status/result endpoints for `kind: Api`.
-- The request body is deserialised as JSON and used to initialise `context` (validated against `spec.input.schema` when present); `httpBindings.start` can further project headers into `context`.
+- The request body is deserialised as JSON and used to initialise `context` (validated against `spec.input.schema` when present); `spec.bindings.http.start` can further project headers into `context`.
 - On `succeed`:
   - The engine returns a 2xx response with the body taken from `context.<outputVar>` (when set) or the full `context` otherwise.
 - On `fail`:

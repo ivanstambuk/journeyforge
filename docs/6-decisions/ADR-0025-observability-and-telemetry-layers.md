@@ -79,7 +79,41 @@ Properties of extension packs:
 - Packs are **enabled purely via deployment configuration** (for example `observability.packs.httpClient: enabled`); the DSL and journey specs remain unchanged.
 - Packs may emit per-state or per-call spans and richer metrics but **must respect the privacy and redaction rules** defined below.
 
-### 3. Privacy, redaction, and attribute allowlists
+### 3. Engine event model and plugin hooks
+
+The engine exposes a small, semantic event model that observability layers subscribe to. This keeps:
+- Core execution semantics in the engine.
+- Telemetry export in dedicated, replaceable plugins.
+
+Representative internal events include:
+- `JourneyStarted` / `JourneyCompleted` / `JourneyFailed`.
+- `StateEntered` / `StateExited` (with state id and type).
+- `TaskStarted` / `TaskCompleted` / `TaskFailed` (with `task.kind`, state id).
+- `ExternalInputWaiting` / `ExternalInputReceived` (for `wait`/`webhook` states).
+
+Each event carries a **telemetry context** with:
+- Correlation:
+  - `journeyId` or logical run id (for APIs).
+  - `journeyName`, `journeyVersion`, `kind`.
+  - Current `phase` and, for completions, top-level `status` and `error.code` when present.
+- Timing:
+  - Event timestamp and optional duration for completed operations.
+- Minimal, non-sensitive attributes, consistent with the core attribute set described earlier.
+
+Observability packs (HTTP client, connectors, CLI, etc.):
+- Subscribe to this event stream.
+- Enrich events with pack-specific attributes (for example HTTP method/status for `httpCall:v1`, topic name for `kafkaPublish:v1`, schedule id for `schedule:v1`).
+- Map enriched events to concrete telemetry backends (traces, metrics, logs).
+
+Task plugins and bindings see a **telemetry handle** in their execution context (aligned with ADR‑0026 and the expression engine features):
+- They can attach pack-specific attributes and child spans/events via this handle.
+- They do not talk directly to exporters; all export is routed through the observability layer.
+
+This design allows:
+- New telemetry backends and packs to be added without touching the core engine.
+- Telemetry to see enough semantic information to be useful, without over-exposing payloads or `context`.
+
+### 4. Privacy, redaction, and attribute allowlists
 
 The telemetry design itself defines privacy and redaction guardrails:
 
@@ -100,7 +134,7 @@ The telemetry design itself defines privacy and redaction guardrails:
 
 These rules apply equally to metrics, traces, and logs.
 
-### 4. Configuration surface (no DSL hooks)
+### 5. Configuration surface (no DSL hooks)
 
 Telemetry is configured via engine/connector/CLI configuration and CI/build tooling, not via journey specs:
 
@@ -116,7 +150,7 @@ Telemetry is configured via engine/connector/CLI configuration and CI/build tool
 
 The DSL (`docs/3-reference/dsl.md`) and journey specs remain observability-agnostic; they only define behaviour and business semantics that telemetry *derives* from (journey names, phases, outcomes, error codes, etc.).
 
-### 5. OpenTelemetry alignment
+### 6. OpenTelemetry alignment
 
 The platform uses a **generic OpenTelemetry-style model**:
 
@@ -124,7 +158,7 @@ The platform uses a **generic OpenTelemetry-style model**:
 - Attribute keys follow OpenTelemetry conventions when they overlap (for example `http.method`, `http.status_code`, `exception.type`), and JourneyForge-specific attributes use a `journey.*` or `journeyforge.*` prefix.
 - The implementation MAY use different concrete exporters (Prometheus, OTLP/HTTP, OTLP/gRPC, logging-only) without changing the logical contract described in this ADR.
 
-### 6. Expression telemetry
+### 7. Expression telemetry
 
 Expression evaluations are observable only via engine/connector telemetry packs; the DSL does not expose expression-level telemetry controls.
 

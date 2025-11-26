@@ -1,0 +1,5 @@
+- [x] Update DSL reference (`docs/3-reference/dsl.md`) to introduce `spec.bindings.websocket` for `kind: Journey`.
+- [x] Extend ADR-0029 with a WebSocket binding sketch and clarify that it is DSL/API design only for now.
+- [x] Create Feature 017 spec (`docs/4-architecture/features/017/spec.md`) and plan/tasks.
+- [ ] Author a dedicated Journeys WebSocket API reference doc describing start/step/status/outcome frames.
+- [ ] Add examples that use `spec.bindings.websocket` alongside HTTP binding for representative journeys.

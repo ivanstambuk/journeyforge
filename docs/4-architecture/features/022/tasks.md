@@ -1,0 +1,5 @@
+- [x] Specify Telemetry SPI (events, sinks, handles) in `docs/4-architecture/features/022/spec.md`.
+- [ ] Add Telemetry SPI types to `journeyforge-runtime-core` and emit core events.
+- [ ] Implement logging sink and wire it via `observability.core.*` config.
+- [ ] Implement traces sink (OpenTelemetry) and metrics sink (Micrometer/Prometheus) as separate modules.
+- [ ] Add pack-specific enrichment for HTTP client, connectors, and CLI, controlled via `observability.packs.*`.

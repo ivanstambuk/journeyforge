@@ -17,11 +17,11 @@ Emit domain events to Kafka from a journey so other systems can react asynchrono
 
 ## Relevant DSL Features
 
-- `task` with `kind: eventPublish:v1` for Kafka event emission.
-- `eventPublish.transport: kafka` and `eventPublish.topic` to define the target topic.
-- DataWeave mappers for `eventPublish.key.mapper` and `eventPublish.value.mapper`.
-- Optional `eventPublish.headers` for record headers (for example `traceparent`, source, etc.).
-- `eventPublish.keySchemaRef` and `eventPublish.valueSchemaRef` to attach JSON Schemas to the key and payload.
+- `task` with `kind: kafkaPublish:v1` for Kafka event emission.
+- `topic` to define the target Kafka topic.
+- DataWeave mappers for `kafkaPublish` key/value (via `key` and `value.mapper`).
+- Optional `headers` for record headers (for example `traceparent`, source, etc.).
+- `keySchemaRef` and `valueSchemaRef` to attach JSON Schemas to the key and payload.
 - `succeed` to complete the journey without depending on event broker responses.
 
 ## Example – event-publish-kafka
@@ -58,28 +58,26 @@ spec:
     emitEvent:
       type: task
       task:
-        kind: eventPublish:v1
-        eventPublish:
-          transport: kafka
-          topic: orders.events
-          key:
-            mapper:
-              lang: dataweave
-              expr: |
-                context.orderId
-          value:
-            mapper:
-              lang: dataweave
-              expr: |
-                {
-                  eventType: "ORDER_UPDATED",
-                  orderId: context.orderId,
-                  amount: context.amount,
-                  status: context.status
-                }
-          headers:
-            traceparent: "${context.traceparent}"
-            source: "journeyforge"
+        kind: kafkaPublish:v1
+        topic: orders.events
+        key:
+          mapper:
+            lang: dataweave
+            expr: |
+              context.orderId
+        value:
+          mapper:
+            lang: dataweave
+            expr: |
+              {
+                eventType: "ORDER_UPDATED",
+                orderId: context.orderId,
+                amount: context.amount,
+                status: context.status
+              }
+        headers:
+          traceparent: "${context.traceparent}"
+          source: "journeyforge"
       next: done
 
     done:
@@ -88,7 +86,7 @@ spec:
 ```
 
 Notes:
-- `eventPublish` does not define `resultVar`, and the journey instance cannot branch on whether the Kafka publish succeeded or failed; it is a side effect.
+- `kafkaPublish:v1` does not define `resultVar`, and the journey instance cannot branch on whether the Kafka publish succeeded or failed; it is a side effect.
 - When configured, the engine validates the mapped payload against `valueSchemaRef` before publishing and integrates with a schema registry using the same schemas.
 
 Related files:

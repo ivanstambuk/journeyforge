@@ -61,19 +61,17 @@ spec:
       notify:
         type: task
         task:
-          kind: eventPublish
-          eventPublish:
-            transport: kafka
-            topic: order.compensation
-            value:
-              mapper:
-                lang: dataweave
-                expr: |
-                  {
-                    orderId: context.orderId,
-                    compensation: "completed",
-                    cause: outcome
-                  }
+          kind: kafkaPublish:v1
+          topic: order.compensation
+          value:
+            mapper:
+              lang: dataweave
+              expr: |
+                {
+                  orderId: context.orderId,
+                  compensation: "completed",
+                  cause: outcome
+                }
         next: done
 
       done:

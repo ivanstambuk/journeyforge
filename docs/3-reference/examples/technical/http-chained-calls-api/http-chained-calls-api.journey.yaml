@@ -5,9 +5,11 @@ metadata:
   version: 0.1.0
   description: Synchronous API that performs multiple HTTP calls and aggregates results.
 spec:
-  route:
-    path: /apis/http-chained-calls
-    method: POST
+  bindings:
+    http:
+      route:
+        path: /apis/http-chained-calls
+        method: POST
 
   apis:
     users:

@@ -4,13 +4,14 @@ metadata:
   name: auth-user-info
   version: 0.1.0
 spec:
-  httpBindings:
-    start:
-      headersToContext:
-        traceparent: traceparent
-      headersPassthrough:
-        - from: traceparent
-          to: traceparent
+  bindings:
+    http:
+      start:
+        headersToContext:
+          traceparent: traceparent
+        headersPassthrough:
+          - from: traceparent
+            to: traceparent
 
   apis:
     users: { openApiRef: apis/users.openapi.yaml }

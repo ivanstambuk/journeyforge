@@ -1,0 +1,4 @@
+- [x] Add `spec.bindings.function` to the DSL reference.
+- [x] Create Feature 021 spec/plan/tasks documents.
+- [ ] Document provider-specific mappings for AWS Lambda, GCP Cloud Functions, and Azure Functions.
+- [ ] Add examples showing deployments where a journey/API is exposed both via HTTP binding and as a cloud function.

@@ -29,7 +29,7 @@ Primary references:
 - Add `metadata.tags` to the DSL for `kind: Journey` and `kind: Api`, with clear semantics and limits.
 - Introduce instance‑level `journey.tags` and `journey.attributes` in the engine’s journey model and Journeys API, with reserved keys for subject/tenant/correlation.
 - Provide a `MetadataLimits` configuration document to externalise limits for definition tags, instance tags, and attributes.
-- Extend JWT HTTP security policies with `mode: required|optional` and `anonymousSubjects` to support mixed‑mode authentication and safe subject mapping.
+- Extend HTTP security policies under `spec.bindings.http.security` with `mode: required|optional` and `anonymousSubjects` to support mixed‑mode authentication and safe subject mapping.
 - Add an operator‑oriented `GET /journeys` listing endpoint with filters over journey name, phase, tags, and selected attributes, and keep room for a self‑service “my journeys” endpoint built on top of `subjectId`.
 
 ## Non-Goals
@@ -61,7 +61,7 @@ Problem:
 
 Proposed pattern:
 - On journey start, the engine:
-  - Validates the JWT using `spec.security.journeyPolicyRef` when a JWT policy is attached.
+- Validates the JWT using the configured HTTP security policy when a JWT policy is attached.
   - Extracts the subject (for example, `context.auth.jwt.claims.sub`) when present and not in the policy’s `anonymousSubjects` list.
   - Sets `attributes.subjectId` to that value internally (not visible in the start request contract). When no valid, non-anonymous subject is available (for example, anonymous tokens with an all-zero UUID or no token in an `optional` policy), `attributes.subjectId` remains unset.
   - Optionally sets `attributes.initiatedBy = "user"` and adds a `self-service` tag.

@@ -1,6 +1,6 @@
 # Journey – cache-user-profile
 
-> Cache-aware profile lookup that combines a transform pipeline with cacheGet/cachePut operations.
+> Cache-aware profile lookup that combines a transform pipeline with cache task plugin operations (`task.kind: cache:v1`).
 
 ## Quick links
 
@@ -16,7 +16,7 @@ See [cache-user-profile.md](../technical/cache-user-profile/cache-user-profile.m
 
 ## Summary
 
-Cache-aware profile lookup that combines a transform pipeline with cacheGet/cachePut operations.
+Cache-aware profile lookup that combines a transform pipeline with cache plugin operations (`cache:v1` get/put).
 
 ## Contracts at a glance
 

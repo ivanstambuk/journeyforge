@@ -38,28 +38,26 @@ spec:
     emitEvent:
       type: task
       task:
-        kind: eventPublish:v1
-        eventPublish:
-          transport: kafka
-          topic: orders.events
-          key:
-            mapper:
-              lang: dataweave
-              expr: |
-                context.orderId
-          value:
-            mapper:
-              lang: dataweave
-              expr: |
-                {
-                  eventType: "ORDER_UPDATED",
-                  orderId: context.orderId,
-                  amount: context.amount,
-                  status: context.status
-                }
-          headers:
-            traceparent: "${context.traceparent}"
-            source: "journeyforge"
+        kind: kafkaPublish:v1
+        topic: orders.events
+        key:
+          mapper:
+            lang: dataweave
+            expr: |
+              context.orderId
+        value:
+          mapper:
+            lang: dataweave
+            expr: |
+              {
+                eventType: "ORDER_UPDATED",
+                orderId: context.orderId,
+                amount: context.amount,
+                status: context.status
+              }
+        headers:
+          traceparent: "${context.traceparent}"
+          source: "journeyforge"
       next: done
 
     done:

@@ -75,7 +75,7 @@ Authoring guidance for actors:
 - Use between **2 and 5 actors** in the sequence diagram (for example client, operator UI, external systems, and the Journeys API).
 - Actors MAY be human (customer, operator) or non-human (payment provider, risk engine, core system), but there should be at least one client-side actor and the Journeys API.
 - Every actor shown MUST correspond to at least one explicit interaction with the journey:
-  - Either a call **from** the journey (for example `type: task` with `kind: httpCall:v1` or `eventPublish:v1` to that system), or
+  - Either a call **from** the journey (for example `type: task` with `kind: httpCall:v1` or `kafkaPublish:v1` to that system), or
   - A call **into** the journey (for example `start`/`status`/`result` endpoints or `wait`/`webhook` step calls).
 - Human ↔ external-system interactions that do not touch the journey MUST NOT be shown unless they directly lead to a call into the journey (for example a user action in an external system that triggers a webhook into the journey).
 - Every step in the Step overview table SHOULD appear as a labelled interaction in at least one diagram (sequence or activity) so integrators can see how to drive the journey over HTTP.

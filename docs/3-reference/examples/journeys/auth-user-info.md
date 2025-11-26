@@ -1,6 +1,6 @@
 # Journey – auth-user-info
 
-> JWT-authenticated user lookup using httpSecurity and httpBindings over the Journeys API.
+> JWT-authenticated user lookup using HTTP security policies and HTTP binding over the Journeys API.
 
 ## Quick links
 
@@ -16,7 +16,7 @@ See [auth-user-info.md](../technical/auth-user-info/auth-user-info.md).
 
 ## Summary
 
-JWT-authenticated user lookup using `jwtValidate:v1` and httpBindings over the Journeys API.
+JWT-authenticated user lookup using `jwtValidate:v1`, HTTP security policies, and HTTP binding over the Journeys API.
 
 ## Contracts at a glance
 

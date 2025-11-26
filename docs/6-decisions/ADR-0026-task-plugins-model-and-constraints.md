@@ -4,7 +4,7 @@ Date: 2025-11-25 | Status: Proposed
 
 ## Context
 
-JourneyForge now expresses all `type: task` states via plugin-backed `task.kind` identifiers of the form `<pluginType>:v<major>` (for example `httpCall:v1`, `eventPublish:v1`, `schedule:v1`, `jwtValidate:v1`). The DSL reference and Feature 011 describe this direction, but several cross-cutting aspects of the plugin model remain implicit:
+JourneyForge now expresses all `type: task` states via plugin-backed `task.kind` identifiers of the form `<pluginType>:v<major>` (for example `httpCall:v1`, `kafkaPublish:v1`, `schedule:v1`, `jwtValidate:v1`). The DSL reference and Feature 011 describe this direction, but several cross-cutting aspects of the plugin model remain implicit:
 
 - Execution model for plugins (synchronous vs asynchronous).
 - Where side effects and I/O are allowed to happen (engine connectors vs arbitrary libraries).
@@ -21,11 +21,11 @@ We adopt a constrained, spec-first plugin model for all `type: task` states that
 ### Plugin identification
 
 - All task plugins are identified in the DSL via `task.kind` values of the form `<pluginType>:v<major>`, where:
-  - `<pluginType>` is a non-empty string identifier (for example `httpCall`, `eventPublish`, `schedule`, `jwtValidate`).
+- `<pluginType>` is a non-empty string identifier (for example `httpCall`, `kafkaPublish`, `schedule`, `jwtValidate`).
   - `<major>` is a positive integer version.
 - Core behaviours are expressed as plugins using the same pattern; for example:
   - `httpCall:v1` – outbound HTTP task.
-  - `eventPublish:v1` – Kafka event publish.
+- `kafkaPublish:v1` – Kafka event publish.
   - `schedule:v1` – schedule binding creation/update.
 - The engine resolves `task.kind` into a plugin implementation via a registry keyed by `(pluginType, major)`.
 

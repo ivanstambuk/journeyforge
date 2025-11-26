@@ -91,13 +91,13 @@ API endpoints reuse the same logical JSON Schemas as journeys but without the `J
   - The exporter emits one OAS YAML per journey under `docs/3-reference/examples/oas/<journey>.openapi.yaml` using the canonical paths with `journeyName` constant baked in.
   - `info.title` is set to `JourneyForge – <journey>`; tags include `<journey>`.
 - For synchronous APIs (`kind: Api`):
-  - The exporter emits one OAS YAML per API under `docs/3-reference/examples/oas/<api>.openapi.yaml` using the canonical `/apis/{apiName}` path (or the explicit `spec.route.path`).
+  - The exporter emits one OAS YAML per API under `docs/3-reference/examples/oas/<api>.openapi.yaml` using the canonical `/apis/{apiName}` path (or the explicit `spec.bindings.http.route.path`).
   - `info.title` is set to `JourneyForge – <api> (Api)`; tags include `<api>`.
 
 ## Future work
 - Add per‑journey input/output JSON Schemas by sampling or from declared `spec.input.schema`/`spec.output.schema` in the spec.
 - Extend events to named signals for `wait`/webhook states when introduced.
-- Define a shared `ProblemDetails` schema and formalise how `kind: Api` exports error responses (including documenting status code mapping driven by `spec.apiResponses` and its Problem-Details-based defaults).
+- Define a shared `ProblemDetails` schema and formalise how `kind: Api` exports error responses (including documenting status code mapping driven by `spec.bindings.http.apiResponses` and its Problem-Details-based defaults).
 
 ## Schema integration and bundling
 - The DSL exposes inline JSON Schemas via:

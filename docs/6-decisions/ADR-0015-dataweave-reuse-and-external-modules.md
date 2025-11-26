@@ -589,12 +589,10 @@ states:
   publish_order_event:
     type: task
     task:
-      kind: eventPublish
-      eventPublish:
-        transport: kafka
-        topic: orders.events
-        value:
-          mapperRef: buildOrderEvent
+      kind: kafkaPublish:v1
+      topic: orders.events
+      value:
+        mapperRef: buildOrderEvent
     next: done
 ```
 
@@ -661,12 +659,10 @@ states:
   publish_audit:
     type: task
     task:
-      kind: eventPublish
-      eventPublish:
-        transport: kafka
-        topic: audit.events
-        value:
-          mapperRef: auditEventFromContext
+      kind: kafkaPublish:v1
+      topic: audit.events
+      value:
+        mapperRef: auditEventFromContext
     next: done
 ```
 

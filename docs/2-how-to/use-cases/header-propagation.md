@@ -14,8 +14,8 @@ Propagate inbound tracing or correlation headers (for example W3C / OpenTelemetr
 
 ## Relevant DSL Features
 
-- `spec.httpBindings.start.headersToContext` and `headersPassthrough`.
-- `spec.httpBindings.steps.*` for step‑level bindings.
+- `spec.bindings.http.start.headersToContext` and `headersPassthrough`.
+- `spec.bindings.http.steps.*` for step‑level bindings.
 - HTTP `task` headers.
 
 ## Example – Header interpolation

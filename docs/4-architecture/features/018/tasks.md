@@ -1,0 +1,5 @@
+- [x] Update DSL reference with `spec.bindings.grpc` for `kind: Api`.
+- [x] Create Feature 018 spec/plan/tasks documents.
+- [ ] Add a gRPC API reference doc describing services, methods, and message mappings.
+- [ ] Add at least one `kind: Api` example that includes both `spec.bindings.http.route` and `spec.bindings.grpc`.
+- [ ] Align OpenAPI and future gRPC exports so they are clearly two views over the same DSL definition.

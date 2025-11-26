@@ -21,7 +21,7 @@ There is no concept of journey initiation, status polling, or `journeyId` – fr
 ## Relevant DSL Features
 
 - `kind: Api` for synchronous, stateless HTTP endpoints.
-- `spec.route` for controlling the external path and method.
+- `spec.bindings.http.route` for controlling the external path and method.
 - `spec.apis` and `operationRef` for OpenAPI-bound HTTP tasks.
 - `task` (HTTP call) with structured result objects (`{status?, ok, headers, body, error?}`).
 - `choice` to branch on HTTP outcomes (for example `ok` and `status`).
@@ -40,9 +40,11 @@ metadata:
   name: http-chained-calls-api
   version: 0.1.0
 spec:
-  route:
-    path: /apis/http-chained-calls
-    method: POST
+  bindings:
+    http:
+      route:
+        path: /apis/http-chained-calls
+        method: POST
 
   apis:
     users:

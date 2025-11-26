@@ -249,7 +249,7 @@ In particular:
 
 This is **intentionally different** from `kind: Api` (ADR-0016), where:
 
-- Terminal failures are mapped to non-2xx HTTP responses based on Problem Details and `spec.apiResponses`.
+- Terminal failures are mapped to non-2xx HTTP responses based on Problem Details and `spec.bindings.http.apiResponses`.
 - HTTP status is part of the contract for classifying API success vs failure.
 
 For journeys, the semantic unit is the **journey outcome**, not the HTTP start call.

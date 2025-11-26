@@ -1,0 +1,4 @@
+- [x] Add `spec.bindings.cli` to the DSL reference for journeys and APIs.
+- [x] Create Feature 020 spec/plan/tasks documents.
+- [ ] Update CLI documentation to align with the conceptual binding model (input via stdin/file, JSON based on `spec.input.schema`, output as `JourneyOutcome`/API response).
+- [ ] Add examples or snippets showing typical CLI invocations for representative journeys/APIs.

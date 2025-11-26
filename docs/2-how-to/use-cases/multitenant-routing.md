@@ -17,7 +17,7 @@ Route requests to different upstream backends based on tenant identity:
 
 ## Relevant DSL Features
 
-- `httpBindings.start.headersToContext`.
+- `spec.bindings.http.start.headersToContext`.
 - `choice` based on `context.tenantId`.
 - HTTP `task` with different `operationRef` targets.
 
@@ -61,10 +61,11 @@ spec:
             message: { type: string }
           additionalProperties: true
       additionalProperties: true
-  httpBindings:
-    start:
-      headersToContext:
-        X-Tenant-Id: tenantId
+  bindings:
+    http:
+      start:
+        headersToContext:
+          X-Tenant-Id: tenantId
   start: routeTenant
   states:
     routeTenant:

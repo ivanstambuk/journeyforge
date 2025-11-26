@@ -21,7 +21,7 @@ Expose a journey/API that:
 - `jwtValidate:v1` – JWT validation task plugin (authN).
 - `context.auth.mtls.*` and `context.auth.jwt.*` – projected auth data for expressions.
 - `choice` – combined predicates over certificate metadata and JWT claims.
-- `httpBindings` – to propagate trace headers and other metadata downstream.
+- HTTP binding (`spec.bindings.http`) – to propagate trace headers and other metadata downstream.
 
 ## Example – Combined policy for admin clients
 
@@ -71,4 +71,3 @@ Notes:
   - `mtlsValidate:v1` and `jwtValidate:v1` handle authentication and projection into `context.auth.mtls.*` and `context.auth.jwt.*`.
   - `checkCombinedPolicy` expresses the combined authorisation rule as a predicate.
 - You can extend this pattern with additional predicates or subjourneys for different roles/tenants while keeping the core auth tasks reusable.
-

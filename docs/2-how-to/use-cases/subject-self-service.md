@@ -25,7 +25,7 @@ We want a pattern where:
 
 ## Relevant DSL Features
 
-- `spec.policies.httpSecurity` and `spec.security.journeyPolicyRef` for enforcing that only
+- HTTP security policies under `spec.bindings.http.security` for enforcing that only
   authenticated users can start journeys.
 - `transform` states for normalising identity from auth context into `context` (for example
   copying `context.auth.jwt.claims.sub`).

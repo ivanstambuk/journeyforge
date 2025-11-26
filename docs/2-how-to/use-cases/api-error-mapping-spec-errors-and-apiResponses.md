@@ -1,4 +1,4 @@
-# Use Case – `kind: Api` Error Mapping with `spec.errors` + `spec.apiResponses`
+# Use Case – `kind: Api` Error Mapping with `spec.errors` + `spec.bindings.http.apiResponses`
 
 Status: Draft | Last updated: 2025-11-22
 
@@ -19,7 +19,7 @@ This use case builds on:
   - Canonical Problem Details as the internal error model.
   - Optional per-source normalisers to build Problem objects from raw HTTP results.
   - A single envelope (Problem or custom) for all external error bodies per journey.
-- `spec.apiResponses` (kind: Api only):
+- `spec.bindings.http.apiResponses` (kind: Api only):
   - Declarative, ordered rules to map final `phase` + canonical Problem object + context to HTTP status codes.
   - Problem-Details-based defaults when omitted.
 
@@ -36,11 +36,11 @@ This use case builds on:
   - `spec.errors.normalisers` for HTTP result → Problem Details.
   - `spec.errors.envelope.format: problemDetails` or `custom` (single envelope per journey).
 - API response mapping (`kind: Api`):
-  - `spec.apiResponses.rules`:
+  - `spec.bindings.http.apiResponses.rules`:
     - `when.phase: SUCCEEDED | FAILED`.
     - Optional `when.errorType` (Problem `type`) and DW `predicate`.
     - `status` or `statusExpr` to set HTTP status.
-  - `spec.apiResponses.default`:
+  - `spec.bindings.http.apiResponses.default`:
     - `SUCCEEDED`: default 200.
     - `FAILED`: default Problem `status` or 500.
 
@@ -52,7 +52,7 @@ Journey definition (sketch): `http-custom-error-envelope-api.journey.yaml`
 - Calls a downstream Orders service.
 - Normalises non-2xx results into Problem Details via inline DW.
 - Exposes a custom error envelope derived from Problem.
-- Uses `spec.apiResponses` to:
+- Uses `spec.bindings.http.apiResponses` to:
   - Return 401/403 for security errors.
   - Return 502 for upstream 5xx.
   - Propagate 201/204 on success when present.
@@ -102,34 +102,36 @@ spec:
             status: payload.status default 500
           }
 
-  apiResponses:
-    rules:
-      - when:
-          phase: FAILED
-          errorType: "urn:subject-unauthenticated"
-        status: 401
-      - when:
-          phase: FAILED
-          errorType: "urn:subject-unauthorized"
-        status: 403
-      - when:
-          phase: FAILED
-          predicate:
-            lang: dataweave
-            expr: |
-              payload.error.status >= 500
-        status: 502
-      - when:
-          phase: SUCCEEDED
-          predicate:
-            lang: dataweave
-            expr: |
-              context.api.status == 201 or context.api.status == 204
-        statusExpr:
-          lang: dataweave
-          expr: context.api.status
-    default:
-      SUCCEEDED: 200
+  bindings:
+    http:
+      apiResponses:
+        rules:
+          - when:
+              phase: FAILED
+              errorType: "urn:subject-unauthenticated"
+            status: 401
+          - when:
+              phase: FAILED
+              errorType: "urn:subject-unauthorized"
+            status: 403
+          - when:
+              phase: FAILED
+              predicate:
+                lang: dataweave
+                expr: |
+                  payload.error.status >= 500
+            status: 502
+          - when:
+              phase: SUCCEEDED
+              predicate:
+                lang: dataweave
+                expr: |
+                  context.api.status == 201 or context.api.status == 204
+            statusExpr:
+              lang: dataweave
+              expr: context.api.status
+        default:
+          SUCCEEDED: 200
       FAILED: fromProblemStatus
 ```
 
@@ -155,7 +157,7 @@ States (sketch):
   - The outward error body is always either Problem or the custom envelope from `spec.errors.envelope.mapper`.
   - There is exactly one error envelope per journey.
 - HTTP status:
-  - `spec.apiResponses.rules` and defaults drive HTTP status codes for both success and failure:
+  - `spec.bindings.http.apiResponses.rules` and defaults drive HTTP status codes for both success and failure:
     - Security errors explicitly map to 401/403 via `errorType`.
     - Upstream 5xx map to 502 via a DW predicate over `payload.error.status`.
     - Successful 201/204 responses propagate upstream status via `statusExpr`.

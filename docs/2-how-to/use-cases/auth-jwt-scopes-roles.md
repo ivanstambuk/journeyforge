@@ -21,7 +21,7 @@ Expose a journey that:
 - `context.auth.jwt.*` – projected header/claims for expressions.
 - `choice` – predicates over JWT claims (scopes/roles/subject).
 - HTTP `task` with `operationRef` for downstream calls.
-- `httpBindings` – to propagate trace headers without repeating them in every state.
+- HTTP binding (`spec.bindings.http`) – to propagate trace headers without repeating them in every state.
 
 ## Example – JWT scopes/roles check before user lookup
 
@@ -34,10 +34,11 @@ metadata:
   name: auth-jwt-scopes
   version: 0.1.0
 spec:
-  httpBindings:
-    start:
-      headersToContext:
-        traceparent: traceparent
+  bindings:
+    http:
+      start:
+        headersToContext:
+          traceparent: traceparent
       headersPassthrough:
         - from: traceparent
           to: traceparent
@@ -74,5 +75,4 @@ spec:
 Notes:
 - `jwtValidate:v1` is responsible only for validating the token and projecting claims into `context.auth.jwt.*`.
 - The authZ rule lives in the `choice` predicate, which inspects `context.auth.jwt.claims.scope` to decide whether the caller may proceed.
-- Downstream user lookup is a normal `httpCall:v1` task that reads `context.auth.jwt.claims.sub` as the user id and propagates `traceparent` via `httpBindings`.
-
+- Downstream user lookup is a normal `httpCall:v1` task that reads `context.auth.jwt.claims.sub` as the user id and propagates `traceparent` via the HTTP binding (`spec.bindings.http`).

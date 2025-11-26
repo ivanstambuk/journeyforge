@@ -20,7 +20,7 @@ Expose a journey/API that:
 - `mtlsValidate:v1` – mTLS validation task plugin (authN).
 - `context.auth.mtls.*` – projected certificate metadata for expressions.
 - `choice` – predicates over `context.auth.mtls.subjectDn` / other fields.
-- `spec.policies.httpSecurity` – optional inbound mTLS policies when enforced at the HTTP surface.
+- HTTP security policies under `spec.bindings.http.security` – optional inbound mTLS policies when enforced at the HTTP surface.
 
 ## Example – mTLS-only subject check
 
@@ -61,4 +61,3 @@ Notes:
 - `mtlsValidate:v1` validates the client certificate and projects metadata into `context.auth.mtls.*`.
 - The journey uses `choice` to express a simple policy over `context.auth.mtls.subjectDn`.
 - On success, the journey can either return certificate metadata (as in the example) or continue to downstream tasks.
-

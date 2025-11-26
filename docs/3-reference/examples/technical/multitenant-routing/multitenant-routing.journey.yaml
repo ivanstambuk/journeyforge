@@ -38,10 +38,11 @@ spec:
               type: string
           additionalProperties: true
       additionalProperties: true
-  httpBindings:
-    start:
-      headersToContext:
-        X-Tenant-Id: tenantId
+  bindings:
+    http:
+      start:
+        headersToContext:
+          X-Tenant-Id: tenantId
   start: routeTenant
   states:
     routeTenant:

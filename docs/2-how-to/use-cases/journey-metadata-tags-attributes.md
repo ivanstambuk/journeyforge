@@ -18,11 +18,11 @@ We want to:
   - The request payload (body).
   - Named headers (`X-Tenant-Id`, `X-Channel`, etc.).
   - The W3C `baggage` header.
-- Do this in a spec-first way using `spec.metadata.bindings` plus existing DSL primitives (`context`, `httpBindings`, `transform`, `httpSecurity`), without assuming any implicit projection from `context` to attributes.
+- Do this in a spec-first way using `spec.metadata.bindings` plus existing DSL primitives (`context`, `spec.bindings.http`, `transform`, HTTP security policies), without assuming any implicit projection from `context` to attributes.
 
 This use case focuses on how journey definitions shape both:
 - `journey.attributes`, via `spec.metadata.bindings` evaluated once at journey start, reading directly from the start request, and
-- (optionally) `context`, via `httpBindings` and `transform` states where the journey’s business logic needs those fields.
+- (optionally) `context`, via `spec.bindings.http` and `transform` states where the journey’s business logic needs those fields.
 
 Any `transform` states shown below are for internal `context` shape only; they do not change how `journey.attributes` is populated.
 
@@ -30,14 +30,14 @@ Any `transform` states shown below are for internal `context` shape only; they d
 
 - `context` initialisation:
   - The start request body is deserialised as JSON and used as the initial `context` object.
-- `httpBindings` (DSL §17):
-  - `httpBindings.start.headersToContext` / `queryToContext` to bind inbound headers/query params into `context`.
+- HTTP binding (DSL §17):
+  - `spec.bindings.http.start.headersToContext` / `queryToContext` to bind inbound headers/query params into `context`.
 - `transform` states:
   - Use DataWeave to normalise values into well-known `context` fields for later use.
 - `metadata.tags` (DSL §2a and §2g):
   - Definition-level tags for journey definitions and `kind: Api` specs.
 - HTTP security (DSL §18):
-  - JWT/mTLS policies populate `context.auth.*` and can be used to derive `subjectId` and other identity attributes.
+  - JWT/mTLS policies and HTTP security policies populate `context.auth.*` and can be used to derive `subjectId` and other identity attributes.
 
 ## Example – From Payload (Order & Customer IDs + Channel Tag)
 
@@ -184,7 +184,7 @@ Resulting metadata (conceptual):
 }
 ```
 
-- If the journey logic also needs these values inside `context`, authors can add `httpBindings`
+- If the journey logic also needs these values inside `context`, authors can add HTTP binding (`spec.bindings.http`)
   and/or `transform` states as in the payload example; these are optional and do not affect
   when or how `journey.tags` / `journey.attributes` are populated.
 - Definition tags (`metadata.tags`) still classify the journey definition itself; bindings
@@ -261,7 +261,7 @@ Resulting metadata (conceptual):
 ```
 
 - If the journey logic also needs parsed baggage values inside `context`, authors can add
-  `httpBindings.start.headersToContext` plus a `transform` state (similar to the earlier
+  `spec.bindings.http.start.headersToContext` plus a `transform` state (similar to the earlier
   example) to produce `context.correlationId` and `context.experiment`; those steps remain
   orthogonal to how `journey.tags` and `journey.attributes` are computed.
 

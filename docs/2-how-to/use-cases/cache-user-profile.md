@@ -19,8 +19,7 @@ Avoid hitting a downstream user profile service on every request by:
 ## Relevant DSL Features
 
 - `transform` for context normalisation.
-- Cache resources under `spec.resources.caches`.
-- `task` kinds `cacheGet` and `cachePut`.
+- Cache task plugin `task.kind: cache:v1` for reading/writing cached entries.
 - HTTP `task` with `operationRef`.
 - `choice` and `succeed`.
 
@@ -38,12 +37,6 @@ spec:
   apis:
     users:
       openApiRef: apis/users.openapi.yaml
-  resources:
-    caches:
-      defaultCache:
-        kind: inMemory
-        maxEntries: 10000
-        ttlSeconds: 300
   input:
     schema:
       type: object
@@ -85,8 +78,8 @@ spec:
     readCache:
       type: task
       task:
-        kind: cacheGet
-        cacheRef: defaultCache
+        kind: cache:v1
+        operation: get
         key:
           mapper:
             lang: dataweave
@@ -135,8 +128,8 @@ spec:
     storeCache:
       type: task
       task:
-        kind: cachePut
-        cacheRef: defaultCache
+        kind: cache:v1
+        operation: put
         key:
           mapper:
             lang: dataweave

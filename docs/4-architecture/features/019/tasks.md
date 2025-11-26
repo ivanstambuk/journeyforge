@@ -1,0 +1,5 @@
+- [x] Update DSL reference to include `spec.bindings.queue` for `kind: Journey`.
+- [x] Create Feature 019 spec/plan/tasks documents.
+- [ ] Define engine/platform configuration examples for mapping logical channels to Kafka/SQS/NATS/etc.
+- [ ] Add at least one example journey that uses `spec.bindings.queue` to start instances from a message channel.
+- [ ] Add documentation describing how queue bindings interact with outbound `kafkaPublish:v1` and other event-publish plugins.

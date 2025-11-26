@@ -4,7 +4,7 @@ Status: Draft | Last updated: 2025-11-23
 
 ## Problem
 
-Emit domain events to Kafka using `task.kind: eventPublish:v1` with key/value mappers and JSON Schemas.
+Emit domain events to Kafka using `task.kind: kafkaPublish:v1` with key/value mappers and JSON Schemas.
 
 ## Example – event-publish-kafka
 

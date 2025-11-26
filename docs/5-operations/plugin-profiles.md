@@ -137,3 +137,32 @@ Semantics:
 
 Profiles are intended to be stable, operational configuration; changes to profiles may alter behaviour across multiple journeys that refer to them. For per-journey or per-state special cases, prefer DSL overrides on the relevant task.
 
+## 5. Cache plugin configuration (`cache:v1`)
+
+The cache task plugin uses a **single logical cache per deployment** and does not have per-profile configuration. Instead, engines expose a small provider-agnostic configuration block under `plugins.cache`:
+
+```yaml
+plugins:
+  cache:
+    provider: inMemory | redis | cloudCache   # one per deployment
+    defaultTtlSeconds: 300                    # default TTL when DSL omits ttlSeconds
+    maxMemoryBytes: 1073741824                # optional soft limit (bytes)
+    evictionPolicy: lru | lfu | ttl | random | noeviction
+    keyPrefix: "journeyforge:dev:"            # optional key namespace prefix
+
+    # provider-specific wiring
+    providerConfig:
+      redis:
+        uri: "redis://cache.example.com/0"
+        connectTimeoutMs: 100
+        readTimeoutMs: 200
+      inMemory: {}
+```
+
+Semantics:
+- `provider` is chosen once per deployment; DSL (`task.kind: cache:v1`) never mentions concrete technologies.
+- `defaultTtlSeconds` applies when a `cache:v1` task omits `ttlSeconds`; per-call `ttlSeconds` in the DSL overrides this value.
+- `maxMemoryBytes` and `evictionPolicy` describe desired cache behaviour under pressure; providers may approximate these according to their own capabilities.
+- `keyPrefix` namespaces all keys written by JourneyForge so multiple deployments can safely share the same physical cache.
+
+Provider-specific details live entirely under `providerConfig.*` and are outside the DSL; see ADR-0028 and the DSL reference (section 15) for the normative cache plugin contract.

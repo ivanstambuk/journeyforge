@@ -18,8 +18,8 @@ Expose a journey that:
 
 ## Relevant DSL Features
 
-- `spec.policies.httpSecurity` and `spec.security.*` for inbound auth.
-- `httpBindings` to project headers into `context`.
+- HTTP security policies under `spec.bindings.http.security` for inbound auth.
+- HTTP binding (`spec.bindings.http`) to project headers into `context`.
 - `transform` to normalise auth data into business fields.
 - HTTP `task` with `operationRef`.
 - `spec.policies.httpClientAuth` and `task.auth.policyRef` for outbound auth.
@@ -35,15 +35,16 @@ metadata:
   name: auth-user-info
   version: 0.1.0
 spec:
-  # Security policies: the engine validates JWT on start requests
-  # Bind relevant headers into context for tracing/correlation
-  httpBindings:
-    start:
-      headersToContext:
-        traceparent: traceparent
-      headersPassthrough:
-        - from: traceparent
-          to: traceparent
+  bindings:
+    http:
+      # Security policies: the engine validates JWT on start requests
+      # Bind relevant headers into context for tracing/correlation
+      start:
+        headersToContext:
+          traceparent: traceparent
+        headersPassthrough:
+          - from: traceparent
+            to: traceparent
 
   apis:
     users:

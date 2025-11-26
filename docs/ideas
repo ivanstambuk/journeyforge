@@ -1415,8 +1415,8 @@ stateMachine:
     MaybeFromCache:
       type: Task
       operation:
-        kind: cacheGet
-        cacheRef: factsCache
+        kind: cache        # cache:v1 in JourneyForge DSL
+        op: get
         keyExpr: "animalType & ':' & locale"   # JSONata/JSONPath over $.input
       resultPath: "$.cache"                    # ASL-style ResultPath
       next: CacheHit?
@@ -1478,8 +1478,8 @@ stateMachine:
     ToCache:
       type: Task
       operation:
-        kind: cachePut
-        cacheRef: factsCache
+        kind: cache
+        op: put
         keyExpr: "animalType & ':' & locale"
         valueExpr: "$.combined"
         ttlSeconds: 60
@@ -1496,7 +1496,7 @@ Core patterns:
 * **ASL-style state machine**: `startAt`, `states`, `type` = `Task`, `Choice`, `Parallel`, `Succeed`. ([AWS Documentation][2])
 * **Task operations**: `operation.kind` is your Datakit-style node type:
 
-  * `httpCall`, `cacheGet`, `cachePut`, `transform`, `ldap`, `jdbc`, `webhook`, etc.
+  * `httpCall`, `cache` (with get/put ops), `transform`, `ldap`, `jdbc`, `webhook`, etc.
 * **Data path semantics**: `resultPath`, `resultSelector`, `outputPath` echo ASL semantics. ([AWS Documentation][3])
 * **Query language**: `JSONata` or `JSONPath` as in the ASL spec extension. ([states-language.net][6])
 
@@ -1912,7 +1912,7 @@ orchestrator-runtime-service/  # journey-execution plane REST
 
 6. **v0.6 – Cache, transform, and Choice**
 
-   * Implement `cacheGet`, `cachePut` operations.
+   * Implement cache operations (get/put) via a cache task plugin.
    * `transform` with JSONata.
    * Full `Choice` semantics.
 

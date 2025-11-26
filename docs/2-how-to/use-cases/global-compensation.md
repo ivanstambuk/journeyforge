@@ -25,7 +25,7 @@ Model a journey that:
   - `mode: async | sync` to control whether callers wait for compensation.
   - `start` and `states` for the compensation state machine.
   - `context` and `outcome` bindings inside compensation states.
-- `task` (HTTP call) and `eventPublish` for performing compensating actions.
+- `task` (HTTP call) and `kafkaPublish:v1` for performing compensating actions.
 - `choice` and `fail` to express main journey success vs failure.
 
 ## Example – http-compensation
@@ -80,19 +80,17 @@ spec:
       notify:
         type: task
         task:
-          kind: eventPublish:v1
-          eventPublish:
-            transport: kafka
-            topic: orders.compensation
-            value:
-              mapper:
-                lang: dataweave
-                expr: |
-                  {
-                    orderId: context.orderId,
-                    terminationKind: outcome.terminationKind,
-                    error: outcome.error
-                  }
+          kind: kafkaPublish:v1
+          topic: orders.compensation
+          value:
+            mapper:
+              lang: dataweave
+              expr: |
+                {
+                  orderId: context.orderId,
+                  terminationKind: outcome.terminationKind,
+                  error: outcome.error
+                }
         next: done
 
       done:

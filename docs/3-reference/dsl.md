@@ -24,7 +24,7 @@ This document normatively defines the JourneyForge journey DSL (for `kind: Journ
 - [14. Transform State (DataWeave)](#dsl-14-transform-state)
 - [15. Cache Resources & Operations](#dsl-15-cache)
 - [16. Parallel State (branches with join)](#dsl-16-parallel-state)
-- [17. HTTP Bindings (Inbound)](#dsl-17-http-bindings)
+- [17. Inbound Bindings (spec.bindings)](#dsl-17-bindings)
 - [18. HTTP Security Policies (Auth)](#dsl-18-http-security-policies)
 - [19. Outbound HTTP Auth (httpClientAuth)](#dsl-19-outbound-http-auth)
 - [20. Named Outcomes (spec.outcomes)](#dsl-20-named-outcomes)
@@ -48,7 +48,7 @@ The DSL surface defines the following state types and configuration blocks. All 
 | State type / construct                    | Description                                      | Notes in spec                                          |
 |------------------------------------------|--------------------------------------------------|--------------------------------------------------------|
 | `task` (`kind: httpCall:v1`)             | HTTP call with structured result recording       | Fully specified, including `operationRef` and errors   |
-| `task` (`kind: eventPublish:v1`)         | Publish events to an external transport          | Fully specified for Kafka in this version              |
+| `task` (`kind: kafkaPublish:v1`)         | Publish events to a Kafka topic                  | Fully specified for Kafka in this version              |
 | `task` (`kind: schedule:v1`)             | Create/update schedule bindings for future runs  | Fully specified for `kind: Journey`                    |
 | `task` (`kind: jwtValidate:v1`)          | JWT validation and claim projection              | Core task plugin; see section 18.6                     |
 | `task` (`kind: mtlsValidate:v1`)         | mTLS client certificate validation               | Core task plugin; see section 18.7                     |
@@ -61,8 +61,9 @@ The DSL surface defines the following state types and configuration blocks. All 
 | `timer`                                  | Durable time-based delay within a journey        | Journeys only; non-interactive, see section 12.3       |
 | `subjourney`                             | Local subjourney call within one spec            | Fully specified for v1; local, synchronous only (ADR-0020) |
 | `parallel`                               | Parallel branches with join                      | DSL shape + join contract defined                      |
-| Cache resources/tasks (`cacheGet`/`cachePut`) | Named caches and cache operations           | DSL shape defined; cache semantics described in section 15 |
-| Policies (`httpResilience`, `httpSecurity`, `httpClientAuth`) | Resiliency/auth configuration (inbound & outbound) | Configuration surface defined; policy semantics described in sections 17–19 |
+| `task` (`kind: cache:v1`)                | Cache lookup/store against a global cache   | DSL shape defined; cache semantics described in section 15 |
+| `task` (`kind: xmlDecode:v1`)            | Decode XML string in context into JSON      | DSL shape defined; semantics described in section 5.3      |
+| Policies (`httpResilience`, HTTP security, `httpClientAuth`) | Resiliency/auth configuration (inbound & outbound) | Configuration surface defined; policy semantics described in sections 17–19 |
 
 <a id="dsl-2-top-level-shape"></a>
 ## 2. Top-level shape
@@ -156,6 +157,8 @@ spec:                           # required
       start: <stateId>          # required for each subjourney
       states:                   # required: map<string, State> for the subjourney
         <stateId>: <State>
+  bindings:                     # optional: map<string, BindingConfig>
+    http: <HttpBindingConfig>   # HTTP inbound binding; see section 17
 ```
 
 Constraints
@@ -175,6 +178,10 @@ Constraints
   - SHOULD use short, human-readable identifiers (recommended `kebab-case`, for example `self-service`, `kyc`, `financial`).
   - MUST respect the maximum count configured via the `MetadataLimits` document (see section 21); tools SHOULD treat specs that exceed this as validation errors.
 - `spec.states` must contain `spec.start`.
+- `spec.bindings`, when present:
+  - MUST be a mapping from binding ids to binding configuration objects.
+  - MAY contain an `http` entry describing the HTTP inbound binding for the definition (see section 17).
+  - MUST NOT contain entries for bindings that are not supported by the current DSL version or engine implementation.
 - `spec.subjourneys`, when present:
   - Defines local subjourney graphs that are only visible within the same spec.
   - Keys under `spec.subjourneys` are local identifiers (for example `collectShipping`, `riskAndKyc`) and MUST be unique within that map.
@@ -212,7 +219,7 @@ The semantics of `succeed`/`fail` for journeys are defined in sections 5.4–5.7
 API endpoints reuse the same state machine model but are exposed as synchronous, stateless HTTP endpoints:
 - HTTP surface:
   - Canonical base path: `/api/v1/apis/{apiName}`.
-  - The actual path and method are controlled by `spec.route` (see below).
+  - The actual path and method are controlled by the HTTP binding (`spec.bindings.http.route`, see below).
 - Call model:
   - One HTTP request creates an ephemeral context, executes from `spec.start` until a terminal state, and returns a single HTTP response.
   - No `journeyId` is created or exposed; there are no status/result polling endpoints for `kind: Api`.
@@ -227,39 +234,43 @@ metadata:
   version: <semver>
   description: <string>         # optional; human-readable summary
 spec:
-  route:                        # optional; controls REST surface
-    path: <string>              # e.g. /apis/get-user-public; defaults to /apis/{metadata.name}
-    method: <string>            # e.g. POST; the initial version supports POST only
+  bindings:                     # optional; controls inbound bindings such as HTTP
+    http:
+      route:                    # optional; controls HTTP surface
+        path: <string>          # e.g. /apis/get-user-public; defaults to /apis/{metadata.name}
+        method: <string>        # e.g. POST; the initial version supports POST only
   input:                        # optional but strongly recommended
     schema: <JsonSchema>        # inline JSON Schema (2020-12) for request body
   output:                       # optional but strongly recommended
     schema: <JsonSchema>        # inline JSON Schema (2020-12) for successful response body
-  apiResponses:                 # optional; HTTP status mapping rules for kind: Api only
-    rules:
-      - when:
-          phase: FAILED
-          errorType: <string>   # optional; Problem.type to match
-          predicate:            # optional; expression predicate over context + error
-            lang: <engineId>    # e.g. dataweave
-            expr: <expr>
-        status: <integer>       # literal HTTP status code
-        # or:
-        # statusExpr:
-        #   lang: <engineId>
-        #   expr: <expr>        # expression that evaluates to an HTTP status code
-    default:                    # optional; per-phase fallbacks when no rule matches
-      SUCCEEDED: 200            # optional; defaults to 200 when omitted
-      FAILED: fromProblemStatus # optional; defaults to Problem.status or 500 when omitted
+  bindings:
+    http:
+      apiResponses:             # optional; HTTP status mapping rules for kind: Api only
+        rules:
+          - when:
+              phase: FAILED
+              errorType: <string>   # optional; Problem.type to match
+              predicate:            # optional; expression predicate over context + error
+                lang: <engineId>    # e.g. dataweave
+                expr: <expr>
+            status: <integer>       # literal HTTP status code
+            # or:
+            # statusExpr:
+            #   lang: <engineId>
+            #   expr: <expr>        # expression that evaluates to an HTTP status code
+        default:                    # optional; per-phase fallbacks when no rule matches
+          SUCCEEDED: 200            # optional; defaults to 200 when omitted
+          FAILED: fromProblemStatus # optional; defaults to Problem.status or 500 when omitted
   start: <stateId>
   states:
     <stateId>: <State>
 ```
 
 Constraints for `kind: Api`
-- `spec.route.path`:
+- `spec.bindings.http.route.path`:
   - If omitted, the canonical path is `/apis/{metadata.name}` underneath the common base `/api/v1`.
   - MUST be an absolute path starting with `/` and without a host.
-- `spec.route.method`:
+- `spec.bindings.http.route.method`:
   - If omitted, defaults to `POST`.
   - The initial version supports `POST` only; future versions MAY allow `GET`/`PUT` where semantics are clear.
 - State surface:
@@ -273,7 +284,7 @@ Constraints for `kind: Api`
 Context and results for `kind: Api`
 - Context initialisation:
   - The HTTP request body is deserialised as JSON and used to initialise the journey `context` for that invocation (subject to `spec.input.schema` validation, when present).
-  - `httpBindings.start` MAY further project headers into `context` and/or provide outbound header defaults.
+  - `spec.bindings.http.start` MAY further project headers into `context` and/or provide outbound header defaults.
 - Successful responses:
   - Reaching `succeed` terminates execution and produces a 2xx HTTP response.
   - The response body is taken from `context.<outputVar>` when `outputVar` is set on the `succeed` state; otherwise the full `context` is used.
@@ -283,12 +294,12 @@ Context and results for `kind: Api`
   - The structure of the error payload for a given journey or API MUST follow the journey’s error configuration:
     - When `spec.errors.envelope` is omitted or uses `format: problemDetails`, the error body MUST use the Problem Details shape.
     - When `spec.errors.envelope.format: custom` is present, the error body MUST be produced by the journey’s configured envelope mapper.
-  - HTTP status code selection for `kind: Api` is controlled by `spec.apiResponses` when present:
-    - Engines MUST evaluate `spec.apiResponses.rules` in order; the first rule whose `when` clause matches the terminal phase and (for failures) the canonical Problem object determines the HTTP status via `status` or `statusExpr`.
-    - When `spec.apiResponses` is omitted or when no rule matches:
+  - HTTP status code selection for `kind: Api` is controlled by `spec.bindings.http.apiResponses` when present:
+    - Engines MUST evaluate `spec.bindings.http.apiResponses.rules` in order; the first rule whose `when` clause matches the terminal phase and (for failures) the canonical Problem object determines the HTTP status via `status` or `statusExpr`.
+    - When `spec.bindings.http.apiResponses` is omitted or when no rule matches:
       - For `phase = SUCCEEDED`, the engine MUST use HTTP 200.
       - For `phase = FAILED`, the engine MUST use the Problem `status` field when present and valid, or 500 when absent.
-  - The error envelope itself remains governed by `spec.errors.envelope` and MUST be uniform for a given journey or API; `spec.apiResponses` MUST NOT change the error body shape, only the HTTP status code.
+  - The error envelope itself remains governed by `spec.errors.envelope` and MUST be uniform for a given journey or API; HTTP status mapping (`spec.bindings.http.apiResponses`) MUST NOT change the error body shape, only the HTTP status code.
 
 ### 2.3 Defaults (spec.defaults)
 
@@ -400,7 +411,7 @@ Semantics
   - When `spec.execution.maxDurationSec` is present, it defines the maximum wall-clock time (in whole seconds) that a single journey or API invocation is allowed to execute from start to terminal outcome.
   - The timer starts when:
     - `kind: Journey`: the journey is accepted by the Journeys API `start` endpoint.
-    - `kind: Api`: the HTTP request is accepted by the API endpoint (for example `/api/v1/apis/{apiName}` or `spec.route.path`).
+    - `kind: Api`: the HTTP request is accepted by the API endpoint (for example `/api/v1/apis/{apiName}` or `spec.bindings.http.route.path` when present).
   - Engine implementations MUST treat reaching this deadline as a failure even if the state machine has not yet reached a terminal `succeed`/`fail` state.
 - Interaction with per-state timeouts:
   - For blocking operations that already have a timeout (`httpCall.timeoutMs`, `wait.timeoutSec`, `webhook.timeoutSec`), the engine SHOULD clamp the effective timeout to the remaining global budget.
@@ -474,8 +485,7 @@ spec:
       notify:
         type: task
         task:
-          kind: eventPublish:v1
-          transport: kafka
+          kind: kafkaPublish:v1
           topic: order.compensation
           value:
             mapper:
@@ -993,40 +1003,54 @@ Validation
   - When absent, and when `spec.policies.httpClientAuth.default` is set, the engine MAY use the default policy as if `auth.policyRef` were set to that id.
   - When neither a task-level `auth.policyRef` nor a usable default can be resolved, the request is sent without additional outbound auth (subject to implementation defaults).
 - HTTP outcomes (status/timeouts) do not terminate execution; you must branch explicitly. In `notify` mode the journey instance cannot branch on call outcomes because they are not observable.
-### 5.2 `task` (event publish – `eventPublish:v1`)
+### 5.2 `task` (Kafka publish – `kafkaPublish:v1`)
 
-In addition to HTTP calls, `task` can publish events to external transports such as Kafka.
+In addition to HTTP calls, `task` can publish events to Kafka topics via the `kafkaPublish:v1` task plugin.
 
 ```yaml
 type: task
 task:
-  kind: eventPublish:v1
-  transport: kafka                 # initial implementation: only "kafka" is supported
-  topic: orders.events             # required
-  key:                             # optional – mapper for Kafka key
+  kind: kafkaPublish:v1
+  connectionSecretRef: secret://kafka/connections/default   # optional – Kafka connection config
+  topic: orders.events                                      # required – Kafka topic name
+
+  # Optional key – literal/interpolated string OR mapper object
+  key: "${context.orderId}"
+  # or:
+  # key:
+  #   mapper:
+  #     lang: <engineId>                                    # e.g. dataweave
+  #     expr: <expression>
+
+  # Required payload – mapper for event value
+  value:
     mapper:
-      lang: <engineId>             # e.g. dataweave
+      lang: <engineId>                                      # e.g. dataweave
       expr: <expression>
-  value:                           # required – mapper for event payload
-    mapper:
-      lang: <engineId>             # e.g. dataweave
-      expr: <expression>
-  headers:                         # optional – Kafka record headers
+
+  # Optional Kafka record headers – values are strings with interpolation
+  headers:
     <k>: <string|interpolated>
-  keySchemaRef: <string>           # optional – JSON Schema for the key
-  valueSchemaRef: <string>         # optional but recommended – JSON Schema for the payload
+
+  # Optional JSON Schemas for key and value
+  keySchemaRef: <string>                                    # optional – JSON Schema for the key
+  valueSchemaRef: <string>                                  # optional but recommended – JSON Schema for the payload
 next: <stateId>
 ```
 
 Semantics
-- Transport and topic:
-  - `transport` identifies the event transport; in the initial implementation it MUST be `kafka`.
-  - `topic` is the Kafka topic name; cluster/connection details are provided out of band by the engine and its configuration.
+- Connection and topic:
+  - `connectionSecretRef` (optional) is a `secretRef` that identifies an engine-managed Kafka connection configuration (bootstrap servers, TLS/SASL/OAUTH/mTLS settings, client id, etc.).
+  - When `connectionSecretRef` is omitted, the engine MUST use its configured default Kafka connection for `kafkaPublish:v1`.
+  - `topic` is the Kafka topic name; it MUST be a non-empty string. Cluster/connection details and authentication are provided entirely by the engine via the resolved connection configuration; they never appear in the DSL.
 - Key and value:
-  - `key.mapper` (when present) is evaluated with `context` bound to the current journey context; the result is serialised according to engine configuration (typically string/bytes) and used as the Kafka record key.
-  - `value.mapper` is required and produces the event payload object; engines typically serialise this as JSON.
+  - `key` MAY be either:
+    - A string value (including interpolated strings) that is evaluated against `context` and serialised according to engine configuration (typically string/bytes), or
+    - An object with a `mapper` as shown above; in that case, the mapper is evaluated with `context` bound to the current journey context and the result is serialised and used as the Kafka record key.
+  - `value` is required and MUST contain a `mapper` object; the mapper is evaluated with `context` bound to the current journey context and produces the event payload object. Engines typically serialise this as JSON before publishing.
 - Headers:
   - `headers` is an optional map from header name to interpolated string value; values are evaluated against `context` and attached as Kafka record headers.
+  - Header values MUST NOT contain raw secrets; secret material is always resolved via `secretRef` in engine configuration, not in DSL specs.
 - Schemas:
   - `keySchemaRef` (optional) points to a JSON Schema that describes the logical shape of the key. Engine implementations and tooling MAY use this for validation or schema registry integration.
   - `valueSchemaRef` (optional but recommended) points to a JSON Schema that describes the event payload. When present, engines SHOULD validate the mapped payload against this schema before publishing and MAY register it with an event/schema registry.
@@ -1035,17 +1059,77 @@ Semantics
   - On publish failures after any configured retries, implementations MAY treat this as an engine execution error (failing the journey/API call); the DSL does not surface partial success states.
 
 Validation
-- `task.kind` for event publish MUST be `eventPublish:v1` in this version.
-- For `eventPublish:v1`:
-  - `transport` is required and must be `kafka`.
-  - `topic` is required and must be a non-empty string.
-  - `value` is required and must contain a `mapper` object with `lang` set to a supported expression engine id (for example `dataweave`) and an inline `expr`.
-  - `key` (when present) must contain a `mapper` object with `lang` set to a supported expression engine id and an inline `expr`.
-  - `headers` (when present) must be a map of header names to string or interpolated string values.
-  - `keySchemaRef` and `valueSchemaRef` (when present) must be non-empty strings referring to JSON Schema documents.
-- `resultVar`, `errorMapping`, and `resiliencePolicyRef` MUST NOT be used with `eventPublish:v1`; event publishes do not produce structured results for branching or error mapping.
+- `task.kind` for Kafka publish MUST be `kafkaPublish:v1` in this version.
+- For `kafkaPublish:v1`:
+  - `topic` is required and MUST be a non-empty string.
+  - `value` is required and MUST contain a `mapper` object with `lang` set to a supported expression engine id (for example `dataweave`) and an inline `expr`.
+  - `key`, when present:
+    - MAY be a string value (including interpolated strings), or
+    - MAY be an object containing a `mapper` with `lang` set to a supported expression engine id and an inline `expr`.
+  - `headers`, when present, MUST be a map of header names to string or interpolated string values.
+  - `keySchemaRef` and `valueSchemaRef`, when present, MUST be non-empty strings referring to JSON Schema documents.
+  - `connectionSecretRef`, when present, MUST be a `secretRef` string; when absent, engines MUST fall back to a configured default connection.
+- `resultVar`, `errorMapping`, and `resiliencePolicyRef` MUST NOT be used with `kafkaPublish:v1`; Kafka publishes do not produce structured results for branching or error mapping.
 
-### 5.3 `task` (schedule – `schedule:v1`)
+### 5.3 `task` (XML decode – `xmlDecode:v1`)
+
+`task.kind: xmlDecode:v1` allows journeys to decode XML strings stored in `context` into JSON values that the rest of the DSL can work with. It is a pure transformation: there is no external I/O; the plugin only reads from and writes to `context`.
+
+```yaml
+type: task
+task:
+  kind: xmlDecode:v1
+
+  # Source – required: context field containing XML as a string
+  sourceVar: rawXml                    # context.rawXml must be a string
+
+  # Target – where to write the decoded JSON
+  target:
+    kind: context                      # context | var
+    path: input                        # when kind == context; dot-path in context
+  resultVar: parsedXml                 # when kind == var; name under context.resultVar
+next: <stateId>
+```
+
+Semantics
+- Source:
+  - The plugin reads `context.<sourceVar>`; at runtime this MUST be a string containing XML.
+  - If the value is absent or not a string, the plugin MUST fail the task with a clear error mapped to the canonical error model.
+- Decode:
+  - The plugin parses the XML string using the engine’s XML parser.
+  - It maps the parsed XML tree to a JSON value using a deterministic XML→JSON mapping defined by the engine (for example element/attribute handling, text nodes, and arrays). This mapping is implementation-defined but MUST be documented and stable.
+- Target:
+  - When `target.kind == context` (default):
+    - If `target.path` is provided:
+      - The decoded JSON value is written at `context.<path>`, overwriting any existing value.
+    - If `target.path` is omitted:
+      - The decoded JSON value MUST be an object and replaces the entire `context`.
+  - When `target.kind == var`:
+    - The decoded JSON value MAY be any JSON value (object, array, primitive) and is stored under `context.<resultVar>`. Other context fields remain unchanged.
+- Control flow:
+  - On successful decode, execution continues to `next`.
+  - On parse/mapping failure, the plugin fails the task; the engine maps this to a Problem Details error (for example `type: "urn:xml-decode:parse-error"`) consistent with ADR‑0003 and ADR‑0026.
+
+Validation
+- `task.kind` for XML decode MUST be `xmlDecode:v1` in this version.
+- `sourceVar`:
+  - Required; MUST be a non-empty identifier.
+  - At runtime, `context.<sourceVar>` MUST be a string; engines SHOULD treat non-string values as a validation/runtime error.
+- `target.kind`:
+  - When omitted, defaults to `context`.
+  - When `kind: context` and `target.path` is omitted, the decoded value MUST be an object.
+- `resultVar`:
+  - Required when `target.kind == var`.
+  - MUST match the usual identifier pattern (`[A-Za-z_][A-Za-z0-9_]*`).
+
+Usage guidance
+- Inbound XML via HTTP:
+  - Authors MAY set up journeys that accept XML payloads by modelling the raw payload as a string in `context` (for example via an adapter or by treating the initial context as a string) and then using `xmlDecode:v1` as an early state to obtain a JSON representation.
+  - Subsequent `choice`/`transform` states should operate on the decoded JSON under `context`.
+- XML responses from HTTP tasks:
+  - When an HTTP task (`httpCall:v1`) returns XML in `context.<resultVar>.body`, a subsequent `xmlDecode:v1` state can decode that string into JSON for further processing.
+
+### 5.4 `task` (schedule – `schedule:v1`)
 
 `task.kind: schedule:v1` allows an interactive journey instance to create or update a **schedule binding** that will trigger future, non-interactive runs of the same journey starting from a specific state, with evolving `context` across runs.
 
@@ -1178,7 +1262,7 @@ Validation
 
 #### Task plugins
 
-All `task` states are implemented via plugins. The DSL expresses both core behaviours (`httpCall:v1`, `eventPublish:v1`, `schedule:v1`) and custom behaviours (for example `jwtValidate:v1`) using the same `task.kind: <pluginType>:v<major>` pattern.
+All `task` states are implemented via plugins. The DSL expresses both core behaviours (`httpCall:v1`, `kafkaPublish:v1`, `schedule:v1`) and custom behaviours (for example `jwtValidate:v1`) using the same `task.kind: <pluginType>:v<major>` pattern.
 
 ```yaml
 type: task
@@ -1194,11 +1278,11 @@ Shape
 - All tasks use the same `type: task` wrapper and `task` block.
 - `task.kind`:
   - MUST have the form `<pluginType>:v<major>` where:
-    - `<pluginType>` is a non-empty identifier chosen by the plugin provider (for example `httpCall`, `eventPublish`, `schedule`, `jwtValidate`, `mtlsValidate`).
+    - `<pluginType>` is a non-empty identifier chosen by the plugin provider (for example `httpCall`, `kafkaPublish`, `schedule`, `jwtValidate`, `mtlsValidate`).
     - `<major>` is a positive integer (major version). Minor and patch versions are handled by engine/plugin wiring and are not expressed in the DSL.
   - Core plugin types for this version are:
     - `httpCall:v1` – HTTP call with structured result recording (section 5.1).
-    - `eventPublish:v1` – Event publish to Kafka (section 5.2).
+    - `kafkaPublish:v1` – Kafka event publish (section 5.2).
     - `schedule:v1` – Schedule binding creation/update (section 5.3).
     - `jwtValidate:v1` – JWT validation task plugin (section 18.6).
     - `mtlsValidate:v1` – mTLS client certificate validation task plugin (section 18.7).
@@ -1530,7 +1614,7 @@ spec:
 - No persistence/resume across process restarts.
 - No dynamic parallel loops / map state: the DSL does not support runtime‑determined fan‑out into N parallel branches or step endpoints (for example “callback‑0 … callback‑N‑1”). Patterns such as “wait for N callbacks” are expressed via a single external‑input state (`wait`/`webhook`) that can be revisited in a loop, using counters/aggregates in `context` to decide when all expected callbacks have been processed. See ADR‑0021 for rationale and loop pattern examples.
 
-Secrets & `secretRef`: Secrets in the DSL are referenced only via `secretRef` fields (for example in webhook security and outbound HTTP client-auth policies and any future secret-consuming policies or task kinds). Engines resolve `secretRef` values against an implementation-defined secret store; raw secret material is never exposed to DataWeave expressions, interpolation, `context`, or logs.
+Secrets & `secretRef`: Secrets in the DSL are referenced only via `secretRef` fields (for example in webhook security, outbound HTTP client-auth policies, Kafka connection configuration for `kafkaPublish:v1`, and any future secret-consuming policies or task kinds). Engines resolve `secretRef` values against an implementation-defined secret store; raw secret material is never exposed to DataWeave expressions, interpolation, `context`, or logs.
 
 <a id="dsl-8-naming-and-terminology"></a>
 ## 8. Naming & terminology
@@ -2104,47 +2188,34 @@ fail_with_problem:
 
 
 <a id="dsl-15-cache"></a>
-## 15. Cache Resources & Operations
+## 15. Cache Task Plugin (`cache:v1`)
 
-Caches are modelled as named resources plus cache-focused task kinds. This section defines the configuration and wiring; concrete cache implementations and eviction behaviour belong to the engine.
+The cache task plugin provides a simple, cross-provider cache surface:
+- DSL exposes a single logical cache per deployment via `task.kind: cache:v1`.
+- The engine configures the concrete cache provider (in-memory, Redis, cloud cache, etc.) and its operational knobs.
 
-### 15.1 Cache resources
-
-```yaml
-spec:
-  resources:
-    caches:
-      defaultCache:
-        kind: inMemory             # inMemory | external
-        maxEntries: 10000          # optional
-        ttlSeconds: 300            # default TTL for entries
-      hotItems:
-        kind: external
-        provider: redis            # non-normative hint; implementation-defined
-```
-
-### 15.2 Cache operations (task kinds)
+### 15.1 Cache operations (task.kind: cache:v1)
 
 ```yaml
 # Read from cache
 type: task
 task:
-  kind: cacheGet
-  cacheRef: defaultCache
+  kind: cache:v1
+  operation: get
   key:
     mapper:
       lang: <engineId>           # e.g. dataweave
       expr: |
         context.userId
-  resultVar: cachedUser            # value stored at context.cachedUser
+  resultVar: cachedUser          # value stored at context.cachedUser
 next: <stateId>
 
 # Write to cache
 otherState:
   type: task
   task:
-    kind: cachePut
-    cacheRef: defaultCache
+    kind: cache:v1
+    operation: put
     key:
       mapper:
         lang: <engineId>         # e.g. dataweave
@@ -2155,36 +2226,57 @@ otherState:
         lang: <engineId>         # e.g. dataweave
         expr: |
           context.profile
-    ttlSeconds: 600                # optional override
+    ttlSeconds: 600              # optional per-call TTL override (seconds)
   next: <stateId>
 ```
 
 Semantics (configuration)
-- `cacheRef` must refer to a named cache under `spec.resources.caches`.
-- `key.mapper` computes a string key from the current `context`.
-- `value.mapper` computes the value to be stored; the engine serialises it as JSON.
-- `cacheGet` will (once implemented) set `resultVar` to the stored value or `null` when missing.
-- `cachePut` will upsert the entry with optional TTL override.
+- `operation`:
+  - Must be `get` or `put`.
+- `key.mapper`:
+  - Evaluated with `context` bound to the current journey context.
+  - Computes a string key; engines MUST coerce the mapper result to a string.
+- `value.mapper` (for `operation: put`):
+  - Evaluated with `context` bound to the current journey context.
+  - Computes the value to be stored; the engine serialises it as JSON.
+- `ttlSeconds`:
+  - Optional per-call TTL override (seconds).
+  - When omitted, the engine uses the default TTL from cache plugin configuration.
+
+Semantics (operation)
+- `operation: get`:
+  - The plugin looks up the computed key in the configured cache.
+  - When an entry is present and not expired, it deserialises the JSON value and assigns it to `context.<resultVar>`.
+  - When no entry is present (or it has expired), it assigns `null` to `context.<resultVar>`.
+- `operation: put`:
+  - The plugin stores the computed value under the computed key with the effective TTL.
+  - It does not write anything back into `context` beyond any engine-provided diagnostics.
 
 Validation
-- `spec.resources.caches` must be a map of ids to cache definitions.
-- `cacheRef` must refer to an existing cache id.
-- `ttlSeconds`, when present, must be an integer ≥ 1.
+- `task.kind` MUST be `cache:v1`.
+- `operation` is required and MUST be either `get` or `put`.
+- For `operation: get`:
+  - `resultVar` is required and MUST match `[A-Za-z_][A-Za-z0-9_]*`.
+  - `value` and `ttlSeconds` MAY be omitted; if present, they are ignored.
+- For `operation: put`:
+  - `value` is required.
+  - `resultVar` MUST be omitted.
+  - `ttlSeconds`, when present, MUST be an integer ≥ 1.
 
 Notes
-- This section defines the DSL surface only; cache implementations and eviction policies are out of scope and owned by Feature 006.
+- This section defines the DSL surface only; cache provider choice and operational settings (default TTL, memory limits, eviction policy, key prefix) are configured at the engine level under the cache plugin configuration and are not exposed in the DSL.
 
-### 15.3 Context vs Cache
+### 15.2 Context vs Cache
 
 - **Context**
   - JSON object attached to a single journey instance.
   - Mutated by `task`, `transform`, `wait`/`webhook`, etc.
   - Exists only for the lifetime of that journey and is never visible to other journeys.
 - **Cache**
-  - Declared under `spec.resources.caches` as named resources (for example, `defaultCache`, `hotItems`).
-  - Logically an external key–value store whose lifetime is independent of any single journey.
-  - Accessed via `cacheGet`/`cachePut` using `cacheRef` and a key mapper.
-  - By default it is cross‑journey: any journey that knows the `cacheRef` and key can read/write entries.
+  - A single logical key–value store configured per deployment via the cache plugin.
+  - Logically external to any single journey; its lifetime is independent of individual runs.
+  - Accessed via `task.kind: cache:v1` using a key mapper and optional value/TTL.
+  - By default it is cross‑journey: any journey that knows the key structure can read/write entries.
 - **Scope patterns**
   - Per‑journey behaviour: use journey‑specific keys (for example, `${context.journeyId}`) so only that instance’s entries are used, even though the underlying cache is shared.
   - Cross‑journey behaviour: use stable business identifiers (for example, `userId`, `paymentId`) as keys so multiple journeys can benefit from shared entries.
@@ -2280,94 +2372,310 @@ Validation
 Notes
 - This section defines the DSL shape and join semantics only; concurrency, scheduling, and detailed error propagation are implemented under Feature 004 (Parallel).
 
-<a id="dsl-17-http-bindings"></a>
-## 17. HTTP Bindings (Inbound)
+<a id="dsl-17-bindings"></a>
+## 17. Inbound Bindings (spec.bindings)
 
-HTTP bindings describe how inbound HTTP metadata (headers and query params) are projected into `context`, and optionally passed through directly to outbound HTTP calls.
+Inbound bindings describe how external transports (HTTP and, in this version, experimentally WebSocket, gRPC, queue/message consumers, and CLI/batch invocations) expose journeys and APIs and how inbound metadata is projected into `context`. The engine core remains transport-agnostic; bindings adapt transports onto the logical operations “start journey/API” and “submit external-input step”.
 
-### 17.1 Start request bindings
+HTTP binding (`spec.bindings.http`) is normative for both `kind: Journey` and `kind: Api`. WebSocket binding (`spec.bindings.websocket`) is introduced as an experimental binding for `kind: Journey` only. gRPC binding (`spec.bindings.grpc`) is introduced as an experimental binding for `kind: Api` only. Queue/message binding (`spec.bindings.queue`) is introduced as an experimental binding for `kind: Journey` only. CLI binding (`spec.bindings.cli`) is introduced as an experimental binding for both `kind: Journey` and `kind: Api`. Cloud-function binding (`spec.bindings.function`) is introduced as an experimental binding for both `kind: Journey` and `kind: Api`.
 
-```yaml
-spec:
-  httpBindings:
-    start:
-      headersToContext:
-        X-User-Id: userId         # header name -> context field
-        X-Tenant-Id: tenantId
-      headersPassthrough:
-        - from: traceparent       # inbound header name
-          to: traceparent         # outbound header name
-      queryToContext:
-        tenant: tenantId          # query param name -> context field
-        debug: debugFlag
-```
+### 17.1 HTTP binding – overview
 
-Semantics
-- `headersToContext`: for each `headerName: contextField` entry, when a start request is invoked (`POST /journeys/{journeyName}/start` for a `kind: Journey` journey definition, or `POST /apis/{apiName}` / `spec.route.path` for `kind: Api`), if the request has the header, its value is copied to `context.<contextField>`. Missing headers are ignored; requiredness should be expressed via JSON Schema on the journey `context`, not here.
-- `headersPassthrough`: for each mapping, the engine conceptually propagates the inbound header value from the start request to all subsequent HTTP tasks as the specified outbound header, *even if it is not stored in `context`*.
-  - This is syntactic sugar for header value propagation; it behaves as if the value flowed via an internal, reserved context field.
-- `queryToContext`: for each `paramName: contextField` entry, when the start request is invoked, if the request has the query parameter, its (string) value is copied to `context.<contextField>`. Missing params are ignored; requiredness should be expressed via JSON Schema on `context` or a dedicated input schema, not here.
-
-### 17.2 Step request bindings
+HTTP binding configuration lives under `spec.bindings.http`:
 
 ```yaml
 spec:
-  httpBindings:
-    steps:
-      waitForCallback:
+  bindings:
+    http:
+      route:                    # kind: Api only – HTTP surface
+        path: <string>          # e.g. /apis/get-user-public; defaults to /apis/{metadata.name}
+        method: <string>        # e.g. POST; initial version supports POST only
+
+      start:                    # start request bindings
         headersToContext:
-          X-Request-Id: lastRequestId
+          X-User-Id: userId
+          X-Tenant-Id: tenantId
         headersPassthrough:
           - from: traceparent
             to: traceparent
         queryToContext:
-          retry: retryFlag
+          tenant: tenantId
+          debug: debugFlag
+
+      steps:                    # step request bindings, keyed by external-input state id
+        waitForCallback:
+          headersToContext:
+            X-Request-Id: lastRequestId
+          headersPassthrough:
+            - from: traceparent
+              to: traceparent
+          queryToContext:
+            retry: retryFlag
 ```
 
 Semantics
-- Applied when `POST /journeys/{journeyId}/steps/{stepId}` is called for the configured `stepId`.
-- `headersToContext` behaves as for the start request: copy inbound headers into `context` before evaluating `wait`/`webhook` predicates or mappers.
-- `headersPassthrough` behaves as for start: propagate header values from the step request to subsequent HTTP tasks as outbound headers, without requiring an explicit `context` field.
-- `queryToContext` behaves as for the start request: copy inbound query parameter values into `context` before evaluating `wait`/`webhook` predicates or mappers.
+- Start bindings:
+  - `spec.bindings.http.start` applies when a start request is invoked:
+    - `POST /api/v1/journeys/{journeyName}/start` for `kind: Journey`, or
+    - `POST /api/v1/apis/{apiName}` (or `spec.bindings.http.route.path` when present) for `kind: Api`.
+  - `headersToContext`: for each `headerName: contextField` entry, if the request has the header, its value is copied to `context.<contextField>`. Missing headers are ignored; requiredness should be expressed via JSON Schema on the journey `context`, not here.
+  - `headersPassthrough`: for each mapping, the engine conceptually propagates the inbound header value from the start request to subsequent HTTP tasks as the specified outbound header, *even if it is not stored in `context`*.
+    - This is syntactic sugar for header value propagation; it behaves as if the value flowed via an internal, reserved context field.
+  - `queryToContext`: for each `paramName: contextField` entry, if the request has the query parameter, its (string) value is copied to `context.<contextField>`. Missing params are ignored; requiredness should be expressed via JSON Schema on `context` or a dedicated input schema, not here.
+- Step bindings:
+  - `spec.bindings.http.steps.<stepId>` applies when `POST /api/v1/journeys/{journeyId}/steps/{stepId}` is called for the configured `stepId`.
+  - `headersToContext` behaves as for the start request: copy inbound headers into `context` before evaluating `wait`/`webhook` predicates or mappers.
+  - `headersPassthrough` behaves as for start: propagate header values from the step request to subsequent HTTP tasks as outbound headers, without requiring an explicit `context` field.
+  - `queryToContext` behaves as for the start request: copy inbound query parameter values into `context` before evaluating `wait`/`webhook` predicates or mappers.
 
-### 17.3 Usage guidance
-- Use `headersToContext` when the header:
+### 17.2 Usage guidance
+- Use `spec.bindings.http.start.headersToContext` / `.steps.*.headersToContext` when the header:
   - Influences branching, transformations, or other behaviour.
   - Needs to be logged, inspected, or included in downstream payloads.
   - Should be part of the journey’s replay/debug story (visible in `context`).
-- Use `headersPassthrough` when the header:
+- Use `spec.bindings.http.start.headersPassthrough` / `.steps.*.headersPassthrough` when the header:
   - Is purely transport-level (for example, tracing, correlation), and
   - Does not need to be read by the journey definition itself.
 - It is valid to use both: bind a header into `context` and also pass it through, if you need both visibility and propagation.
 
 Validation
-- `httpBindings.start.headersToContext` and `httpBindings.steps.*.headersToContext` must map header names to non-empty context field names.
-- `httpBindings.start.queryToContext` and `httpBindings.steps.*.queryToContext`, when present, must map query parameter names to non-empty context field names.
+- `spec.bindings.http.start.headersToContext` and `spec.bindings.http.steps.*.headersToContext` must map header names to non-empty context field names.
+- `spec.bindings.http.start.queryToContext` and `spec.bindings.http.steps.*.queryToContext`, when present, must map query parameter names to non-empty context field names.
 - `headersPassthrough` entries must provide `from` and `to` header names (non-empty strings).
-- Step ids under `httpBindings.steps` must refer to external-input states (`wait`/`webhook`).
+- Step ids under `spec.bindings.http.steps` must refer to external-input states (`wait`/`webhook`).
 
 Notes
-- This section defines the binding model; concrete enforcement and header sets are implemented in the engine/API layer.
+- This section defines the HTTP binding model; concrete enforcement and header sets are implemented in the engine/API layer.
+
+### 17.3 WebSocket binding – overview (Journeys only, experimental)
+
+WebSocket binding allows journeys to be driven over a long-lived, bidirectional WebSocket connection instead of individual HTTP calls. It is only valid for `kind: Journey` in this version; `kind: Api` remains HTTP-only.
+
+Shape:
+
+```yaml
+spec:
+  bindings:
+    websocket:
+      endpoint:                   # optional – where clients connect
+        path: <string>            # e.g. /ws/journeys/auth-user-info; defaults to /ws/journeys/{metadata.name}
+        subprotocol: <string>     # optional WebSocket subprotocol identifier
+
+      start:                      # how to start journeys over this binding
+        messageType: <string>     # e.g. startJourney
+
+      steps:                      # how to submit external-input steps over this binding
+        <stepId>:
+          messageType: <string>   # e.g. submitStep
+```
+
+Semantics (high level)
+- Applicability:
+  - `spec.bindings.websocket` is only valid for `kind: Journey`; it MUST be rejected for `kind: Api`.
+  - A journey MAY configure both HTTP and WebSocket bindings; they are alternative ways to reach the same logical journey definition.
+- Endpoint:
+  - If `endpoint.path` is omitted, the canonical path is `/ws/journeys/{metadata.name}`.
+  - If `endpoint.subprotocol` is set, clients SHOULD negotiate this subprotocol when opening the WebSocket; journeys SHOULD treat connections without the expected subprotocol as invalid.
+- Start messages:
+  - `start.messageType` defines the logical message type used to initiate new journey instances over WebSocket.
+  - The exact JSON envelope for start messages (fields, routing metadata, payload) is defined by the WebSocket Journeys API reference and the feature spec for WebSocket bindings; conceptually, each start message maps to the same logical “start journey” operation as `POST /api/v1/journeys/{journeyName}/start`.
+  - The initial `context` for a journey started via WebSocket is derived from the message payload in the same way it is derived from the HTTP request body for the Journeys API, subject to `spec.input.schema` validation when present.
+- Step messages:
+  - `steps.<stepId>.messageType` defines the logical message type used when submitting external-input payloads to a specific `wait`/`webhook` state.
+  - The exact JSON envelope for step messages is defined by the WebSocket Journeys API reference; conceptually, each such message maps to the same logical “submit step” operation as `POST /api/v1/journeys/{journeyId}/steps/{stepId}`.
+- Outgoing messages:
+  - When a journey with a WebSocket binding is started over WebSocket, the engine MAY emit:
+    - Status messages when the journey changes state (for example updates to `JourneyStatus`), and
+    - Outcome messages when the journey reaches a terminal outcome (`JourneyOutcome`),
+    over the same WebSocket connection.
+  - The exact JSON shapes and routing rules for status/outcome messages are defined by the WebSocket Journeys API reference and the corresponding feature spec; the DSL only records that WebSocket is an inbound binding for start and step submissions.
+
+Validation
+- `spec.bindings.websocket`:
+  - MUST NOT be present for `kind: Api`.
+  - MAY be present for `kind: Journey` alongside `spec.bindings.http`.
+- `endpoint.path`, when present, MUST be a non-empty string starting with `/` and without a host.
+- `start.messageType`, when present, MUST be a non-empty string.
+- `steps.<stepId>.messageType`, when present, MUST be a non-empty string, and `<stepId>` MUST refer to an external-input state (`wait`/`webhook`) in `spec.states`.
+
+Notes
+- This section defines the DSL shape for WebSocket binding and its relationship to existing HTTP semantics. Concrete message envelopes, error mapping, and reconnection semantics are defined in the WebSocket binding feature spec and Journeys WebSocket API reference.
+
+### 17.5 Queue/message binding – overview (Journeys only, experimental)
+
+Queue/message binding allows journeys to be triggered by messages consumed from external messaging systems (for example Kafka, SQS, NATS, Azure Service Bus, SNS, Pub/Sub). It is only valid for `kind: Journey` in this version; `kind: Api` remains request/response over HTTP or gRPC.
+
+The DSL treats queue/message bindings in a provider-agnostic way: journeys declare logical channels; engine/platform configuration maps those channels onto concrete providers, topics, subscriptions, or queues.
+
+Shape:
+
+```yaml
+spec:
+  bindings:
+    queue:
+      starts:
+        - channel: <string>      # logical channel that starts new journey instances
+
+      steps:
+        <stepId>:
+          channel: <string>      # logical channel for step submissions to this state
+```
+
+Semantics (high level)
+- Applicability:
+  - `spec.bindings.queue` is only valid for `kind: Journey`; it MUST be rejected for `kind: Api`.
+  - A journey MAY configure HTTP, WebSocket, and queue bindings simultaneously; they are alternative ways to reach the same logical definition.
+- Channels:
+  - `channel` identifies a logical message source (for example `orders.created`, `orders.approvals`) that the engine/platform maps to a concrete provider/topic/subscription.
+  - Channel-to-provider mapping (Kafka topics, SQS queue names, NATS subjects, etc.) is defined in engine/platform configuration, not in the DSL.
+- Starts:
+  - For each entry in `starts`:
+    - Messages consumed from the corresponding `channel` are treated as **start events** for this journey definition.
+    - The message payload and attributes are mapped to the initial `context` according to the queue binding feature spec and platform configuration, subject to validation against `spec.input.schema` when present.
+    - Each message results in a new journey instance (fire-and-forget semantics); request/response patterns over messaging (for example `reply-to`) are modelled via normal journey behaviour and outbound connectors, not special queue-binding semantics.
+- Steps:
+  - For each `steps.<stepId>.channel`:
+    - Messages consumed from that `channel` are treated as **step submission events** for the external-input state identified by `<stepId>`.
+    - The engine MUST be able to determine which journey instance the message targets (for example via `journeyId` in message metadata); the exact mapping is defined in the queue binding feature spec and engine configuration.
+    - Message payloads are validated against the state’s `input.schema` when present and applied as if they were submitted via the HTTP Journeys API step endpoint.
+
+Validation
+- `spec.bindings.queue`:
+  - MUST NOT be present for `kind: Api`.
+  - MAY be present for `kind: Journey` alongside other bindings.
+- `starts[*].channel` MUST be non-empty strings.
+- `steps.<stepId>.channel` MUST be non-empty strings, and `<stepId>` MUST refer to an external-input state (`wait`/`webhook`) in `spec.states`.
+
+Notes
+- This section defines the DSL shape and high-level semantics for queue/message binding. Provider-specific details (Kafka vs SQS vs NATS, consumer groups, retry/dead-letter policies, etc.) and the exact mapping between message metadata and `context`/`journeyId` are defined in the queue binding feature spec and engine/platform configuration.
+
+### 17.4 gRPC binding – overview (Apis only, experimental)
+
+gRPC binding allows `kind: Api` definitions to be exposed as unary gRPC methods instead of (or in addition to) HTTP endpoints. It is only valid for `kind: Api` in this version; `kind: Journey` continues to use the HTTP Journeys API (and optionally WebSocket) as its external surface.
+
+Shape:
+
+```yaml
+spec:
+  bindings:
+    grpc:
+      service: <string>           # fully-qualified gRPC service name, e.g. journeys.api.UserApi
+      method: <string>            # unary method name for this Api, e.g. GetUserPublic
+```
+
+Semantics (high level)
+- Applicability:
+  - `spec.bindings.grpc` is only valid for `kind: Api`; it MUST be rejected for `kind: Journey`.
+  - An API MAY configure both HTTP and gRPC bindings; they are alternative ways to reach the same logical definition.
+- Service and method:
+  - `service` names the gRPC service that exposes this Api; when omitted, tooling MAY derive it from `metadata.name` using a platform-specific naming convention.
+  - `method` names the unary RPC method that maps to this Api; when omitted, tooling MAY derive it from `metadata.name` using a platform-specific convention.
+- Request/response mapping:
+  - Each gRPC call to the configured `service/method` is conceptually equivalent to a single HTTP call to the Api’s HTTP endpoint:
+    - The gRPC request message is mapped to the initial `context` according to `spec.input.schema` and the gRPC API reference for this binding.
+    - Execution proceeds from `spec.start` to a terminal state (`succeed`/`fail`) without external input, as required for `kind: Api`.
+    - The gRPC response message is mapped from the final result (`spec.output.schema`, `spec.errors`, and any configured status mapping) according to the gRPC API reference.
+- Status codes:
+  - Mapping between HTTP status codes (selected via `spec.bindings.http.apiResponses` when present) and gRPC status codes is defined in the gRPC API reference and platform configuration; the DSL does not introduce a separate gRPC status-mapping block.
+
+Validation
+- `spec.bindings.grpc`:
+  - MUST NOT be present for `kind: Journey`.
+  - MAY be present for `kind: Api` alongside `spec.bindings.http`.
+- `service`, when present, MUST be a non-empty string.
+- `method`, when present, MUST be a non-empty string.
+
+Notes
+- This section defines the DSL shape for gRPC binding and its relationship to existing Api semantics. Concrete `.proto` definitions, message field mappings, and status-code translation rules are defined in the gRPC binding feature spec and the Journeys gRPC API reference.
+
+### 17.6 CLI binding – overview (Journeys and Apis, experimental)
+
+CLI binding models local, non-networked invocation of journeys and APIs via a command-line interface or batch job runner. It is valid for both `kind: Journey` and `kind: Api` and is primarily descriptive: it documents that a definition is intended to be runnable via the JourneyForge CLI and batch tools.
+
+Shape:
+
+```yaml
+spec:
+  bindings:
+    cli: {}   # reserved for CLI/batch invocation; no fields in v1
+```
+
+Semantics (high level)
+- Applicability:
+  - `spec.bindings.cli` MAY be present for both `kind: Journey` and `kind: Api`.
+  - The CLI MAY still run journeys/APIs that omit `spec.bindings.cli`; presence is advisory metadata, not a hard requirement.
+- Invocation:
+  - CLI tools (for example `journeyforge run` or `journeyforge api`) use:
+    - `spec.input.schema` to validate and interpret input provided via stdin or files.
+    - `spec.output.schema` and the `JourneyOutcome`/API response model to shape output printed to stdout.
+  - Each CLI invocation is conceptually equivalent to:
+    - Starting a journey instance and waiting for a terminal outcome (or status snapshot), or
+    - Invoking a `kind: Api` and returning its response, without exposing HTTP or gRPC transport details.
+- Jobs:
+  - Batch schedulers (cron, CI/CD, Kubernetes `CronJob`, etc.) invoke the same CLI commands on a schedule or as part of pipelines.
+  - From the engine’s perspective, there is no difference between a human and a scheduler invoking the CLI; both are covered by the CLI binding.
+
+Validation
+- `spec.bindings.cli`, when present, MUST be either an empty object or a future extension object defined by CLI/ops features; this version does not define any fields.
+
+Notes
+- This section defines the DSL hook for CLI/batch invocation. Concrete CLI commands, flags, and process-level contracts (stdin/stdout/exit codes) are defined in CLI documentation and operations runbooks, not in the DSL.
+
+### 17.7 Cloud-function binding – overview (Journeys and Apis, experimental)
+
+Cloud-function binding models deployments where journeys and APIs are exposed via cloud function platforms such as AWS Lambda, Google Cloud Functions, or Azure Functions. It reuses the logical semantics of HTTP and `kind: Api`/`kind: Journey` entrypoints; the function platform and its triggers are operational concerns.
+
+Shape:
+
+```yaml
+spec:
+  bindings:
+    function: {}   # reserved for cloud-function deployment; no fields in v1
+```
+
+Semantics (high level)
+- Applicability:
+  - `spec.bindings.function` MAY be present for both `kind: Journey` and `kind: Api`.
+  - The engine and DSL semantics are unchanged; cloud-function bindings are thin adapters on top of existing entrypoints.
+- Invocation:
+  - For HTTP-triggered functions (for example API Gateway + Lambda, HTTP-triggered GCF/Azure Functions):
+    - The provider-specific event object (headers, path, body) is normalised to the same logical HTTP request shape used by `spec.bindings.http`.
+    - The binding invokes the same logical operations as the HTTP binding:
+      - `start` for journeys,
+      - `callApi` for `kind: Api`.
+    - The function return value is constructed from the resulting `JourneyOutcome`/`JourneyStatus` or Api response in a provider-specific way (for example Lambda proxy integration response).
+  - For non-HTTP triggers (for example some Pub/Sub or queue-triggered functions), cloud-function bindings SHOULD reuse the semantics of queue bindings (see §17.5) rather than defining new behaviour.
+- Deployment:
+  - `spec.bindings.function` is provider-neutral; it does not name AWS/GCP/Azure resources or trigger types.
+  - Mapping from this binding to concrete function deployments (function names, handlers, triggers, IAM roles, etc.) is defined in engine/platform configuration and deployment tooling.
+
+Validation
+- `spec.bindings.function`, when present, MUST be an object; in this version it MUST NOT define any fields.
+
+Notes
+- This section defines the DSL hook for cloud-function deployment and its relationship to existing HTTP and queue bindings. Provider-specific deployment details (API Gateway configuration, function runtimes, triggers) and error/status mapping rules are defined in cloud-function binding feature specs and deployment documentation, not in the DSL.
 
 <a id="dsl-18-http-security-policies"></a>
 ## 18. HTTP Security Policies (Auth)
 
-HTTP security policies define reusable authentication constraints for inbound HTTP requests (start and step calls) for mechanisms that are not modelled as task plugins. In this version, JWT validation is expressed via the `jwtValidate:v1` task plugin (section 18.6); HTTP security policies cover mTLS and API key validation only. They are configured under `spec.policies.httpSecurity` and attached via `securityPolicyRef` at journey and step levels.
+HTTP security policies define reusable authentication constraints for inbound HTTP requests (start and step calls) for mechanisms that are not modelled as task plugins. In this version, JWT validation is expressed via the `jwtValidate:v1` task plugin (section 18.6); HTTP security policies cover mTLS and API key validation only. They are configured under `spec.bindings.http.security.policies` and attached via `spec.bindings.http.security.attach.*` at journey and step levels.
 
 ### 18.1 Policy definitions
 
 ```yaml
 spec:
-  policies:
-    httpSecurity:
-      default: apiKeyDefault      # optional default policy id
-      definitions:
-        apiKeyDefault:
-          kind: apiKey
-          location: header        # header | query
-          name: X-Api-Key
-          keys:
-            - secretRef: secret://apikeys/backend-service
+  bindings:
+    http:
+      security:
+        policies:
+          default: apiKeyDefault      # optional default policy id
+          definitions:
+            apiKeyDefault:
+              kind: apiKey
+              location: header        # header | query
+              name: X-Api-Key
+              keys:
+                - secretRef: secret://apikeys/backend-service
 ```
 
 Kinds
@@ -2380,13 +2688,16 @@ Kinds
 
 ```yaml
 spec:
-  security:
-    journeyPolicyRef: apiKeyDefault       # applied to all inbound endpoints by default
-    start:
-      securityPolicyRef: apiKeyDefault   # optional override for start
-    steps:
-      waitForCallback:
-        securityPolicyRef: clientCertDefault
+  bindings:
+    http:
+      security:
+        attach:
+          journeyPolicyRef: apiKeyDefault       # applied to all inbound endpoints by default
+          start:
+            securityPolicyRef: apiKeyDefault   # optional override for start
+          steps:
+            waitForCallback:
+              securityPolicyRef: clientCertDefault
 ```
 
 Semantics
@@ -2396,7 +2707,7 @@ Semantics
 - If no policy is resolved for an endpoint, authentication behaviour is implementation-defined (for example, relying on upstream gateway enforcement).
 
 ### 18.3 Validation
-- `spec.policies.httpSecurity.definitions` must be a map of ids to policy objects.
+- `spec.bindings.http.security.policies.definitions` must be a map of ids to policy objects.
 - Any `journeyPolicyRef` / `securityPolicyRef` must refer to an existing id in `definitions` (or to a platform-level policy); unknown ids are a validation error.
 - API key policies (`kind: apiKey`) must configure a location, header/query name, and at least one key entry; client-certificate policies (`kind: mtls`, when supported) must specify at least one `trustAnchors` entry.
 
@@ -2404,9 +2715,9 @@ Semantics
 - Use HTTP security policies when:
   - You need specs to be explicit about how journeys are authenticated via mTLS and API keys.
   - You want the same authentication behaviour reused across multiple journeys or steps.
-- Combine with `httpBindings` when:
+- Combine with the HTTP binding when:
   - You also need to project authentication metadata into `context` (for example, subject ids or key identifiers) or forward headers downstream.
-  - `httpSecurity` enforces *who* can call for mTLS/API-key mechanisms; `jwtValidate:v1` and `mtlsValidate:v1` are used as explicit task states for JWT/mTLS authentication, and `httpBindings` controls *how* inbound metadata is made available to the journey instance and downstream calls.
+  - HTTP security policies enforce *who* can call for mTLS/API-key mechanisms; `jwtValidate:v1` and `mtlsValidate:v1` are used as explicit task states for JWT/mTLS authentication, and `spec.bindings.http` controls *how* inbound metadata is made available to the journey instance and downstream calls.
 
 Notes
 - This section defines the configuration model only; enforcement belongs to the security implementation in the engine and is out of scope for the DSL reference.
@@ -2550,8 +2861,8 @@ mtls-normalise:
 
 This keeps `context` as the canonical place for data that influences journey behaviour, while:
 - `jwtValidate:v1` and `mtlsValidate:v1` govern JWT and mTLS authentication, and
-- `httpSecurity` governs API key validation, and
-- `httpBindings` governs how inbound metadata becomes available to the journey instance and downstream calls.
+- HTTP security policies (under `spec.bindings.http.security`) govern API key validation, and
+- the HTTP binding (`spec.bindings.http`) governs how inbound metadata becomes available to the journey instance and downstream calls.
 
 ### 18.6 JWT validation task plugin (`jwtValidate:v1`)
 
@@ -2927,7 +3238,7 @@ Semantics
   - Jars are created at run start and destroyed at the terminal state.
 - When `spec.cookies` is omitted:
   - No jar is created.
-  - HTTP behaviour remains defined solely by other sections (`task`, `httpBindings`, `httpSecurity`, etc.).
+  - HTTP behaviour remains defined solely by other sections (`task`, `spec.bindings.http`, HTTP security policies, etc.).
 
 Validation
 - `spec.cookies.jar.domains[*].pattern` must be non‑empty strings.
@@ -2963,7 +3274,7 @@ Notify mode
 
 Inbound cookies
 - The jar does not ingest inbound `Cookie` headers from start or step requests:
-  - If journeys need to work with inbound cookies, they must use existing mechanisms (`httpBindings.start.headersToContext`, `httpBindings.steps.*.headersToContext`, plus `transform` states) and, if desired, construct `Cookie` headers explicitly for outbound calls.
+  - If journeys need to work with inbound cookies, they must use existing mechanisms (`spec.bindings.http.start.headersToContext`, `spec.bindings.http.steps.*.headersToContext`, plus `transform` states) and, if desired, construct `Cookie` headers explicitly for outbound calls.
 
 Validation
 - Cookie parsing and domain/path derivation are implementation details but MUST follow RFC 6265 style HTTP cookie rules (or successors).
@@ -3071,8 +3382,8 @@ Rules:
   ordinary `context` fields (for example `context.identity.*`, `context.participants.*`) and/or metadata, using the
   existing DSL constructs (`transform`, `choice`, `wait`, `webhook`, etc.).
 - When external identity is present (for example from a JWT or client certificate), journey definitions that rely on it
-  SHOULD project it into `context` explicitly (for example via `httpBindings.start.headersToContext` followed by a
-  `transform`), so that journey logic can make clear, data-driven decisions.
+  SHOULD project it into `context` explicitly (for example via `spec.bindings.http.start.headersToContext` followed by
+  a `transform`), so that journey logic can make clear, data-driven decisions.
 - For any external-input interaction (journey start, `wait` state, `webhook` state, or `POST /steps/{stepId}` call),
   journey definitions that care about access control MUST implement their own checks over `context` and/or request
   data (for example via predicates, guards, or preceding `choice` states). The engine does not infer access rules from

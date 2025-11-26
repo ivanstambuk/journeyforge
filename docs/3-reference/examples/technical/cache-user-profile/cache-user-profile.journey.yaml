@@ -61,8 +61,8 @@ spec:
     readCache:
       type: task
       task:
-        kind: cacheGet
-        cacheRef: defaultCache
+        kind: cache:v1
+        operation: get
         key:
           mapper:
             lang: dataweave
@@ -109,8 +109,8 @@ spec:
     storeCache:
       type: task
       task:
-        kind: cachePut
-        cacheRef: defaultCache
+        kind: cache:v1
+        operation: put
         key:
           mapper:
             lang: dataweave

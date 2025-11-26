@@ -46,7 +46,7 @@ consistent vocabulary.
   - Behaviour that is directly and visibly configured in a journey definition or in
     documented configuration objects:
     - Example: a `transform` state that sets `context.orderId`.
-    - Example: auth task plugins (`jwtValidate:v1`, `mtlsValidate:v1`) or `spec.policies.httpSecurity` entries that declare API key policies.
+    - Example: auth task plugins (`jwtValidate:v1`, `mtlsValidate:v1`) or HTTP security policies under `spec.bindings.http.security` that declare API key policies.
     - Example: `MetadataLimits` values for tag/attribute caps.
   - When we say “explicit”, we mean “clearly encoded in DSL/config and visible in the spec”.
 
