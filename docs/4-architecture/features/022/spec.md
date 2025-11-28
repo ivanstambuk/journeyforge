@@ -47,7 +47,7 @@ Primary references:
 ## Non-Goals
 
 - No journey- or state-level telemetry controls in the DSL (`spec.telemetry` remains out of scope).
-- No requirement to ship every pack in this feature; packs beyond the core/logging may be completed in follow-up slices.
+- No requirement to ship every pack in this feature; packs beyond the core/logging may be completed in follow-up increments.
 - No commitment to specific exporter libraries; the SPI must support OTLP/Prometheus/logging, but concrete dependencies can evolve.
 
 ## Telemetry SPI
@@ -92,21 +92,28 @@ Events **must not** carry payloads or arbitrary `context` values; they expose on
   - `journeyforge-observability-otel`
   - `journeyforge-observability-metrics`
 
-This feature defines the SPI and core sink responsibilities; concrete modules can be implemented in follow-up slices.
+This feature defines the SPI and core sink responsibilities; concrete modules can be implemented in follow-up increments.
 
 ### 3. TelemetryHandle
 
 Engine components (task plugins, bindings, expression engines, etc.) interact with telemetry via a `TelemetryHandle`:
 
 - Provided in execution context:
-  - `TaskExecutionContext` (Feature 011) and similar engine contexts include a `TelemetryHandle`.
-  - Bindings (HTTP, queue, CLI, WebSocket, function) receive a handle for the current request/run.
+  - `TaskExecutionContext` (Feature 011) and similar engine contexts include a `TelemetryHandle` for the current journey/API run.
+  - Bindings (HTTP, queue, CLI, WebSocket, function) receive a handle for the current request/run and may pass it into connector calls.
 - Capabilities (conceptual):
-  - Attach attributes to the current activity (for example a span or logical operation).
-  - Emit child events where necessary (for example HTTP client attempts within a task).
-  - Respect the same privacy rules (no payload bodies, no arbitrary `context` fields).
+  - Attach attributes to the current activity (for example a span or logical operation), using a stable, kebab-case naming convention for attribute keys (for example `journey.name`, `task.state_id`, `plugin.type`, `http.method`).
+  - Emit child events where necessary (for example HTTP client attempts within a task), reusing the same `TelemetryEvent` model where practical.
+  - Respect the same privacy rules (no payload bodies, no arbitrary `context` fields; no raw secrets such as tokens, passwords, private keys, or cookie values).
 
-Plugins **do not** talk directly to exporters; they only annotate the current telemetry context and/or emit plugin-specific events via the SPI.
+Usage from plugins and bindings:
+- Plugins and bindings **do not** talk directly to exporters or sinks.
+- They:
+  - Annotate the current telemetry context via `TelemetryHandle` (for example set journey/plugin/http attributes on the active span or activity).
+  - Optionally emit plugin- or binding-specific child events for richer packs to consume.
+- Sinks remain responsible for:
+  - Mapping attributes onto logs, traces, and metrics.
+  - Enforcing allowlists/redaction per ADR‑0025 and the observability runbook.
 
 ## Behaviour
 
@@ -169,4 +176,3 @@ This feature requires that runtime-core reads these settings and wires Telemetry
 | NFR-022-01 | Event model stability | Operator tooling, dashboards | The core event types and attributes must remain stable across minor versions; additive changes are allowed, breaking changes require a new major. |
 | NFR-022-02 | Low overhead at core | Performance | Event emission must be lightweight; packs that add heavy processing must be clearly optional and documented. |
 | NFR-022-03 | Privacy guarantees | Security, governance | SPI and packs must obey ADR‑0025 privacy/redaction rules; violations are considered defects. |
-

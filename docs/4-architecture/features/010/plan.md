@@ -27,5 +27,4 @@ Status: Draft | Last updated: 2025-11-23
 - Docs under `docs/` (for example a CLI how-to) accurately describe the implemented commands and flags.
 
 ## Intent Log
-- 2025-11-23: Initial CLI feature spec and roadmap entry added via Codex session, based on Q-003 (scope of CLI façade vs Journeys/Admin REST APIs and UI) with Option A (“single Admin + Dev CLI feature”) selected. 
-
+- 2025-11-23: Initial CLI feature spec and roadmap entry added via Codex session, based on the “scope of CLI façade vs Journeys/Admin REST APIs and UI” design question with Option A (“single Admin + Dev CLI feature”) selected. 

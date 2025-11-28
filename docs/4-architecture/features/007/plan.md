@@ -18,8 +18,7 @@
 - Examples:
   - Update `wait-approval` and `payment-callback` specs and schemas.
   - Regenerate/adjust corresponding OpenAPI examples.
-- Implementation (later slice):
+- Implementation (later increment):
   - Extend parser/model to include `response` blocks.
   - Implement response projection in engine.
   - Extend OpenAPI exporter.
-

@@ -20,7 +20,7 @@ This journey orchestrates a travel bundle for a traveler:
 - It waits for aggregated trip status updates (confirmed, partially confirmed, cancelled, or failed) from a provider-facing webhook.
 - After confirmation, it allows a single post-booking change or cancel action within a bounded window before completing with a confirmed, partially confirmed, or cancelled outcome, and optionally collects post-trip feedback in a separate window.
 
-The journey is long-lived: clients start it once, track progress via status calls, submit confirmation and change/cancel decisions via dedicated steps, and finally read an outcome that summarises overall trip status and segment-level details. Design and scope for this example are captured under Q-017 in `docs/4-architecture/open-questions.md`.
+The journey is long-lived: clients start it once, track progress via status calls, submit confirmation and change/cancel decisions via dedicated steps, and finally read an outcome that summarises overall trip status and segment-level details.
 
 Actors & systems:
 - Travel booking frontend or agent desktop that starts the journey, shows bundle proposals, and polls status/result.
@@ -87,7 +87,7 @@ The second workflow covers cancellation during traveler confirmation and ends wi
 
 ### Compensation for partial success
 
-In some deployments, providers may leave a trip in a partially confirmed state (for example, flight confirmed but hotel/car failed) and still require cleanup for unconfirmed segments. Under Q-021, `spec.compensation` can be configured to run for these partial-success outcomes while the main journey still terminates with `JourneyOutcome.phase = Succeeded`. A sketch of this pattern for `travel-booking-bundle` is:
+In some deployments, providers may leave a trip in a partially confirmed state (for example, flight confirmed but hotel/car failed) and still require cleanup for unconfirmed segments. In these cases, `spec.compensation` can be configured to run for partial-success outcomes while the main journey still terminates with `JourneyOutcome.phase = Succeeded`. A sketch of this pattern for `travel-booking-bundle` is:
 
 ```yaml
 spec:

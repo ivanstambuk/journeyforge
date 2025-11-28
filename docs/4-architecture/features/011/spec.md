@@ -9,7 +9,7 @@
 | Linked tasks | `docs/4-architecture/features/011/tasks.md` |
 | Roadmap entry | #003 |
 
-> Guardrail: This specification is the single normative source of truth for the feature. Track high‑ and medium‑impact questions in `docs/4-architecture/open-questions.md` (see Q-001 for plugin extensibility), encode resolved answers directly in the Requirements/NFR/Behaviour/UI/Telemetry sections below, and use ADRs under `docs/6-decisions/` for architecturally significant clarifications.
+> Guardrail: This specification is the single normative source of truth for the feature. Track high‑ and medium‑impact questions in `docs/4-architecture/open-questions.md`, encode resolved answers directly in the Requirements/NFR/Behaviour/UI/Telemetry sections below, and use ADRs under `docs/6-decisions/` for architecturally significant clarifications.
 
 ## Overview
 Introduce a modular plugin model for JourneyForge task execution so that:
@@ -30,30 +30,48 @@ This feature keeps the graph and long‑lived primitives (`choice`, `parallel`, 
   - Plugins can surface RFC 9457 Problem Details, and
   - Engines treat plugin crashes as internal errors rather than journey-authored failures.
 - Rebuild engine support for built-in `task.kind` values (`httpCall`, `kafkaPublish`, `schedule`) on top of the Task Plugin SPI, without changing existing DSL semantics.
-- Document how this feature relates to future **TransformPlugin** and **ExpressionEnginePlugin** extension points (Option B), without committing to their implementation in this slice.
+- Document how this feature relates to future **TransformPlugin** and **ExpressionEnginePlugin** extension points (Option B), without committing to their implementation in this increment.
 
 ## Non-Goals
 - No new DSL state types beyond plugin-backed `task.kind` values; `choice`, `parallel`, `wait`, `webhook`, `timer`, `subjourney`, `succeed`, and `fail` remain fixed.
 - No general plugin model for persistence, timers, or storage backends; those concerns stay internal to the engine and connectors.
-- No cross-language plugin SDKs in this slice; the execution SPI is Java-only, and out-of-process/worker style integrations remain out of scope.
+- No cross-language plugin SDKs in this increment; the execution SPI is Java-only, and out-of-process/worker style integrations remain out of scope.
 - No configuration UI; plugin configuration is managed via engine configuration files, environment, and the existing DSL only.
 - No changes to OpenAPI/Arazzo exports or the Journeys API contracts beyond what is already defined in the DSL reference and existing features.
+
+## Module Placement and HTTP Plugins
+
+This feature defines the Task Plugin execution model for the runtime engine; concrete plugin implementations live in their respective modules so that the core remains focused on journeys, states, and context (see ADR‑0031).
+
+- `journeyforge-runtime-core`:
+  - Owns the core journey engine, state machine, and the Task Plugin SPI (`TaskPlugin`, `TaskExecutionContext`, `TaskResult`).
+  - Integrates with the Telemetry SPI (`TelemetryEvent`, `TelemetrySink`, `TelemetryHandle`) from Feature 022.
+  - Does not depend on HTTP client libraries, HTTP-specific policy types, or cookie/observability helpers.
+- Connector and feature modules:
+  - Provide concrete plugin implementations keyed by `task.kind: <pluginType>:v<major>`.
+  - Interpret DSL/model configuration relevant to their domain.
+  - For HTTP:
+    - `journeyforge-connectors-http` owns `httpCall:v1` and all outbound HTTP semantics:
+      - Request construction from DSL/model.
+      - HTTP resilience, auth, and cookie policies.
+      - HTTP-level observability built on top of `TelemetryHandle`.
+    - The engine discovers and invokes the HTTP plugin via the generic Task Plugin SPI; no HTTP-specific logic is embedded in `journeyforge-runtime-core`.
 
 ## Functional Requirements
 | ID | Requirement | Success path | Validation path | Failure path | Telemetry & traces | Source |
 |----|-------------|--------------|-----------------|--------------|--------------------|--------|
-| FR-011-01 | Represent all tasks as plugins in the DSL. | DSL requires `task.kind` values of the form `<pluginType>:v<major>` for all tasks, including core behaviours (`httpCall:v1`, `kafkaPublish:v1`, `schedule:v1`); fields under `task` other than `kind` are treated as plugin-defined config. | DSL validators accept plugin-shaped `task.kind` when `<pluginType>` is non-empty and `<major>` is a positive integer, and reject malformed identifiers; old forms such as `kind: httpCall` or `kind: eventPublish` are rejected. | Specs using malformed plugin ids or plugin kinds in the old format are rejected at validation/load time with clear error messages. | Spec-parsing logs and metrics can record counts of tasks per `<pluginType>` for observability. | DSL ref §5 (task) update; Q-001 |
-| FR-011-02 | Define Task Plugin SPI and registration. | Engine exposes a Java SPI (for example `TaskPlugin`) that all task behaviours implement; plugins are discovered via a registry (for example ServiceLoader plus explicit configuration) keyed by `(pluginType, major)`. | Unit tests and documentation demonstrate registration of both built-in and custom Task Plugins; configuration errors (missing plugin for a used `<pluginType>:v<major>`) are caught at startup. | If a journey refers to `task.kind: foo:v1` and no corresponding plugin is registered, engine startup fails fast or the spec load for that journey is rejected; runtime MUST NOT silently ignore or downgrade such tasks. | Engine logs plugin registration and resolution at debug level; optional metrics track plugin load failures. | Feature 001 engine overview; Q-001 |
-| FR-011-03 | Provide rich execution context to Task Plugins. | Task Plugin SPI exposes a `TaskExecutionContext` (or equivalent) that includes: current `context` JSON, journey metadata (`kind`, `metadata.name`, `metadata.version`), journey instance id (when available), logical state id, and incoming HTTP request context for `kind: Api` when available. | SPI documentation and unit tests assert that the context object includes the required fields; engine implementation passes through the correct values during task execution. | If required context is missing at runtime (for example journey id when the platform guarantees it), engine treats this as an internal error and fails the run with an internal Problem Details type. | Telemetry can attach journey and plugin identifiers as attributes on spans for task execution. | DSL ref §5 (bindings available to plugin implementations); ADR‑0003; Q-001 |
+| FR-011-01 | Represent all tasks as plugins in the DSL. | DSL requires `task.kind` values of the form `<pluginType>:v<major>` for all tasks, including core behaviours (`httpCall:v1`, `kafkaPublish:v1`, `schedule:v1`); fields under `task` other than `kind` are treated as plugin-defined config. | DSL validators accept plugin-shaped `task.kind` when `<pluginType>` is non-empty and `<major>` is a positive integer, and reject malformed identifiers; old forms such as `kind: httpCall` or `kind: eventPublish` are rejected. | Specs using malformed plugin ids or plugin kinds in the old format are rejected at validation/load time with clear error messages. | Spec-parsing logs and metrics can record counts of tasks per `<pluginType>` for observability. | DSL ref §5 (task); ADR‑0026 |
+| FR-011-02 | Define Task Plugin SPI and registration. | Engine exposes a Java SPI (for example `TaskPlugin`) that all task behaviours implement; plugins are discovered via a registry (for example ServiceLoader plus explicit configuration) keyed by `(pluginType, major)`. | Unit tests and documentation demonstrate registration of both built-in and custom Task Plugins; configuration errors (missing plugin for a used `<pluginType>:v<major>`) are caught at startup. | If a journey refers to `task.kind: foo:v1` and no corresponding plugin is registered, engine startup fails fast or the spec load for that journey is rejected; runtime MUST NOT silently ignore or downgrade such tasks. | Engine logs plugin registration and resolution at debug level; optional metrics track plugin load failures. | Feature 001 engine overview; ADR‑0026 |
+| FR-011-03 | Provide rich execution context to Task Plugins. | Task Plugin SPI exposes a `TaskExecutionContext` (or equivalent) that includes: current `context` JSON, journey metadata (`kind`, `metadata.name`, `metadata.version`), journey instance id (when available), logical state id, and incoming HTTP request context for `kind: Api` when available. | SPI documentation and unit tests assert that the context object includes the required fields; engine implementation passes through the correct values during task execution. | If required context is missing at runtime (for example journey id when the platform guarantees it), engine treats this as an internal error and fails the run with an internal Problem Details type. | Telemetry can attach journey and plugin identifiers as attributes on spans for task execution. | DSL ref §5 (bindings available to plugin implementations); ADR‑0003; ADR‑0026 |
 | FR-011-04 | Align Task Plugin outcomes with the error model. | Task Plugins can return a structured result that either: (a) produces a normal context update, or (b) yields a Problem Details object representing an error; engine maps this to the canonical `JourneyOutcome`/`spec.errors` behaviour without changing the DSL. | Tests cover plugins that: succeed, produce plugin-reported Problems (Problem Details), and crash; resulting `JourneyOutcome` and HTTP responses match the rules from ADR‑0003 and ADR‑0016. | Unhandled exceptions or contract violations in Task Plugin code are treated as internal engine errors (distinct Problem Details type, HTTP 500 for `kind: Api`), not journey-authored failures. | Error metrics and logs distinguish between plugin-reported Problems and plugin runtime failures. | ADR‑0003, ADR‑0016; DSL error model §5.7 |
 | FR-011-05 | Execute core behaviours via Task Plugins. | Core behaviours `httpCall:v1`, `kafkaPublish:v1`, and `schedule:v1` are implemented as first-party Task Plugins that the engine registers under reserved keys, preserving all semantics documented in Feature 001 and related specs. | Regression tests compare pre- and post-feature execution for journeys using only these core plugins to ensure identical outcomes and error handling. | Any behaviour drift for these core plugins (for example different error object shapes or scheduling semantics) is treated as a regression and must be fixed before this feature is considered done. | Telemetry continues to attribute HTTP calls, Kafka publishes, and schedules using existing names; optional plugin type/version labels may be added. | Feature 001 spec; DSL ref §5.1–5.3 |
-| FR-011-06 | Allow plugin-backed tasks in both `kind: Journey` and `kind: Api`. | Engine executes plugin-backed tasks identically in both journey and API contexts; plugins see journey metadata and, for APIs, the HTTP request context, and can mutate `context` used later in the run. | Tests include journeys and APIs that use the same plugin-backed task and assert consistent behaviour from the plugin’s perspective; validation rules do not restrict plugin-backed tasks by `kind`. | If a plugin depends on context that is not available in a given `kind` (for example HTTP headers in a long-running journey resumed from storage), the plugin must fail with a clear Problem Details error; the engine must not silently ignore such issues. | Telemetry may distinguish plugin executions by `kind` (journey vs API) for analysis. | DSL ref §5 (task); Q-001 |
-| FR-011-07 | Prepare for Transform and Expression Engine plugins. | The Task Plugin SPI is defined in a way that future `TransformPlugin` and `ExpressionEnginePlugin` SPIs can share common context and error-handling patterns; the spec briefly documents this planned alignment but does not require implementation in this slice. | Design review for the SPI shows that context and metadata types are reusable for other plugin categories; no DSL changes are required to add Transform/Expression plugins later. | If later features discover that the Task Plugin SPI is too narrow for Transform/Expression plugins, they may extend it but should not break existing Task Plugins; this is recorded as a future open question if needed. | None required in this slice beyond design documentation. | Q-001, roadmap |
+| FR-011-06 | Allow plugin-backed tasks in both `kind: Journey` and `kind: Api`. | Engine executes plugin-backed tasks identically in both journey and API contexts; plugins see journey metadata and, for APIs, the HTTP request context, and can mutate `context` used later in the run. | Tests include journeys and APIs that use the same plugin-backed task and assert consistent behaviour from the plugin’s perspective; validation rules do not restrict plugin-backed tasks by `kind`. | If a plugin depends on context that is not available in a given `kind` (for example HTTP headers in a long-running journey resumed from storage), the plugin must fail with a clear Problem Details error; the engine must not silently ignore such issues. | Telemetry may distinguish plugin executions by `kind` (journey vs API) for analysis. | DSL ref §5 (task); Feature 001 spec |
+| FR-011-07 | Prepare for Transform and Expression Engine plugins. | The Task Plugin SPI is defined in a way that future `TransformPlugin` and `ExpressionEnginePlugin` SPIs can share common context and error-handling patterns; the spec briefly documents this planned alignment but does not require implementation in this increment. | Design review for the SPI shows that context and metadata types are reusable for other plugin categories; no DSL changes are required to add Transform/Expression plugins later. | If later features discover that the Task Plugin SPI is too narrow for Transform/Expression plugins, they may extend it but should not break existing Task Plugins; this is recorded as a future open question if needed. | None required in this increment beyond design documentation. | ADR‑0027; roadmap |
 
 ## Non-Functional Requirements
 | ID | Requirement | Driver | Measurement | Dependencies | Source |
 |----|-------------|--------|-------------|--------------|--------|
-| NFR-011-01 | Preserve JVM safety and stability when loading third-party plugins. | Runtime robustness. | Engine validates plugin classes on load and isolates failures to plugin boundaries; a faulty plugin cannot bring down the entire engine during journey execution beyond the current run. | Java module/classloader setup; plugin discovery mechanism. | Q-001 |
+| NFR-011-01 | Preserve JVM safety and stability when loading third-party plugins. | Runtime robustness. | Engine validates plugin classes on load and isolates failures to plugin boundaries; a faulty plugin cannot bring down the entire engine during journey execution beyond the current run. | Java module/classloader setup; plugin discovery mechanism. | ADR‑0026; project constitution |
 | NFR-011-02 | Keep the core engine small and testable. | Maintainability. | Core engine modules have no hard compile-time dependency on specific plugin implementations beyond the SPI; built-in task plugins live in dedicated modules or packages. | Module boundaries in `journeyforge-runtime-core` and connectors. | Feature 001, AGENTS.md |
 | NFR-011-03 | Clear, opinionated plugin naming and versioning. | Operational clarity. | All plugin-backed `task.kind` values use `<pluginType>:v<major>` with documented conventions for `<pluginType>`; engine logs and error messages reference these identifiers clearly. | DSL validators and engine logging. | DSL ref §5 (custom task plugins) |
 | NFR-011-04 | Backwards compatibility for existing specs. | Adoption. | Rebuilding built-in tasks on top of the Task Plugin SPI introduces no breaking changes to existing journeys or APIs; all existing DSL examples and tests continue to pass unchanged. | Migration tests comparing before/after behaviour. | Feature 001 spec; DSL ref |
@@ -106,34 +124,35 @@ spec:
       outputVar: output
 ```
 
-```java
-// Example – task plugin signature sketch (Java, non-normative)
-public interface TaskPlugin {
-  String pluginType();          // e.g. "jwtValidate"
-  int majorVersion();           // e.g. 1
+## Task Plugin SPI Overview
 
-  TaskResult execute(TaskExecutionContext ctx) throws TaskPluginException;
-}
+This section summarises the core SPI types in a language-agnostic way.
 
-public sealed interface TaskResult
-    permits TaskSuccess, TaskProblem {
-}
-
-public record TaskSuccess(JsonNode updatedContext) implements TaskResult {}
-
-public record TaskProblem(ProblemDetails problem) implements TaskResult {}
-
-public interface TaskExecutionContext {
-  JsonNode context();                // current journey context
-  JsonNode taskConfig();             // all fields under `task` except `kind`
-  JourneyMetadata journey();         // kind, name, version
-  Optional<JourneyInstanceId> instanceId();  // journeyId when available
-  String stateId();                  // DSL state id
-  Optional<HttpRequestContext> httpRequest(); // for kind: Api when available
-
-  PlatformView platform();           // structured view aligned with ADR-0022 (`platform` binding)
-}
-```
+- `TaskPlugin`
+  - Identified by `(pluginType, major)` and bound to `task.kind: <pluginType>:v<major>` in the DSL.
+  - Exposes a single `execute` operation that takes a `TaskExecutionContext` and returns a `TaskResult` or signals a `TaskPluginException`.
+  - Must be pure with respect to control-flow: no resumable lifecycles; long-lived waiting is modelled via DSL states (`wait`, `webhook`, `timer`, `schedule`).
+- `TaskExecutionContext`
+  - Read-only view over the current journey state:
+    - `context` – current JSON context object.
+    - `taskConfig` – plugin configuration (all fields under `task` except `kind`).
+    - `journey` – metadata for the definition (name, version, kind).
+    - `instanceId` – journey instance identifier when available.
+    - `stateId` – DSL state identifier.
+    - `httpRequest` – HTTP request metadata for `kind: Api` when present.
+  - Integration points:
+    - `telemetry` – handle for attaching attributes and child events to the current telemetry activity (Feature 022).
+    - `platform` – structured access to platform/configuration views aligned with ADR‑0022.
+- `TaskResult`
+  - Structured outcome of plugin execution:
+    - `TaskSuccess` – carries an updated `context` value to be persisted by the engine.
+    - `TaskProblem` – wraps an RFC 9457 Problem Details instance representing a plugin-reported failure; the engine leaves `context` unchanged and maps the Problem into envelopes (`JourneyOutcome`, HTTP status) per ADR‑0003/ADR‑0016/ADR‑0024.
+- `TaskPluginException`
+  - Signals unexpected plugin failures (bugs, misconfiguration) distinct from normal, journey-visible Problems.
+  - The engine converts these into internal errors with stable Problem types and HTTP 5xx semantics without leaking sensitive details.
+- `TaskPluginRegistry`
+  - Engine-side registry responsible for resolving `(pluginType, major)` into a concrete `TaskPlugin` implementation.
+  - May be backed by static configuration, ServiceLoader-style discovery, or explicit wiring, but resolution behaviour (no silent fallbacks, no best-effort downgraded versions) is governed by the functional requirements in this spec.
 
 ## Cross-cutting Task Plugin Rules
 

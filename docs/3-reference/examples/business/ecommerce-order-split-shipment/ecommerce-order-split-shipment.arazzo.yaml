@@ -3,7 +3,7 @@ info:
   title: JourneyForge – ecommerce-order-split-shipment workflows
   version: 0.1.0
   summary: Workflows for e-commerce orders with inventory checks and split shipments.
-  description: Workflows for orchestrating e-commerce orders with inventory reservation, customer confirmation, split shipments, and fulfillment callbacks. See Q-013 in docs/4-architecture/open-questions.md for design context.
+  description: Workflows for orchestrating e-commerce orders with inventory reservation, customer confirmation, split shipments, and fulfillment callbacks.
 sourceDescriptions:
   - name: ecommerceOrder
     type: openapi

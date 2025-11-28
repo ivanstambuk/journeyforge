@@ -2,7 +2,7 @@ openapi: 3.1.0
 info:
   title: Claims API
   version: 1.0.0
-  description: Claims API for FNOL (first notice of loss) and settlement recording. See Q-015 in docs/4-architecture/open-questions.md for journey design context.
+  description: Claims API for FNOL (first notice of loss) and settlement recording.
   contact:
     name: JourneyForge
 servers:

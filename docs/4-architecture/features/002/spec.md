@@ -9,7 +9,7 @@
 | Linked tasks | `docs/4-architecture/features/002/tasks.md` |
 | Roadmap entry | #002 |
 
-> Guardrail: This specification is the single normative source of truth for the feature. Track high‑ and medium‑impact questions in `docs/4-architecture/open-questions.md` (for example Q-002), encode resolved answers directly in the Requirements/NFR/Behaviour/Telemetry sections below, and use ADRs under `docs/6-decisions/` for architecturally significant clarifications.
+> Guardrail: This specification is the single normative source of truth for the feature. Track high‑ and medium‑impact questions in `docs/4-architecture/open-questions.md`, encode resolved answers directly in the Requirements/NFR/Behaviour/Telemetry sections below, and use ADRs under `docs/6-decisions/` for architecturally significant clarifications.
 
 ## Overview
 Introduce a metadata model and query surface for journeys that allows:
@@ -33,7 +33,7 @@ Primary references:
 - Add an operator‑oriented `GET /journeys` listing endpoint with filters over journey name, phase, tags, and selected attributes, and keep room for a self‑service “my journeys” endpoint built on top of `subjectId`.
 
 ## Non-Goals
-- No append‑only enrichment APIs for tags/attributes in this slice (only v1 immutability is implemented; enrichment is directional).
+- No append‑only enrichment APIs for tags/attributes in this increment (only v1 immutability is implemented; enrichment is directional).
 - No shared/global metadata policies or reuse mechanism beyond journey‑local configuration; reuse will be considered only if duplication becomes a real problem.
 - No typed attribute system (all attribute values are strings) and no ad‑hoc query language beyond a small, fixed set of query parameters.
 - No separate “internal‑only” metadata channel; tags/attributes are observable metadata by design.

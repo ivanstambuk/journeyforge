@@ -15,7 +15,6 @@ Gradle will fail fast if any underlying task fails; check the failing sub-task i
 ## Usage Guidelines
 - Keep `qualityGate` green; treat it as the minimal CI contract for any change.
 - When a feature spec or plan introduces new quality requirements (for example contract tests, mutation analysis, additional architecture checks), update this runbook once the corresponding Gradle tasks are wired in.
-- For large feature slices, consider running module-scoped `check` tasks (for example runtime or connector modules) during iteration and the full `qualityGate` before marking the feature complete.
+- For large feature increments, consider running module-scoped `check` tasks (for example runtime or connector modules) during iteration and the full `qualityGate` before marking the feature complete.
 
 Keep this document in sync whenever thresholds, task wiring, or report locations change.
-

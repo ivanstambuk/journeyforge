@@ -21,7 +21,7 @@ Status: Draft | Last updated: 2025-11-23
 - Network in CI would flake tests → use stubbed HTTP client interface injected into the engine.
 - Misuse of scheduling for high-frequency jobs → enforce coarse-grained minimum interval and document limits in ADR-0017; keep initial scheduler in-memory and single-node.
 - Confusion between interactive and scheduled paths → keep `task.kind: schedule:v1` clearly non-interactive and document patterns in examples; validate non-interactive scheduled paths statically where possible.
-- Implementation complexity in scheduler → start with in-memory, single-node scheduler and document limitations; defer distributed/HA scheduler to a later feature slice (for example under persistence/admin features).
+- Implementation complexity in scheduler → start with in-memory, single-node scheduler and document limitations; defer distributed/HA scheduler to a later feature increment (for example under persistence/admin features).
 
 ## Validation
 - `./gradlew spotlessApply check` green.

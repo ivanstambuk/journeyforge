@@ -2,7 +2,7 @@ openapi: 3.1.0
 info:
   title: Car Rentals API
   version: 1.0.0
-  description: Car Rentals API for creating and cancelling car bookings. See Q-017 in docs/4-architecture/open-questions.md for journey design context.
+  description: Car Rentals API for creating and cancelling car bookings.
   contact:
     name: JourneyForge
 servers:

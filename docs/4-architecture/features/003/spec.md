@@ -30,9 +30,9 @@ This feature extends the DSL and engine behaviour for *outbound* HTTP only; inbo
 - Define caching behaviour for OAuth2 access tokens so that tokens obtained with identical effective requests can be reused across journey instances until expiry.
 
 ## Non-Goals
-- No UI or admin API for managing the secret store in this slice; we only define the DSL and engine contract for resolving `secretRef` values.
+- No UI or admin API for managing the secret store in this increment; we only define the DSL and engine contract for resolving `secretRef` values.
 - No refresh token handling beyond basic access‑token caching.
-- No support for arbitrary OAuth grants (password, device code, etc.); this slice focuses on `client_credentials`.
+- No support for arbitrary OAuth grants (password, device code, etc.); this increment focuses on `client_credentials`.
 - No per‑task inline secrets; all sensitive material must flow via `secretRef`.
 
 ## Functional Requirements

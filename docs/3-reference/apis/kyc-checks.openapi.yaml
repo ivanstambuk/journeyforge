@@ -2,7 +2,7 @@ openapi: 3.1.0
 info:
   title: KYC Checks API
   version: 1.0.0
-  description: KYC checks API for starting identity verification flows. See Q-019 in docs/4-architecture/open-questions.md for journey design context.
+  description: KYC checks API for starting identity verification flows.
   contact:
     name: JourneyForge
 servers:

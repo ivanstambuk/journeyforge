@@ -18,7 +18,7 @@ We want:
 - A clear, predictable **timeout outcome** when that budget is exceeded.
 - Semantics that work for both `kind: Journey` (Journeys API) and `kind: Api` (synchronous HTTP endpoints), and that integrate with the existing error model (ADR‑0003).
 
-This ADR is related to open question Q-007 in `docs/4-architecture/open-questions.md`.
+This ADR is related to earlier discussions about maximum journey execution time and deadline semantics tracked in `docs/4-architecture/open-questions.md`.
 
 ## Decision
 We introduce an optional `spec.execution` block that defines a global execution budget and a terminal timeout mapping.

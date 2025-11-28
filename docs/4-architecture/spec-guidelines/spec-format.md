@@ -24,7 +24,7 @@ JSON Schema dialect
 - No secrets in specs; reference them indirectly (future: `secret://...`).
 
 ## YAML Style Rules
-(Related: Q-003 in `docs/4-architecture/open-questions.md`.)
+(Related: see ADR-0015 for the v1 decision to keep expressions inline-only.)
 - Indentation
   - Use 2 spaces per indentation level.
   - Tabs are not allowed anywhere in YAML files.

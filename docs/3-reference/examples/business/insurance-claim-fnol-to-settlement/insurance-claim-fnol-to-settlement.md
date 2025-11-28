@@ -20,7 +20,7 @@ This journey models a simplified insurance claim from FNOL to settlement:
 - It then runs parallel assessments from an adjuster and a repair/medical provider, each providing their own decision and recommended amounts, with soft SLAs so that overdue assessments are marked (and can be escalated) without automatically denying the claim.
 - If both assessments support approval, it moves to an internal settlement approval step; approved settlements are recorded in the Claims API and a payment is authorised via the Payments API.
 
-The journey is long-lived: clients start it once, track progress via status calls, submit FNOL details and assessment decisions via dedicated steps, and finally read an outcome that summarises whether the claim was settled or denied and what assessment data led to that decision. Design and scope for this example are captured under Q-015 in `docs/4-architecture/open-questions.md`.
+The journey is long-lived: clients start it once, track progress via status calls, submit FNOL details and assessment decisions via dedicated steps, and finally read an outcome that summarises whether the claim was settled or denied and what assessment data led to that decision.
 
 Actors & systems:
 - Claims intake channel or back-office system that starts the journey, submits FNOL details, and polls status/result.

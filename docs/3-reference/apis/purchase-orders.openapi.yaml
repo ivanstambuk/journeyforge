@@ -2,7 +2,7 @@ openapi: 3.1.0
 info:
   title: Purchase Orders API
   version: 1.0.0
-  description: Purchase Orders API for creating B2B purchase orders. See Q-014 in docs/4-architecture/open-questions.md for journey design context.
+  description: Purchase Orders API for creating B2B purchase orders.
   contact:
     name: JourneyForge
 servers:

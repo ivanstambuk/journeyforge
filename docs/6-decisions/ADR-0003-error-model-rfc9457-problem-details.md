@@ -37,7 +37,7 @@ We considered several options:
     - First normalise any low-level error data into a Problem Details object, and
     - Then apply a journey-level envelope mapper that takes a Problem Details object (or a `{code,reason,...}` view of
       it) and produces the desired error body for that journey.
-- The DSL introduces a dedicated `spec.errors` block (see Q-002 in `docs/4-architecture/open-questions.md`) to make
+- The DSL introduces a dedicated `spec.errors` block to make
   these mappings explicit and per-journey:
   - `spec.errors.canonicalFormat` declares the canonical internal error model for the journey; in this version it is
     implicitly `rfc9457` when omitted and MUST be `rfc9457` when present.
@@ -52,7 +52,7 @@ We considered several options:
     other request metadata; one journey has exactly one external error envelope (Problem Details by default).
   - Shared DataWeave modules and `exprRef`-based reuse remain possible in general, but `spec.errors` itself is defined
     in terms of inline mappers in this version; cross-journey sharing of error mappers is out of scope until usage
-    patterns are clearer (see Q-002).
+    patterns are clearer and justified by real reuse.
 
 ## Consequences
 - Consistency:

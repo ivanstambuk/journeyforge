@@ -75,7 +75,7 @@ Positive:
   - Returning selected cookies to clients without manual header mangling.
 - The separation between transport concerns and business logic remains:
   - Inbound cookies stay explicit (via header bindings).
-  - Jar content is not directly exposed to DataWeave in this slice.
+  - Jar content is not directly exposed to DataWeave in this increment.
 
 Negative / trade-offs:
 - Engine and HTTP connector complexity increases:

@@ -3,7 +3,7 @@ info:
   title: JourneyForge – b2b-purchase-order workflows
   version: 0.1.0
   summary: Workflows for B2B purchase orders with multi-level approvals.
-  description: Workflows for creating B2B purchase orders and driving multi-level approvals (manager, parallel department+finance, procurement board) to an approved or rejected outcome. See Q-014 in docs/4-architecture/open-questions.md for design context.
+  description: Workflows for creating B2B purchase orders and driving multi-level approvals (manager, parallel department+finance, procurement board) to an approved or rejected outcome.
 sourceDescriptions:
   - name: b2bPurchaseOrder
     type: openapi

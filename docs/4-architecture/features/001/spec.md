@@ -9,7 +9,7 @@
 | Linked tasks | `docs/4-architecture/features/001/tasks.md` |
 | Roadmap entry | #001 |
 
-> Guardrail: This specification is the single normative source of truth for the feature. Track high‑ and medium‑impact questions in `docs/4-architecture/open-questions.md` (for example Q-001), encode resolved answers directly in the Requirements/NFR/Behaviour/Telemetry sections below, and use ADRs under `docs/6-decisions/` for architecturally significant clarifications.
+> Guardrail: This specification is the single normative source of truth for the feature. Track high‑ and medium‑impact questions in `docs/4-architecture/open-questions.md`, encode resolved answers directly in the Requirements/NFR/Behaviour/Telemetry sections below, and use ADRs under `docs/6-decisions/` for architecturally significant clarifications.
 
 ## Overview
 Introduce a spec‑first engine that executes YAML/JSON journey definitions using the full DSL surface defined in `docs/3-reference/dsl.md`. The DSL includes state types such as `task` (HTTP call, cache operations, and `schedule` via `task.kind: <pluginType>:v<major>`), `choice`, `transform`, `wait`, `webhook`, `parallel`, `timer`, `subjourney`, `succeed`, and `fail`, plus configuration blocks for schemas, policies, and error handling. Execution is initially synchronous and in‑memory, suitable for local runs and unit tests, and lays the foundation for later persistence, durable scheduling, timers, and parallelism.
@@ -244,5 +244,5 @@ spec:
 - Scheduling and engine:
   - Internal schedule binding model linking journey definitions, subject ids, cadence, and evolving `context`.
   - Scheduler component that triggers new journey instances based on bindings, enforcing `interval` and `maxRuns` as per ADR‑0017.
-- API surface (future slice, not in this feature):
+- API surface (future increment, not in this feature):
   - Read-only endpoints for listing schedules per subject and cancelling schedules, keyed by schedule id or `(journey, subjectId, start)`, to be defined alongside the admin plane features.

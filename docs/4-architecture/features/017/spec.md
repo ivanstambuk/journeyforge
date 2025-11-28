@@ -18,7 +18,7 @@ Introduce a WebSocket inbound binding for `kind: Journey` definitions via `spec.
 - Submit external-input step payloads.
 - Optionally receive status/outcome updates over the same connection.
 
-This feature is **DSL/API design only**; engine implementation and transport details will be delivered in later slices.
+This feature is **DSL/API design only**; engine implementation and transport details will be delivered in later increments.
 
 Primary references:
 - DSL reference: `docs/3-reference/dsl.md` (section 17 – Inbound Bindings).
@@ -135,9 +135,8 @@ The DSL itself does not embed these message schemas; it only declares that a giv
 | NFR-017-02 | Preserve engine transport-agnosticism. | Architecture. | All WebSocket semantics must be expressed in terms of existing logical operations (`start`, `submitStep`, `getStatus`, `getOutcome`). |
 | NFR-017-03 | Avoid over-specifying message envelopes. | Flexibility. | Details of JSON frames live in a separate WebSocket API reference; DSL only captures binding configuration. |
 
-## Open Questions (for future slices)
+## Open Questions (for future increments)
 
-This feature intentionally keeps WebSocket message envelopes and server behaviour high-level. If future slices need more precision, they should introduce new questions in `open-questions.md`, for example:
+This feature intentionally keeps WebSocket message envelopes and server behaviour high-level. If future increments need more precision, they should introduce new questions in `open-questions.md`, for example:
 - How should reconnection and resume semantics be expressed (if at all) at the DSL or API layer?
 - Should journeys be able to opt into or out of status/outcome streaming over WebSockets explicitly?
-

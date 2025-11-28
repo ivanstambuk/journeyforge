@@ -4,7 +4,7 @@ Last updated: 2025-11-23
 
 Guiding principles
 - Spec‑first. Update the spec before plans/tasks or code.
-- Small, verifiable increments. Run `./gradlew --no-daemon spotlessApply check` after each slice.
+- Small, verifiable increments. Run `./gradlew --no-daemon spotlessApply check` after each increment.
 - Track ambiguities in `open-questions.md`; reflect decisions in specs/ADRs.
 
 ## Features (initial seed)

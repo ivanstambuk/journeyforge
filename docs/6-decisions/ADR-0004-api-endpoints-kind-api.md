@@ -61,7 +61,7 @@ Execution semantics (`kind: Api`):
   - The structure of the error payload MUST follow the journey’s error configuration:
     - When `spec.errors.envelope` is omitted or uses `format: problemDetails`, the error body MUST use the Problem Details shape.
     - When `spec.errors.envelope.format: custom` is present, the error body MUST be produced by the journey’s configured envelope mapper.
-  - HTTP status code selection remains an implementation concern (see Q-001 in `docs/4-architecture/open-questions.md`); implementations MAY consult `spec.outcomes` and canonical Problem Details `status` to choose appropriate status codes.
+  - HTTP status code selection remains an implementation concern; implementations MAY consult `spec.outcomes` and canonical Problem Details `status` to choose appropriate status codes.
 
 Constraints (`kind: Api`):
 - State surface:

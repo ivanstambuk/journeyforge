@@ -19,5 +19,5 @@ JourneyForge needs a single, powerful expression/transform language for predicat
 
 ## Notes
 - Implementation details (e.g., embedding vs external CLI) are non‑normative and will be specified in the corresponding feature.
-- External DataWeave modules and DSL-level `exprRef` fields are explicitly out of scope for this version; see ADR-0015 and Q-003 in `docs/4-architecture/open-questions.md` for recorded reuse scenarios and the v1 decision to keep expressions inline-only.
+- External DataWeave modules and DSL-level `exprRef` fields are explicitly out of scope for this version; see ADR-0015 for recorded reuse scenarios and the v1 decision to keep expressions inline-only.
 - Later ADRs (for example ADR‑0027) generalise the expression model to a pluggable Expression Engine SPI; DataWeave remains the baseline engine for `lang: dataweave`, but deployments MAY register additional engines alongside it.

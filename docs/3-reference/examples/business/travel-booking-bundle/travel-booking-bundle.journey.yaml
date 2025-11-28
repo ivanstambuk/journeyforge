@@ -1,4 +1,3 @@
-# Design note: see Q-017 in docs/4-architecture/open-questions.md for scope and provider structure.
 apiVersion: v1
 kind: Journey
 metadata:

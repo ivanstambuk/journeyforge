@@ -33,9 +33,9 @@ This feature is opt‑in per spec via `spec.cookies` and does not change behavio
 
 ## Non-Goals
 - No generic, cross‑journey cookie store or persistence; the jar is strictly per journey instance or per API invocation.
-- No DataWeave binding that exposes the jar content directly to DSL expressions in this slice.
+- No DataWeave binding that exposes the jar content directly to DSL expressions in this increment.
 - No automatic transformation of inbound `Cookie` into the jar; inbound cookies are only available via explicit header bindings or engine‑specific mechanisms.
-- No support for cookie partitioning or advanced browser features (e.g. CHIPS) beyond standard domain/path/secure attributes in this slice.
+- No support for cookie partitioning or advanced browser features (e.g. CHIPS) beyond standard domain/path/secure attributes in this increment.
 
 ## Functional Requirements
 | ID | Requirement | Success path | Validation path | Failure path | Telemetry & traces | Source |

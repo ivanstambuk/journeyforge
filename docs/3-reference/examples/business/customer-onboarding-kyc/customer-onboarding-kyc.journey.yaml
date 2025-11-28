@@ -1,4 +1,3 @@
-# Design note: see Q-019 in docs/4-architecture/open-questions.md for scope and multi-party check structure.
 apiVersion: v1
 kind: Journey
 metadata:

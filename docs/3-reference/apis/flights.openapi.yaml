@@ -2,7 +2,7 @@ openapi: 3.1.0
 info:
   title: Flights API
   version: 1.0.0
-  description: Flights API for creating and cancelling flight bookings. See Q-017 in docs/4-architecture/open-questions.md for journey design context.
+  description: Flights API for creating and cancelling flight bookings.
   contact:
     name: JourneyForge
 servers:

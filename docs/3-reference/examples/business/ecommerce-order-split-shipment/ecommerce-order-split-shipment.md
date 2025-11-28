@@ -19,7 +19,7 @@ This journey orchestrates an e-commerce order that may require split shipments:
 - When at least some items are available, it proposes split shipments and waits for the customer to confirm whether to proceed or cancel.
 - On confirmation, it requests shipments and then waits for a fulfillment callback that reports whether the order was fully fulfilled, partially fulfilled, cancelled, or failed.
 
-The journey is long-lived: clients start it once, track progress via status calls, submit a confirmation decision via a dedicated step, and poll for a final outcome that summarises the overall fulfillment status and any split shipments. Design and scope for this example are captured under Q-013 in `docs/4-architecture/open-questions.md`.
+The journey is long-lived: clients start it once, track progress via status calls, submit a confirmation decision via a dedicated step, and poll for a final outcome that summarises the overall fulfillment status and any split shipments.
 
 Actors & systems:
 - E-commerce frontend or order management system that starts the journey, surfaces split-shipment proposals, and polls status/result.

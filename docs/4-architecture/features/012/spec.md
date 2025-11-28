@@ -48,9 +48,45 @@ This feature:
 | FR-012-04 | Cross-engine configuration and limits. | Expression engines are configured under `plugins.expressions` with deployment-wide `defaults` and optional per-engine overrides in `engines.<engineId>`, supporting at minimum `maxEvalMs` and `maxOutputBytes` as cross-engine limits. | Configuration reference and tests cover applying defaults and per-engine overrides and assert that engines enforce `maxEvalMs`/`maxOutputBytes` for representative expression sites. | When configuration is missing or invalid (for example negative limits), the engine MUST fail fast at startup; when evaluations exceed configured limits, engines MUST fail the evaluation with a clear error or apply stricter internal limits, but MUST NOT silently ignore configured bounds. | Telemetry and logs SHOULD surface when evaluations are terminated due to expression limits (for example `expr.limited=true`, `expr.limit=maxEvalMs`). | ADR-0027 |
 | FR-012-05 | Cross-engine error taxonomy. | All expression engines classify evaluation errors using stable, engine-specific `code` values; engine features document how each code maps to conceptual categories such as syntax error, runtime error, limit violation, or internal/engine failure so that tooling can derive higher-level groupings from codes alone. | SPI and engine docs specify how errors from each engine implementation are mapped into engine-specific codes; tests assert correct classification for representative failure cases (syntax-like, runtime-like, limit, internal/bug). | Misclassified or uncategorised errors are treated as internal engine errors and MUST be fixed; engines MUST NOT surface raw stack traces or unstructured failures to DSL authors. | Telemetry and Problem Details SHOULD expose `expr.code` (or equivalent) so that expression failures can be distinguished from plugin/connector failures. | ADR-0027, ADR-0003, ADR-0025, ADR-0026 |
 
+## Expression Engine SPI Overview
+
+This section summarises the core Expression Engine SPI types in a language-agnostic way. Concrete Java types live in the runtime once Feature 012 proceeds to implementation.
+
+- `ExpressionEnginePlugin`
+  - Identified by an engine id (for example `dataweave`, `jsonata`, `jolt`, `jq`) and a major version.
+  - Exposes a single `evaluate` operation that takes:
+    - An expression string.
+    - An `ExpressionEvaluationContext` (bindings).
+    - Optional evaluation options (for example maxEvalMs, maxOutputBytes) derived from configuration.
+  - Returns an `ExpressionResult` representing either a value or a Problem-style failure.
+  - Must be pure: cannot reach engine connectors or mutate engine/journey state; it can only compute values from its inputs.
+
+- `ExpressionEvaluationContext`
+  - Read-only view over data available at the expression site, aligned with the DSL bindings:
+    - `context` – current journey context JSON value.
+    - `payload` – “current payload” for the site (for example HTTP body, external-input step payload); `null`/absent when not applicable.
+    - `error` – low-level error value only in error-mapping sites (for example `spec.errors` mappers); `null`/absent elsewhere.
+    - `platform` – read-only JSON object exposing platform metadata and configuration (see ADR‑0022 and DSL reference §10).
+  - Integration points:
+    - `telemetry` – a handle for attaching attributes and child events for expression evaluation when enabled (Feature 022); engines MAY use this for aggregated metrics/traces but expression engines do not talk directly to exporters.
+
+- `ExpressionResult`
+  - Structured outcome of expression evaluation:
+    - `ExpressionValue` – wraps a JSON/primitive value to be written into `context` or a variable according to the DSL site rules.
+    - `ExpressionProblem` – wraps an RFC 9457 Problem Details instance representing an evaluation failure (syntax error, runtime error, limit violation); evaluation does not change journey context.
+  - Expression failures are mapped into journey behaviour according to the DSL site:
+    - For predicates, evaluation failures are treated as internal engine errors (as described in the DSL reference).
+    - For mappers/transforms, behaviour follows the existing error model and `spec.errors` configuration.
+
+- `ExpressionEngineRegistry`
+  - Engine-side registry responsible for resolving `lang: <engineId>` into a concrete `ExpressionEnginePlugin` implementation.
+  - Resolution MUST be strict:
+    - Unknown `lang` values cause validation or startup failures.
+    - Engines MUST NOT fall back to a default engine when a requested `engineId` is unavailable.
+
 ## Interface & Contract Catalogue
 
--- **DSL**
+--- **DSL**
   - `lang: <engineId>` on:
     - `choice.when.predicate`,
     - `transform.expr` / `transform.mapper`,
@@ -58,8 +94,8 @@ This feature:
     - error mappers under `spec.errors` and similar.
   - Engine ids such as `dataweave`, `jsonata`, `jolt`, and `jq` are defined by language-specific features (for example Features 013–016) and ADRs (for example ADR-0002, ADR-0027); this feature only defines the generic plugin and wiring model.
 - **Engine SPI (conceptual)**
-  - `ExpressionEnginePlugin` – main interface for expression engines (language id, version, evaluate method).
-  - `ExpressionEvaluationContext` – bindings provided to expression engines (`context`, `payload`, `error`, `platform`) with availability per expression context defined in the DSL reference.
+  - `ExpressionEnginePlugin` – main interface for expression engines (engine id, version, evaluate method) as summarised above.
+  - `ExpressionEvaluationContext` – bindings provided to expression engines (`context`, `payload`, `error`, `platform`, plus optional telemetry handle) with availability per expression context defined in the DSL reference.
   - `ExpressionResult` – success/failure wrapper:
     - `ExpressionValue` – successful evaluation with a JSON/primitive value.
     - `ExpressionProblem` – evaluation failure represented as an RFC 9457 Problem Details object; evaluation does not change journey context.

@@ -36,7 +36,7 @@ Run this section **before** implementation for the feature starts.
 
 4. **Tasks coverage**
    - [ ] Every functional requirement, non-functional requirement, and key scenario/journey path maps to at least one task.
-   - [ ] Tasks sequence tests before implementation and keep planned increments ≤90 minutes by outlining logical, self-contained slices (execution may run longer if needed).
+  - [ ] Tasks sequence tests before implementation and keep planned increments ≤90 minutes by outlining logical, self-contained increments (execution may run longer if needed).
    - [ ] Planned tests enumerate success, validation, and failure branches for journeys/DSL/connectors, with failing cases queued before or alongside implementation.
 
 5. **Constitution compliance**
@@ -79,4 +79,3 @@ Run this section once all planned tasks are complete and the latest build is gre
    - [ ] Any lessons or reusable guidance (for example DSL idioms, journey patterns, connector policies) are captured so downstream features can adopt them.
 
 Do not mark the feature complete until all medium/high-impact divergences are resolved through updated specs, approved tasks, or explicit user sign-off recorded in the plan.
-

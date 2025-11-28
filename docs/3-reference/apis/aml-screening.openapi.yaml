@@ -2,7 +2,7 @@ openapi: 3.1.0
 info:
   title: AML Screening API
   version: 1.0.0
-  description: AML screening API for starting AML checks on individuals. See Q-019 in docs/4-architecture/open-questions.md for journey design context.
+  description: AML screening API for starting AML checks on individuals.
   contact:
     name: JourneyForge
 servers:

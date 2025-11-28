@@ -1321,6 +1321,10 @@ Configuration, security, and observability
 - Plugin behaviour is configured primarily via the DSL `task` block; when a plugin supports engine-defined profiles, omission of a profile selector in the DSL MUST be treated as selecting a well-defined `"default"` profile from engine configuration.
 - Plugins MAY cause external side effects (for example HTTP calls, event publishes), but from the DSL’s perspective these effects are always mediated by engine-provided connectors and infrastructure; plugin DSL surfaces MUST NOT assume direct access to arbitrary sockets, databases, or filesystem paths.
 - Data available to plugins via `context` and HTTP request bindings MAY contain PII and secrets; plugins and engines MUST honour the project’s security posture (for example cookie and secret-handling rules from ADR-0012 and observability guardrails from ADR-0025/ADR-0026) and MUST NOT use the DSL to expose or log raw secret values. Logging levels and telemetry detail for plugins are controlled via deployment configuration (`observability.plugins.*`), not per-journey DSL fields.
+- Implementation references (non-normative):
+  - Feature 011 – Task Plugins & Execution SPI – defines the engine-side plugin interfaces and execution model that realise these DSL rules.
+  - ADR-0026 – Task Plugins Model and Constraints – captures the plugin constraints adopted by the engine.
+  - ADR-0031 – Runtime Core vs Connector Modules Boundary – describes how plugin implementations (including HTTP) are placed in core vs connector modules.
 
 ### 5.4 `choice` (branch)
 Choice states enable data-driven branching: tasks and other states write results into `context`, and predicates over that data decide which `next` state is taken.
@@ -1412,7 +1416,7 @@ Semantics
 <a id="dsl-6-example"></a>
 ## 6. Example
 	
-The `spec.errors` block allows journeys to centralise, per journey, how they normalise and expose errors, building on the canonical RFC 9457 Problem Details model (see ADR‑0003 and Q-002 in `docs/4-architecture/open-questions.md`).
+The `spec.errors` block allows journeys to centralise, per journey, how they normalise and expose errors, building on the canonical RFC 9457 Problem Details model (see ADR‑0003).
 	
 	```yaml
 	spec:
@@ -1608,7 +1612,7 @@ spec:
 ## 7. Limitations (explicit non-capabilities)
 - Terminal success/failure are explicit via `succeed`/`fail`; tasks never auto‑terminate a journey.
 - Enforcement for retries, circuit breakers, bulkheads, or authentication policies is not defined here; only configuration via resilience policies is specified.
-- Engine feature slices MAY implement only a subset of the DSL surface at any given time. When a state type or construct (for example `wait`, `webhook`, `timer`, `parallel`, `subjourney`, cache operations, or scheduling) is not yet supported by a given engine, specs using it SHOULD be rejected or explicitly documented as unsupported until the corresponding feature spec is implemented.
+- Engine feature increments MAY implement only a subset of the DSL surface at any given time. When a state type or construct (for example `wait`, `webhook`, `timer`, `parallel`, `subjourney`, cache operations, or scheduling) is not yet supported by a given engine, specs using it SHOULD be rejected or explicitly documented as unsupported until the corresponding feature spec is implemented.
 - No array indexing in dot‑paths (no `a[0]`), and no alternate expression languages beyond those explicitly supported by the expression engine plugin model.
 - No generic environment-variable lookup or direct secret access from expressions; secrets only appear as opaque `secretRef` identifiers in dedicated policy/task configuration surfaces.
 - No persistence/resume across process restarts.
@@ -3159,7 +3163,7 @@ Semantics
   - `execution.defaultMaxDurationSec`:
     - Optional; when present, expresses the desired default wall-clock lifetime (in whole seconds) for a single journey instance or API invocation when the journey/API spec does not declare `spec.execution`.
     - Engines that support global execution limits SHOULD enforce a deadline of at most this value for such specs, applying the execution-deadline semantics from section “2.4 Execution deadlines (spec.execution)” with an engine-defined timeout error mapping when `spec.execution.onTimeout` is not available.
-    - The effective default for a given installation is conceptually `min(defaultMaxDurationSec, maxDurationUpperBoundSec, platformCaps)`; platform limits continue to take precedence (see Q-015).
+    - The effective default for a given installation is conceptually `min(defaultMaxDurationSec, maxDurationUpperBoundSec, platformCaps)`; platform limits continue to take precedence.
   - `execution.maxDurationUpperBoundSec`:
     - Optional; when present, defines a hard upper bound (in whole seconds) that engines MUST apply when interpreting `spec.execution.maxDurationSec` in journey/API definitions.
     - When a spec sets `spec.execution.maxDurationSec` greater than this value, engines MUST clamp the effective global budget to `execution.maxDurationUpperBoundSec` (or stricter platform caps) while still using the spec’s `spec.execution.onTimeout` for the timeout outcome as described in section “2.4 Execution deadlines (spec.execution)” and ADR‑0007.

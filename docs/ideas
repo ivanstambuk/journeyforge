@@ -479,7 +479,7 @@ Later, you can split off **`orchestrator-ui-react`** (React Flow / Atlas) into a
 
 ---
 
-## 🚀 MVP roadmap (incremental slices)
+## 🚀 MVP roadmap (incremental increments)
 
 Given the large scope, it is safer to explicitly carve out stages.
 
@@ -618,7 +618,7 @@ A few design tensions you should consciously manage:
 | Persistence               | Pluggable: filesystem, embedded DB, JDBC DB                                                    | Simple first, pluggable later                                                       |
 | Versioning & environments | Versioned workflows, environment bindings (dev/test/prod), immutable deployed specs            | RFP/enterprise expectations                                                         |
 | Telemetry & governance    | OpenTelemetry integration, log streaming, RBAC for admin APIs, RFP checklist in docs           | Enterprise positioning                                                              |
-| MVP slice                 | Core HTTP engine + basic spec + engine + simple CLI/API                                        | Additional connectors and UI later                                                  |
+| MVP increment             | Core HTTP engine + basic spec + engine + simple CLI/API                                        | Additional connectors and UI later                                                  |
 | Main risks                | DSL complexity, overlap with existing engines, SAGA semantics complexity, feature bloat        | Needs a disciplined, minimal core                                                   |
 
 If you want, the next step can be a concrete **initial repo blueprint** (README outline, first Gradle modules, and one minimal workflow spec + engine stub) that you can drop into a GitHub repo and start iterating on.
@@ -1112,7 +1112,7 @@ Later, you can split off **`orchestrator-ui-react`** (React Flow / Atlas) into a
 
 ---
 
-## 🚀 MVP roadmap (incremental slices)
+## 🚀 MVP roadmap (incremental increments)
 
 Given the large scope, it is safer to explicitly carve out stages.
 
@@ -1251,7 +1251,7 @@ A few design tensions you should consciously manage:
 | Persistence               | Pluggable: filesystem, embedded DB, JDBC DB                                                    | Simple first, pluggable later                                                       |
 | Versioning & environments | Versioned workflows, environment bindings (dev/test/prod), immutable deployed specs            | RFP/enterprise expectations                                                         |
 | Telemetry & governance    | OpenTelemetry integration, log streaming, RBAC for admin APIs, RFP checklist in docs           | Enterprise positioning                                                              |
-| MVP slice                 | Core HTTP engine + basic spec + engine + simple CLI/API                                        | Additional connectors and UI later                                                  |
+| MVP increment             | Core HTTP engine + basic spec + engine + simple CLI/API                                        | Additional connectors and UI later                                                  |
 | Main risks                | DSL complexity, overlap with existing engines, SAGA semantics complexity, feature bloat        | Needs a disciplined, minimal core                                                   |
 
 If you want, the next step can be a concrete **initial repo blueprint** (README outline, first Gradle modules, and one minimal workflow spec + engine stub) that you can drop into a GitHub repo and start iterating on.
@@ -1874,7 +1874,7 @@ orchestrator-runtime-service/  # journey-execution plane REST
     payments-saga/
 ```
 
-### MVP slices
+### MVP increments
 
 1. **v0.1 – Spec & synchronous runner**
 

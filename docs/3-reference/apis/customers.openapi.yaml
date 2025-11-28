@@ -2,7 +2,7 @@ openapi: 3.1.0
 info:
   title: Customers API
   version: 1.0.0
-  description: Customers API for creating customer records after successful onboarding. See Q-019 in docs/4-architecture/open-questions.md for journey design context.
+  description: Customers API for creating customer records after successful onboarding.
   contact:
     name: JourneyForge
 servers:

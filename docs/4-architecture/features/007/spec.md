@@ -27,10 +27,10 @@ Per-journey OpenAPI exports are updated to describe step responses using `allOf`
 - Ensure reserved `JourneyStatus` fields (`journeyId`, `journeyName`, `phase`, `currentState`, `updatedAt`, `tags`, `attributes`, `_links`) cannot be overridden by step response projections.
 
 ## Non-Goals
-- No change to the final result envelope (`JourneyOutcome`) or `succeed`/`fail` semantics in this slice.
+- No change to the final result envelope (`JourneyOutcome`) or `succeed`/`fail` semantics in this increment.
 - No per-step request envelope changes beyond existing `input.schema`; step requests continue to use the step-specific input schema only.
 - No support for streaming or multi-part step responses; step calls remain single JSON documents.
-- No UI work in this slice beyond updating reference docs and example OpenAPI specs.
+- No UI work in this increment beyond updating reference docs and example OpenAPI specs.
 
 ## Functional Requirements
 | ID | Requirement | Success path | Validation path | Failure path | Telemetry & traces | Source |

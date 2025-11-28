@@ -3,7 +3,7 @@ info:
   title: JourneyForge – travel-booking-bundle workflows
   version: 0.1.0
   summary: Workflows for travel booking bundles with flight, hotel, and car.
-  description: Workflows for booking a travel bundle (flight, hotel, car), handling provider confirmations, and supporting post-booking change/cancel and post-trip feedback actions. See Q-017 in docs/4-architecture/open-questions.md for design context.
+  description: Workflows for booking a travel bundle (flight, hotel, car), handling provider confirmations, and supporting post-booking change/cancel and post-trip feedback actions.
 sourceDescriptions:
   - name: travelBooking
     type: openapi

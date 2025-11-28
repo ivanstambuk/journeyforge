@@ -1,4 +1,3 @@
-# Design note: see Q-014 in docs/4-architecture/open-questions.md for scope and approval structure.
 apiVersion: v1
 kind: Journey
 metadata:

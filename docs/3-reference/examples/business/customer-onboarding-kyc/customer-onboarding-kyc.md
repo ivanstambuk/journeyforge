@@ -21,7 +21,7 @@ This journey models individual customer onboarding with multi-party checks:
 - It receives KYC and AML results via webhooks, followed by a risk/compliance decision via another webhook.
 - On approval, it creates an account for the customer.
 
-The journey is long-lived: clients start it once, track progress via status calls, submit KYC documents via a dedicated step, and then let KYC/AML providers and a risk/compliance system drive the remaining steps via webhooks. The final outcome summarises whether onboarding was approved or rejected, and includes check results and provisioning details. Design and scope for this example are captured under Q-019 in `docs/4-architecture/open-questions.md`.
+The journey is long-lived: clients start it once, track progress via status calls, submit KYC documents via a dedicated step, and then let KYC/AML providers and a risk/compliance system drive the remaining steps via webhooks. The final outcome summarises whether onboarding was approved or rejected, and includes check results and provisioning details.
 
 Actors & systems:
 - Onboarding client (for example a customer portal or mobile app) that starts the journey, uploads KYC documents, and polls status/result.

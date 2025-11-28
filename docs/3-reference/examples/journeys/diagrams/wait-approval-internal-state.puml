@@ -1,6 +1,6 @@
 @startuml
 !include journey-diagram-theme.puml
-' Internal DSL state graph for wait-approval (Q-008)
+' Internal DSL state graph for wait-approval
 title wait-approval – internal DSL state graph
 
 [*] --> submit

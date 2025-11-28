@@ -44,7 +44,7 @@ The DSL reference in `docs/3-reference/dsl.md` is still evolving; this feature f
 ## Non-Functional Requirements
 | ID | Requirement | Driver | Measurement | Dependencies | Source |
 |----|-------------|--------|-------------|--------------|--------|
-| NFR-009-01 | Align linter behaviour with DSL evolution. | Avoid drift between docs and tooling. | When the DSL reference changes materially, the JSON Schema and CLI rules are updated in the same slice or shortly after; mismatches are treated as defects. | DSL reference, parser/model. | Governance docs. |
+| NFR-009-01 | Align linter behaviour with DSL evolution. | Avoid drift between docs and tooling. | When the DSL reference changes materially, the JSON Schema and CLI rules are updated in the same increment or shortly after; mismatches are treated as defects. | DSL reference, parser/model. | Governance docs. |
 | NFR-009-02 | Keep linting fast enough for local use. | Developer experience. | Linting all journey specs completes in seconds on a typical dev machine; CI adds minimal overhead. | Gradle tasks, CLI implementation. | Build/CI strategy. |
 | NFR-009-03 | Deterministic, offline linting. | CI stability and security. | Lint runs do not depend on external network calls; rule evaluations are deterministic for the same input. | JSON Schema tooling, Spectral (if used), Java CLI. | CI guidelines. |
 | NFR-009-04 | Clear, actionable diagnostics. | Usability. | Error messages include file paths and meaningful paths within the YAML (for example `spec.states.call-api.task.method`), and avoid leaking sensitive content. | All lint tooling. | Developer tooling docs. |

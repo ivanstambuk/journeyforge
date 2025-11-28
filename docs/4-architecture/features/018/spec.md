@@ -16,7 +16,7 @@
 Introduce a gRPC inbound binding for `kind: Api` definitions via `spec.bindings.grpc`. The binding provides a spec-visible way to expose synchronous APIs as unary gRPC methods while reusing the same logical engine semantics as HTTP-bound `kind: Api`:
 - One request creates an ephemeral context, executes the state graph from `spec.start` to a terminal state, and returns a single response.
 
-This feature is **DSL/API design only**; engine implementation of gRPC servers and `.proto` generation will be delivered in later slices.
+This feature is **DSL/API design only**; engine implementation of gRPC servers and `.proto` generation will be delivered in later increments.
 
 Primary references:
 - DSL reference: `docs/3-reference/dsl.md` (section 17 – Inbound Bindings).
@@ -110,4 +110,3 @@ Status mapping:
 | NFR-018-01 | Keep DSL additive and backwards compatible. | Stability. | APIs without `spec.bindings.grpc` continue to be HTTP-only. |
 | NFR-018-02 | Preserve a single source of truth for contracts. | Spec-first. | `.proto` definitions must be generated from DSL (`spec.input.schema` / `spec.output.schema`), not hand-authored. |
 | NFR-018-03 | Avoid binding DSL to a specific gRPC deployment model. | Flexibility. | Decisions about servers, load balancing, and service discovery remain in platform config and are out of scope for this feature. |
-

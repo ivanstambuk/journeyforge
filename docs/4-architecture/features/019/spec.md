@@ -19,7 +19,7 @@ Introduce a queue/message inbound binding for `kind: Journey` definitions via `s
 
 The DSL intentionally avoids provider-specific concepts (topics, queues, subscriptions); it deals only with **logical channels**, which the engine/platform maps onto concrete messaging infrastructure.
 
-This feature is **DSL/API design only**; engine implementation of consumers, offsets, retries, and dead-letter handling will be delivered in later slices.
+This feature is **DSL/API design only**; engine implementation of consumers, offsets, retries, and dead-letter handling will be delivered in later increments.
 
 Primary references:
 - DSL reference: `docs/3-reference/dsl.md` (section 17 – Inbound Bindings, queue/message binding).
@@ -123,4 +123,3 @@ If the engine cannot resolve a message to a specific journey instance and step (
 | NFR-019-01 | Keep DSL provider-neutral. | Portability. | No provider-specific resource names or options in `spec.bindings.queue`; all such details live in engine/platform config. |
 | NFR-019-02 | Preserve a clear mapping to existing logical operations. | Architecture. | Queue bindings must only use the existing `start` and `submitStep` semantics; no queue-specific control-flow in the DSL. |
 | NFR-019-03 | Avoid conflating queue semantics with error handling. | Clarity. | Error/retry/dead-letter policies belong to engine/platform configuration, not the queue binding DSL surface. |
-

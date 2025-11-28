@@ -23,7 +23,7 @@ Related:
 - ADR-0004 – API Endpoints (`kind: Api`).
 - ADR-0006 – Event Publish Tasks for Kafka.
 - `docs/3-reference/dsl.md` – JourneyForge DSL Reference.
-- `docs/4-architecture/open-questions.md` – see Q-003.
+- `docs/4-architecture/open-questions.md` – earlier design questions captured reuse scenarios and constraints.
 
 ## Reuse Scenarios (Recorded for Future Design)
 
@@ -892,7 +892,7 @@ For v1 of the JourneyForge DSL, we **ban** external DataWeave modules and `exprR
     - `normalisers` and `envelope` mappers MUST use inline `expr`.
     - Cross-journey error mappings via shared `.dwl` files are out of scope for v1.
 
-This decision answers Q-003 in `docs/4-architecture/open-questions.md` with Option A: keep v1 strictly inline-only and revisit external module/import support only after we have more evidence from real-world reuse needs.
+This decision adopts Option A from earlier design discussions: keep v1 strictly inline-only and revisit external module/import support only after we have more evidence from real-world reuse needs.
 
 ## Consequences
 
@@ -920,6 +920,6 @@ Negative / trade-offs:
 Future work:
 
 - When there is stronger evidence from real deployments that a module system is warranted, we can:
-  - Revisit Q-003 in `docs/4-architecture/open-questions.md`.
+  - Revisit external-module support once real reuse pressure is observed in practice.
   - Propose a new ADR that designs an explicit, data-modelled reuse mechanism (for example named mapper libraries or DSL-level modules) rather than reintroducing raw `exprRef` to arbitrary `.dwl` files.
   - Update ADR-0002 and the DSL reference to describe that mechanism and its constraints.

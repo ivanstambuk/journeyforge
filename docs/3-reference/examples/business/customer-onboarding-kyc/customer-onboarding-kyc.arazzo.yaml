@@ -3,7 +3,7 @@ info:
   title: JourneyForge – customer-onboarding-kyc workflows
   version: 0.1.0
   summary: Workflows for customer onboarding with individual KYC checks.
-  description: Workflows for starting individual customer onboarding, collecting KYC documents, processing KYC/AML results via webhooks, processing a risk decision, and reading the final approved or rejected outcome. See Q-019 in docs/4-architecture/open-questions.md for design context.
+  description: Workflows for starting individual customer onboarding, collecting KYC documents, processing KYC/AML results via webhooks, processing a risk decision, and reading the final approved or rejected outcome.
 sourceDescriptions:
   - name: customerOnboarding
     type: openapi

@@ -19,7 +19,7 @@ This journey models a multi-level B2B purchase order approval process:
 - It then collects approvals at three levels: first from a manager, then in parallel from a department head and finance, and finally from a procurement board.
 - Any rejection at any level ends the journey with a Failed phase and a level-specific rejection code; a fully approved path ends with an APPROVED outcome.
 
-The journey is long-lived: clients start it once, track progress via status calls, submit approval decisions via dedicated steps for each level, and finally read an outcome that summarises the approval history and whether the purchase order was approved or rejected. Design and scope for this example are captured under Q-014 in `docs/4-architecture/open-questions.md`.
+The journey is long-lived: clients start it once, track progress via status calls, submit approval decisions via dedicated steps for each level, and finally read an outcome that summarises the approval history and whether the purchase order was approved or rejected.
 
 Actors & systems:
 - Buyer-side client (for example a purchasing portal or back-office system) that starts the journey and polls status/result.

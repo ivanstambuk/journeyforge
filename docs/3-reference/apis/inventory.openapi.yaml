@@ -2,7 +2,7 @@ openapi: 3.1.0
 info:
   title: Inventory API
   version: 1.0.0
-  description: Inventory API for reserving items and planning split shipments. See Q-013 in docs/4-architecture/open-questions.md for journey design context.
+  description: Inventory API for reserving items and planning split shipments.
   contact:
     name: JourneyForge
 servers:

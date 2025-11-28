@@ -2,7 +2,7 @@ openapi: 3.1.0
 info:
   title: Orders API
   version: 1.0.0
-  description: Orders API for e-commerce checkout and order orchestration. See Q-013 in docs/4-architecture/open-questions.md for journey design context.
+  description: Orders API for e-commerce checkout and order orchestration.
   contact:
     name: JourneyForge
 servers:

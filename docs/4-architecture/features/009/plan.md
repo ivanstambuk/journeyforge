@@ -15,7 +15,7 @@
 
 ## Risks & Mitigations
 - Risk: DSL surface changes frequently while the feature is being designed.  
-  - Mitigation: Focus early increments on schema layout and integration points; defer heavy semantic rules and CLI implementation to a later slice once DSL changes slow down.
+  - Mitigation: Focus early increments on schema layout and integration points; defer heavy semantic rules and CLI implementation to a later increment once DSL changes slow down.
 - Risk: Divergence between JSON Schema, Spectral rules, and Java CLI semantics.  
   - Mitigation: Treat the CLI (using the parser/model) as the source of truth for deep semantics and keep schemas/rulesets as thin, documented layers aligned via shared examples.
 - Risk: Linting adds too much overhead to local development or CI.  
