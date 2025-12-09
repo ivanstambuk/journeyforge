@@ -3,10 +3,10 @@
 Date: 2025-11-19 | Status: Accepted
 
 ## Context
-JourneyForge needs a single, powerful expression/transform language for predicates and mapping. Early options included JSONPath (selectors) and JSONata. We elected to pick one canonical language to avoid fragmentation.
+JourneyForge needs a powerful expression/transform language for predicates and mapping. Early options included JSONPath (selectors) and JSONata. This ADR documents the adoption of DataWeave as an expression engine, prior to the general pluggable expression engine model introduced in ADR‑0027.
 
 ## Decision
-- Adopt DataWeave 2.x as the canonical expression language from the beginning.
+- Adopt DataWeave 2.x as one of the supported expression engines (engine id `dataweave`) and wire initial predicates and transforms to it.
 - In the initial version of the DSL:
   - `choice` supports a DataWeave predicate form (`when.predicate: { lang: dataweave, expr }`) that must evaluate to boolean; expressions are authored inline in journey specs.
   - Equality checks remain as sugar for readability and can be compiled to equivalent DataWeave.
@@ -20,4 +20,4 @@ JourneyForge needs a single, powerful expression/transform language for predicat
 ## Notes
 - Implementation details (e.g., embedding vs external CLI) are non‑normative and will be specified in the corresponding feature.
 - External DataWeave modules and DSL-level `exprRef` fields are explicitly out of scope for this version; see ADR-0015 for recorded reuse scenarios and the v1 decision to keep expressions inline-only.
-- Later ADRs (for example ADR‑0027) generalise the expression model to a pluggable Expression Engine SPI; DataWeave remains the baseline engine for `lang: dataweave`, but deployments MAY register additional engines alongside it.
+- ADR‑0027 generalises the expression model to a pluggable Expression Engine SPI; `dataweave` is one engine id among others (for example `jsonata`, `jolt`, `jq`), and deployments choose which engines to enable.

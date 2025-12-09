@@ -97,6 +97,21 @@ the “Avoid” column except when explicitly quoting legacy identifiers or exte
   - Use: “principal” (conceptual owner such as an end user or service), `attributes.subjectId` / `attributes.tenantId` / `context` as defined in ADR‑0010 and ADR‑0011.
   - Avoid: inventing new model terms like “owner”, “user id”, “customer id” without mapping them explicitly through `context`/attributes.
 
+## Expression engines – terminology
+
+- **Expression engine**
+  - A pluggable, pure evaluation component selected via `lang: <engineId>` at DSL expression sites (`choice` predicates, `transform` states, mappers, error mappers).
+  - Implemented via the Expression Engine SPI from ADR‑0027 / Feature 012; examples include engines identified by `dataweave`, `jsonata`, `jolt`, and `jq`.
+  - Expression engines compute values from their inputs (`context`, `payload`, `error`, `platform`) and return JSON/primitive results or evaluation errors; they do not perform external I/O or control-flow.
+
+- **Engine id**
+  - The string identifier used in `lang` to select an expression engine, for example `dataweave`, `jsonata`, `jolt`, `jq`.
+  - Resolved by the engine’s Expression Engine registry; if a spec references an unknown engine id, validation or startup MUST fail rather than falling back to another engine.
+
+- **Usage conventions**
+  - In docs/specs, prefer “expression engine” / “engine id” over calling any concrete engine “canonical” or “baseline”.
+  - When referring to a concrete engine, use phrases like “the `dataweave` expression engine” or “a `jsonata` expression engine” instead of implying that one engine is the default for all deployments.
+
 Notes:
 - Do not introduce new terms such as “deployment” as if they were part of the model. When
   you mean “a concrete installation plus its configuration”, talk explicitly about “the

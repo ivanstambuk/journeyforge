@@ -2,8 +2,8 @@
 
 | Field | Value |
 |-------|-------|
-| Status | Draft |
-| Last updated | 2025-11-25 |
+| Status | Ready |
+| Last updated | 2025-12-09 |
 | Owners | TBD |
 | Linked plan | `docs/4-architecture/features/022/plan.md` |
 | Linked tasks | `docs/4-architecture/features/022/tasks.md` |
@@ -114,6 +114,25 @@ Usage from plugins and bindings:
 - Sinks remain responsible for:
   - Mapping attributes onto logs, traces, and metrics.
   - Enforcing allowlists/redaction per ADR‑0025 and the observability runbook.
+
+### 4. Task plugin telemetry (normative rules)
+
+Task plugins use the Telemetry SPI via `TelemetryHandle` but MUST follow additional constraints so that observability remains consistent and safe:
+
+- Attribute usage:
+  - Plugins MAY attach attributes that describe:
+    - Journey and state context (for example `journey.name`, `journey.version`, `journey.kind`, `task.state_id`, `plugin.type`, `plugin.major`).
+    - Connector-specific metadata that is explicitly non-sensitive (for example HTTP method, status code, target host; Kafka topic name).
+  - Plugins MUST NOT attach attributes that include:
+    - Payload bodies or arbitrary `context` subtrees.
+    - Raw secrets such as tokens, passwords, API keys, private keys, cookie values.
+  - All attributes remain subject to `observability.attributes.allowed` and `observability.attributes.redactAlways` configuration.
+- Events and spans:
+  - Plugins SHOULD emit telemetry that correlates clearly with `TaskStarted`/`TaskCompleted`/`TaskFailed` events (for example spans tagged with `plugin.type` and `task.state_id`).
+  - Plugins MUST NOT create spans/events that contradict the core journey lifecycle semantics (for example pretending a task succeeded when it returned a Problem).
+- Logging and Problems:
+  - Plugin logging levels and detail are configured via observability configuration (for example `observability.plugins.*`) and MUST obey ADR‑0025/ADR‑0026 privacy rules.
+  - Caller-visible Problems remain the primary channel for business errors; telemetry MAY include structural error codes (for example plugin-specific `code` values) but MUST NOT embed full Problem documents or sensitive details by default.
 
 ## Behaviour
 

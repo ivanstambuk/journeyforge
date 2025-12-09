@@ -1,6 +1,6 @@
 # Feature 001 – Plan
 
-Status: Draft | Last updated: 2025-11-23
+Status: Draft | Last updated: 2025-12-09
 
 ## Increments
 - [ ] T-001-01: Define model types (Workflow, State variants, HttpCall spec) in `journeyforge-model`.
@@ -17,11 +17,14 @@ Status: Draft | Last updated: 2025-11-23
  - [ ] T-001-12: Update reference docs (DSL §5) and at least one example journey to illustrate scheduling. (≤90 min)
 
 ## Risks & Mitigations
-- Minimal expression evaluation for `choice` could expand quickly → constrain to `equals` on a `var` dot‑path (documented in spec) and add open question for richer expressions.
+- Expression engine behaviour for `choice` must remain predictable across engines → keep Feature 001’s requirements engine-agnostic and rely on ADR‑0027 + Features 012–016 to define engine-specific semantics and tests per engine id.
 - Network in CI would flake tests → use stubbed HTTP client interface injected into the engine.
 - Misuse of scheduling for high-frequency jobs → enforce coarse-grained minimum interval and document limits in ADR-0017; keep initial scheduler in-memory and single-node.
 - Confusion between interactive and scheduled paths → keep `task.kind: schedule:v1` clearly non-interactive and document patterns in examples; validate non-interactive scheduled paths statically where possible.
 - Implementation complexity in scheduler → start with in-memory, single-node scheduler and document limitations; defer distributed/HA scheduler to a later feature increment (for example under persistence/admin features).
+
+## Intent Log
+- 2025-12-09 – Aligned Feature 001 spec/plan with the pluggable expression engine model: kept normative text engine-agnostic for predicates and mappers, while allowing concrete examples to use `lang: dataweave`; resolved Q-001 in `open-questions.md`.
 
 ## Validation
 - `./gradlew spotlessApply check` green.

@@ -2,7 +2,7 @@
 
 | Field | Value |
 |-------|-------|
-| Status | Draft |
+| Status | Draft | <!-- Specification status only (Draft/Ready/Deprecated), independent of implementation progress. -->
 | Last updated | YYYY-MM-DD |
 | Owners | <Name(s)> |
 | Linked plan | `docs/4-architecture/features/<NNN>/plan.md` |

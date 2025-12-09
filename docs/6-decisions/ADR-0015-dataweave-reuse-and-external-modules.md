@@ -4,7 +4,7 @@ Date: 2025-11-22 | Status: Proposed
 
 ## Context
 
-JourneyForge uses DataWeave 2.x as the canonical expression and transform language (see ADR-0002). Early drafts of the DSL and docs mentioned two forms of reuse:
+JourneyForge uses DataWeave 2.x as one of its expression engines for predicates and transforms (see ADR‑0002). Early drafts of the DSL and docs mentioned two forms of reuse:
 
 - Inline expressions via `expr` in predicates and mappers.
 - External modules via `exprRef` fields and DataWeave imports inside `expr` that point to `.dwl` files.

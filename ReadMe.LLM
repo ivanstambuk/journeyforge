@@ -24,4 +24,4 @@ Compact orientation for AI coding assistants.
 - Roadmap: `docs/4-architecture/roadmap.md`
 - Templates: `docs/templates/*`
 
-DataWeave: JourneyForge uses DataWeave 2.x as the canonical expression language (predicates now; transforms later).
+Expression engines: JourneyForge supports pluggable expression engines selected via `lang` (for example `dataweave`, `jsonata`, `jolt`, `jq`) at DSL expression sites; see ADR‑0027 and Features 012–016.

@@ -19,7 +19,7 @@ Implement a DataWeave-backed `ExpressionEnginePlugin` and wire all `lang: datawe
 
 - Provide a production-grade DataWeave 2.x expression engine implementation that satisfies the `ExpressionEnginePlugin` contract.
 - Ensure that all existing DSL expression locations using `lang: dataweave` behave identically before and after the refactor (modulo documented bug fixes).
-- Establish DataWeave as the baseline expression engine implementation for this version of the DSL, while keeping the expression engine model open to additional dialects via the Expression Engine SPI.
+- Integrate the `dataweave` expression engine into the pluggable expression engine model while keeping the overall design open to additional dialects via the Expression Engine SPI.
 
 ## Non-Goals
 

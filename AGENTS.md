@@ -53,9 +53,9 @@ This workflow applies to all architecturally significant work, including ADRs, D
 - Analysis & Implementation Drift Gate runbook: `docs/5-operations/analysis-gate-checklist.md`
 - Quality gate usage guide: `docs/5-operations/quality-gate.md`
 
-DataWeave: JourneyForge uses DataWeave 2.x as the canonical expression language (predicates now; transforms later).
+Expression engines: JourneyForge supports pluggable expression engines selected via `lang: <engineId>` at DSL expression sites (for example `dataweave`, `jsonata`, `jolt`, `jq`); engine configuration determines which engines are available in a given installation (see ADR‑0027 and Feature 012).
 
-DataWeave authoring: When adding or updating DataWeave mappers and predicates in YAML, prefer multiline block scalars for `expr` values:
+DataWeave authoring: When adding or updating `lang: dataweave` mappers and predicates in YAML, prefer multiline block scalars for `expr` values:
 
 ```yaml
 expr: |
@@ -72,10 +72,11 @@ Single-line `expr: "..."` is still valid but should be avoided in new specs and 
 - For any non-trivial change to specs, ADRs, DSL/docs, or code, the agent MUST follow a **two-phase interaction**:
   - **Phase 1 – Clarifications (questions only).**
     1. Restate the task briefly to confirm understanding.
-    2. Ask numbered clarification questions (1., 2., 3.) and wait for the human’s answers; do not propose options, solutions, or implementation plans in this message, **except when reasonable options with pros/cons and a clear recommendation can already be presented.**
+    2. Ask numbered clarification questions and wait for the human’s answers; do not propose options, solutions, or implementation plans in this message, **except when reasonable options with pros/cons and a clear recommendation can already be presented.**
+       - **Owner preference – single-question cadence:** when asking for clarifications or follow-ups, the agent SHOULD ask at most **one** question per chat message and iterate, instead of batching multiple questions together.
     3. For design/architecture topics, record at least one `Q-xxx` entry in `docs/4-architecture/open-questions.md` before asking those questions; when that question is resolved and its outcome is captured in an ADR/spec/doc, remove the corresponding row from `open-questions.md` as part of the same slice of work.
   - **Phase 2 – Options & decision.**
-    4. After the human has answered the clarification questions (when any are needed), present 2–4 options labelled A, B, C, … with short pros/cons, and explicitly ask the human to choose or refine.
+    4. After the human has answered the clarification questions (when any are needed), present 2–4 options labelled A, B, C, … with short pros/cons, and explicitly ask the human to choose or refine. When presenting an open question to the human (for example from `open-questions.md`), format it as a **Decision Card** following `docs/4-architecture/spec-guidelines/open-questions-format.md` (emoji and headings as defined there, with the `(**recommended**)` marker immediately after the preferred option’s emoji).
     5. Only after the human confirms a choice may the agent draft or modify ADRs, specs, DSL/docs, or code, and it MUST mention the relevant `Q-xxx` ID in its chat summary for that change (do not embed `Q-xxx` IDs in normative specs/ADRs/docs; see `docs/4-architecture/open-questions.md`).
 
 ### Owner preference – options-first for design

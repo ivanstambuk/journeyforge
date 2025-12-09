@@ -998,10 +998,9 @@ Validation
   - `resultVar` MUST be omitted (there is no result).
   - `errorMapping` MUST be omitted (there is no error result to map).
   - `resiliencePolicyRef` MAY be ignored by the engine; retries have no observable effect on journey behaviour.
-- Outbound auth (`auth.policyRef`):
+ - Outbound auth (`auth.policyRef`):
   - When present, the engine resolves `auth.policyRef` against `spec.policies.httpClientAuth.definitions` (or platform-level equivalents) and applies the resulting policy to the outbound HTTP request (for example by adding an `Authorization` header or attaching a client certificate).
-  - When absent, and when `spec.policies.httpClientAuth.default` is set, the engine MAY use the default policy as if `auth.policyRef` were set to that id.
-  - When neither a task-level `auth.policyRef` nor a usable default can be resolved, the request is sent without additional outbound auth (subject to implementation defaults).
+  - When absent, the engine MUST NOT apply any outbound auth policy implicitly; the request is sent without additional outbound auth (subject to implementation defaults), regardless of whether `spec.policies.httpClientAuth.default` is set.
 - HTTP outcomes (status/timeouts) do not terminate execution; you must branch explicitly. In `notify` mode the journey instance cannot branch on call outcomes because they are not observable.
 ### 5.2 `task` (Kafka publish – `kafkaPublish:v1`)
 
@@ -1425,13 +1424,13 @@ The `spec.errors` block allows journeys to centralise, per journey, how they nor
 	    normalisers:
 	      httpDefault:
 	        mapper:
-	          lang: dataweave       # baseline engine
+	          lang: dataweave
 	          expr: |
 	            // HTTP result → Problem Details
 	            ...
 	      ordersApi:
 	        mapper:
-	          lang: dataweave       # baseline engine
+	          lang: dataweave
 	          expr: |
 	            // Orders API error → Problem Details
 	            ...
@@ -2783,7 +2782,7 @@ Kinds
 
 Semantics
 - Policy resolution:
-  - `spec.policies.httpClientAuth.default` (when set) provides a default policy id for HTTP tasks that do not specify their own `auth.policyRef`.
+  - `spec.policies.httpClientAuth.default` is an optional documentation/authoring hint for the spec and tooling; it MUST NOT cause the engine to apply any outbound auth policy implicitly to HTTP tasks that omit `auth.policyRef`.
   - `definitions` is a map from policy id to policy object; unknown `kind` values are invalid.
 - Secret references:
   - All secret-bearing fields (`tokenRef`, `auth.clientSecretRef`, `auth.clientCertRef`) are opaque `secretRef` identifiers.

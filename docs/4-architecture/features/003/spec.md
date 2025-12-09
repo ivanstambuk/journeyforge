@@ -106,7 +106,7 @@ spec:
 
 ## Interface & Contract Catalogue
 - DSL / Spec:
-  - `spec.policies.httpClientAuth.default: <policyId>`.
+  - `spec.policies.httpClientAuth.default: <policyId>` (optional hint for spec authors and tooling; engines MUST NOT apply this policy implicitly to HTTP tasks that omit `task.auth.policyRef`).
   - `spec.policies.httpClientAuth.definitions[<id>]` with supported `kind` values:
     - `bearerStatic` (fields: `tokenRef: secretRef`).
     - `oauth2ClientCredentials` (fields: `tokenEndpoint`, `auth.method`, `auth.clientId`, `auth.clientSecretRef?`, `auth.clientCertRef?`, `form.*`).

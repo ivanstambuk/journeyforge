@@ -83,24 +83,6 @@ paths:
             type: string
           description: Repeatable; all specified tag values MUST be present on the journey
             (AND semantics).
-        - in: query
-          name: orderId
-          required: false
-          schema:
-            type: string
-          description: Filters by attributes.orderId, when present.
-        - in: query
-          name: paymentIntentId
-          required: false
-          schema:
-            type: string
-          description: Filters by attributes.paymentIntentId, when present.
-        - in: query
-          name: crmCaseId
-          required: false
-          schema:
-            type: string
-          description: Filters by attributes.crmCaseId, when present.
       responses:
         "200":
           description: Paginated list of journeys

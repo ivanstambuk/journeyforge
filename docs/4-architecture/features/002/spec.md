@@ -143,12 +143,9 @@ Proposed pattern:
 
 These classifications can be sourced from payload, headers, or baggage via the attribute/tag sourcing configuration, but are always controlled explicitly by spec/policy rather than inferred by convention.
 
-### Query API Shape (Directional)
+### Journeys listing API (`GET /api/v1/journeys`)
 
-Problem:
-- Expose a simple, predictable way to search and list journeys based on the tags/attributes model, without introducing a full-blown query language.
-
-Directional proposal for the Journeys API:
+This feature normatively defines the operator listing API for journeys based on the tags/attributes model, without introducing a general-purpose query language.
 
 - **Endpoint:**
   - `GET /api/v1/journeys`
@@ -164,16 +161,10 @@ Directional proposal for the Journeys API:
   - `tag` – repeatable query parameter; when present multiple times, all specified tags MUST be present on the journey (AND semantics).
 - Used for queries such as “all `self-service` journeys” or “all `kyc` journeys in `RUNNING` phase”.
 
-- **Correlation filters (attribute-backed, optional but recommended):**
-  - `orderId` – filters by `attributes.orderId`.
-  - `paymentIntentId` – filters by `attributes.paymentIntentId`.
-  - `crmCaseId` – filters by `attributes.crmCaseId`.
-  - These cover the main “jump from external system to journeys” scenarios; their presence does not change the underlying attribute rules (they are thin shims over `journey.attributes`).
-
 - **Semantics:**
   - All provided filters are combined with logical AND:
     - for example, `subjectId=alice&phase=RUNNING&journeyName=loan-application` filters to Alice’s running loan applications.
-  - Query parameters map directly to indices over `journeyName`, `phase`, `tags`, and selected attributes (`subjectId`, `tenantId`, and the correlation IDs above).
+  - Query parameters map directly to indices over `journeyName`, `phase`, `tags`, and selected attributes (`subjectId`, `tenantId`).
   - Pagination, sorting, and response shapes are defined in the Journeys API reference; this feature spec focuses on which dimensions are exposed, not on list mechanics.
 
 ## Non-Functional Requirements
@@ -235,7 +226,7 @@ Response:
   - Mixed‑mode JWT: `required` vs `optional`, anonymous vs real subjects, and `subjectId` derivation.
   - Limits enforcement: journeys that approach and exceed `MetadataLimits`.
 - API contract tests:
-  - `GET /journeys` filters (`journeyName`, `phase`, `subjectId`, `tenantId`, `tag`, correlation ids).
+  - `GET /journeys` filters (`journeyName`, `phase`, `subjectId`, `tenantId`, `tag`).
   - `JourneyStatus`/`JourneyOutcome` schemas including `tags` and `attributes`.
 - Security tests:
   - Ensure that tags/attributes are never populated with raw JWTs or secrets.
@@ -257,7 +248,7 @@ Response:
 - `GET /api/v1/journeys/{journeyName}/start`:
   - Start payload remains “raw context JSON”; no explicit `tags`/`attributes` fields.
 - `GET /api/v1/journeys`:
-  - Query parameters: `journeyName`, `phase`, `subjectId`, `tenantId`, `tag`, `orderId`, `paymentIntentId`, `crmCaseId`.
+  - Query parameters: `journeyName`, `phase`, `subjectId`, `tenantId`, `tag`.
   - Response body: paginated collection of `JourneyStatus` records.
 - `JourneyStatus` schema:
   - Adds `tags: string[]` and `attributes: { [key: string]: string }` alongside existing fields.

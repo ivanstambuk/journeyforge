@@ -2,8 +2,8 @@
 
 | Field | Value |
 |-------|-------|
-| Status | Draft |
-| Last updated | 2025-11-25 |
+| Status | Ready |
+| Last updated | 2025-12-09 |
 | Owners | TBD |
 | Linked plan | `docs/4-architecture/features/011/plan.md` |
 | Linked tasks | `docs/4-architecture/features/011/tasks.md` |
@@ -45,7 +45,7 @@ This feature defines the Task Plugin execution model for the runtime engine; con
 
 - `journeyforge-runtime-core`:
   - Owns the core journey engine, state machine, and the Task Plugin SPI (`TaskPlugin`, `TaskExecutionContext`, `TaskResult`).
-  - Integrates with the Telemetry SPI (`TelemetryEvent`, `TelemetrySink`, `TelemetryHandle`) from Feature 022.
+  - Integrates with the Telemetry SPI (`TelemetryEvent`, `TelemetrySink`, `TelemetryHandle`) from Feature 022, which also defines the normative telemetry rules for task plugins.
   - Does not depend on HTTP client libraries, HTTP-specific policy types, or cookie/observability helpers.
 - Connector and feature modules:
   - Provide concrete plugin implementations keyed by `task.kind: <pluginType>:v<major>`.
@@ -182,7 +182,7 @@ This feature adopts the constrained plugin model defined in ADR-0026 (Task Plugi
   - When a plugin supports profiles, it MAY expose a profile selector field in `taskConfig`; if omitted, the effective profile is `"default"`, resolved from engine configuration.
 - **Security, privacy, and observability**
   - Plugins MUST treat data from `context()` and `httpRequest()` as potentially sensitive and MUST NOT log raw secrets such as tokens, passwords, or cookie values.
-  - Plugins and connectors participate in the layered observability model from ADR-0025; plugin executions SHOULD emit spans enriched with journey and plugin attributes and MAY publish metrics for latency and error rates.
+  - Plugins and connectors participate in the layered observability model from ADR-0025; plugin executions SHOULD emit spans enriched with journey and plugin attributes and MAY publish metrics for latency and error rates, following the Telemetry SPI and plugin telemetry rules defined in Feature 022.
 
 These rules constrain the SPI so that future plugin types and implementations (including first-party and third-party plugins) remain compatible with the spec-first DSL, error model, and observability design.
 
