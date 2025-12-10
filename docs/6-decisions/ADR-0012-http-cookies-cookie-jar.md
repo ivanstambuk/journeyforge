@@ -26,7 +26,7 @@ We introduce a first-class cookie configuration in the DSL and a per-run cookie 
       - Exact host patterns (e.g. `api.example.com`).
       - Leading-dot subdomain patterns (e.g. `.example.com`), which match subdomains of `example.com` but not `example.com` itself.
   - Add `spec.cookies.returnToClient` to control which cookies from the jar are emitted as `Set-Cookie` on terminal `succeed`:
-    - `mode: none | allFromAllowedDomains | filtered`.
+    - `mode: none | allFromAllowedDomains | filtered` (required whenever `spec.cookies.returnToClient` is configured).
     - Optional `include.names` and `include.namePatterns` (Java regex) when `mode: filtered`.
   - Extend HTTP tasks (`kind: httpCall:v1`) with `task.cookies.useJar?: boolean`:
     - Defaults to `true` when `spec.cookies.jar` exists.
@@ -61,6 +61,9 @@ We introduce a first-class cookie configuration in the DSL and a per-run cookie 
     - Emits `Set-Cookie` only for cookies whose names are in `include.names` or match `include.namePatterns` when `mode: filtered`.
     - Emits deletion `Set-Cookie` for cookies that the jar observed as deleted, subject to the same filters.
   - `returnToClient` is success-only; `fail` responses do not emit `Set-Cookie` from the jar.
+
+- Defaults:
+  - When `spec.cookies.jar` is configured but `spec.cookies.returnToClient` is omitted, the jar is used only for downstream HTTP calls; engines MUST NOT emit `Set-Cookie` from the jar back to clients. Returning cookies is always an explicit, opt-in choice via `spec.cookies.returnToClient.mode`.
 
 Cookie interpretation (parsing, domain/path matching, deletion semantics) is aligned with RFC 6265 (or its successors) and must be implemented consistently in the HTTP connector.
 

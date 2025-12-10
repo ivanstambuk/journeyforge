@@ -3225,7 +3225,7 @@ Shape
       - Subdomain pattern (leading dot), for example `.example.com`, matches hosts that end with `.example.com` and are not exactly `example.com` (for example `api.example.com`, `foo.bar.example.com`).
   - The jar is considered enabled for the spec when `spec.cookies.jar` is present, even if `domains` is empty (in that case, no cookies are stored or attached).
 - `spec.cookies.returnToClient` (optional):
-  - `mode`:
+  - `mode` (required when `spec.cookies.returnToClient` is present):
     - `none` – do not emit any `Set-Cookie` headers to the client.
     - `allFromAllowedDomains` – emit `Set-Cookie` for all cookies in the jar whose domains match `jar.domains`.
     - `filtered` – emit `Set-Cookie` only for cookies selected via `include`.
@@ -3242,10 +3242,11 @@ Semantics
 - When `spec.cookies` is omitted:
   - No jar is created.
   - HTTP behaviour remains defined solely by other sections (`task`, `spec.bindings.http`, HTTP security policies, etc.).
+  - No cookies are emitted back to clients from a jar (there is no jar and no `returnToClient` configuration).
 
 Validation
 - `spec.cookies.jar.domains[*].pattern` must be non‑empty strings.
-- `spec.cookies.returnToClient.mode`, when present, must be one of `none`, `allFromAllowedDomains`, `filtered`.
+- When `spec.cookies.returnToClient` is present, `spec.cookies.returnToClient.mode` MUST be present and one of `none`, `allFromAllowedDomains`, `filtered`.
 - `spec.cookies.returnToClient.include.names`, when present, must be arrays of strings.
 - `spec.cookies.returnToClient.include.namePatterns`, when present, must be arrays of strings that compile as Java‑style regular expressions.
 
@@ -3339,7 +3340,7 @@ Validation
 
 ### 22.4 Returning cookies to the client on success (returnToClient)
 
-When `spec.cookies.returnToClient` is present, the engine may emit `Set-Cookie` headers towards the client on successful terminal responses.
+When `spec.cookies.returnToClient` is present, the engine may emit `Set-Cookie` headers towards the client on successful terminal responses. When `spec.cookies.jar` is configured but `spec.cookies.returnToClient` is omitted, the cookie jar is used only for downstream HTTP calls; engines MUST NOT emit `Set-Cookie` from the jar to clients.
 
 Scope
 - `returnToClient` applies only when a run terminates in `succeed`:

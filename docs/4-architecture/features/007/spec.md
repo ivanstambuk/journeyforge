@@ -2,8 +2,8 @@
 
 | Field | Value |
 |-------|-------|
-| Status | Draft |
-| Last updated | 2025-11-21 |
+| Status | Ready |
+| Last updated | 2025-12-10 |
 | Owners | TBD |
 | Linked plan | `docs/4-architecture/features/007/plan.md` |
 | Linked tasks | `docs/4-architecture/features/007/tasks.md` |
@@ -59,7 +59,14 @@ spec:
           schema: <JsonSchema>
         response:
           outputVar: stepResponse
-          schemaRef: schemas/wait-approval-step-response.json
+          schema:
+            type: object
+            properties:
+              decision:
+                type: string
+              approvedBy:
+                type: string
+            required: ["decision"]
         apply:
           mapper:
             lang: dataweave
@@ -91,7 +98,7 @@ spec:
 
 ## Test Strategy
 - Add DSL validation tests covering valid/invalid `response` blocks on `wait`/`webhook`, including reserved field collisions.
-- Extend OpenAPI exporter tests to assert that per-journey OAS files for journeys with response projections use `allOf` over `JourneyStatus` and the declared `schemaRef`.
+- Extend OpenAPI exporter tests to assert that per-journey OAS files for journeys with response projections use `allOf` over `JourneyStatus` and the inline `response.schema` object.
 - Add end-to-end tests (once an engine exists) where step calls return both `JourneyStatus` fields and projected response fields, and ensure that final `JourneyOutcome` behaviour is unchanged.
 
 ## Interface & Contract Catalogue

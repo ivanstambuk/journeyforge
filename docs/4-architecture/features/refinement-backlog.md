@@ -4,16 +4,16 @@
 
 ## Pass 1 – Core Engine, Plugins, Observability
 
-- [ ] Feature 001 – Core HTTP Engine + DSL
-- [ ] Feature 011 – Task Plugins & Execution SPI
-- [ ] Feature 022 – Observability Packs & Telemetry SPI
+- [x] Feature 001 – Core HTTP Engine + DSL
+- [x] Feature 011 – Task Plugins & Execution SPI
+- [x] Feature 022 – Observability Packs & Telemetry SPI
 
 ## Pass 2 – Metadata, Auth, Cookies, External Input
 
-- [ ] Feature 002 – Journey Metadata, Tags & Query
-- [ ] Feature 003 – Outbound HTTP Auth & Secrets
-- [ ] Feature 004 – HTTP Cookies & Journey Cookie Jar
-- [ ] Feature 007 – External-Input Step Responses & Schemas
+- [x] Feature 002 – Journey Metadata, Tags & Query
+- [x] Feature 003 – Outbound HTTP Auth & Secrets
+- [x] Feature 004 – HTTP Cookies & Journey Cookie Jar
+- [x] Feature 007 – External-Input Step Responses & Schemas
 
 ## Pass 3 – Tooling, Expression Engines, Bindings
 
@@ -29,4 +29,3 @@
 - [ ] Feature 019 – Queue/Message Binding for Journeys
 - [ ] Feature 020 – CLI/Batch Binding for Journeys and APIs
 - [ ] Feature 021 – Cloud-Function Binding for Journeys and APIs
-

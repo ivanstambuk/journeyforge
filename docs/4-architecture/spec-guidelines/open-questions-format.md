@@ -1,6 +1,6 @@
 # Open Questions – Decision Card Format
 
-Status: Draft | Last updated: 2025-12-09
+Status: Draft | Last updated: 2025-12-10
 
 This document defines the standard “Decision Card” format for all medium‑ and high‑impact open questions that are presented to humans (for example in chat, design docs, or reviews).
 
@@ -34,6 +34,8 @@ Short, human-readable question text (one or a few sentences).
   - ❌ Bullet point 2  
   - ❌ Bullet point 3 (optional)
 
+---
+
 #### 🅱️ Option B – Option title
 - **Idea:** Short description of what this option proposes.
 - **Spec impact:** How this option changes or constrains the spec.
@@ -43,6 +45,8 @@ Short, human-readable question text (one or a few sentences).
 - **Cons:**  
   - ❌ Bullet point 1  
   - ❌ Bullet point 2  
+
+---
 
 #### 🅲 Option C – Option title
 - **Idea:** Short description of what this option proposes.

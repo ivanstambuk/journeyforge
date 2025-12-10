@@ -2,8 +2,8 @@
 
 | Field | Value |
 |-------|-------|
-| Status | Draft |
-| Last updated | 2025-11-21 |
+| Status | Ready |
+| Last updated | 2025-12-10 |
 | Owners | TBD |
 | Linked plan | `docs/4-architecture/features/003/plan.md` |
 | Linked tasks | `docs/4-architecture/features/003/tasks.md` |
