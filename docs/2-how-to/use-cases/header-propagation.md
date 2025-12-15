@@ -18,6 +18,8 @@ Propagate inbound tracing or correlation headers (for example W3C / OpenTelemetr
 - `spec.bindings.http.steps.*` for step‑level bindings.
 - HTTP `task` headers.
 
+Note: `headersPassthrough` is request-scoped. It applies only to outbound HTTP tasks executed while processing the current inbound request (start or step submission) and does not persist across `wait`/`webhook` boundaries. Use `headersToContext` (or an explicit `transform`) for values that must persist across multiple requests in the same journey.
+
 ## Example – Header interpolation
 
 Journey definition: `http-header-interpolation.journey.yaml`

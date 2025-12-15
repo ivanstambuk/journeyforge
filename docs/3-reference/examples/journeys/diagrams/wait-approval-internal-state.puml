@@ -27,6 +27,7 @@ note right of waitForApproval
   input: approval payload { decision, comment }
   response.outputVar: stepResponse
   engine copies validated payload to context.payload
+  engine clears context.payload while waiting
 end note
 
 @enduml

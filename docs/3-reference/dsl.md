@@ -1612,10 +1612,9 @@ spec:
 ## 7. Limitations (explicit non-capabilities)
 - Terminal success/failure are explicit via `succeed`/`fail`; tasks never auto‑terminate a journey.
 - Enforcement for retries, circuit breakers, bulkheads, or authentication policies is not defined here; only configuration via resilience policies is specified.
-- Engine feature increments MAY implement only a subset of the DSL surface at any given time. When a state type or construct (for example `wait`, `webhook`, `timer`, `parallel`, `subjourney`, cache operations, or scheduling) is not yet supported by a given engine, specs using it SHOULD be rejected or explicitly documented as unsupported until the corresponding feature spec is implemented.
+- Engine feature increments MAY implement only a subset of the DSL surface at any given time. When a state type or construct (for example `wait`, `webhook`, `timer`, `parallel`, `subjourney`, cache operations, or scheduling) is not yet supported by a given engine, specs using it SHOULD be rejected or explicitly documented as unsupported until the corresponding feature spec is implemented (this includes durable constructs like `wait`/`webhook`/`timer` when an engine build does not yet support persistence across restarts).
 - No array indexing in dot‑paths (no `a[0]`), and no alternate expression languages beyond those explicitly supported by the expression engine plugin model.
 - No generic environment-variable lookup or direct secret access from expressions; secrets only appear as opaque `secretRef` identifiers in dedicated policy/task configuration surfaces.
-- No persistence/resume across process restarts.
 - No dynamic parallel loops / map state: the DSL does not support runtime‑determined fan‑out into N parallel branches or step endpoints (for example “callback‑0 … callback‑N‑1”). Patterns such as “wait for N callbacks” are expressed via a single external‑input state (`wait`/`webhook`) that can be revisited in a loop, using counters/aggregates in `context` to decide when all expected callbacks have been processed. See ADR‑0021 for rationale and loop pattern examples.
 
 Secrets & `secretRef`: Secrets in the DSL are referenced only via `secretRef` fields (for example in outbound HTTP client-auth policies, Kafka connection configuration for `kafkaPublish:v1`, and any future secret-consuming policies or task kinds). Engines resolve `secretRef` values against an implementation-defined secret store; raw secret material is never exposed to DataWeave expressions, interpolation, `context`, or logs.
@@ -1876,6 +1875,7 @@ Step payload handling for external-input submissions:
 - The submitted step body is validated against the state’s `input.schema`.
 - After validation succeeds, the engine MUST copy the submitted JSON value into `context.payload` (overwriting any previous value at that path).
 - Subsequent states executed as part of the same step submission can read the submitted payload from `context.payload`.
+- While the run is paused at an external-input state (`wait`/`webhook`), `context.payload` MUST be absent: when the engine enters a `wait` or `webhook` state (including re-entry via loops), it MUST clear `context.payload` to avoid persisting untrusted or stale submission data across idle periods. Journeys that want to retain any part of a submission across re-entry MUST explicitly copy it into a stable context subtree.
 
 ### 12.1 `wait` (manual/external input)
 ```yaml
@@ -1907,7 +1907,7 @@ Semantics
 - If `timeoutSec` elapses without submission, transition to `onTimeout`.
 
 Usage guidance
-- Treat `context.payload` as a “last external-input submission” scratch space. Prefer a follow-up `transform` to project only the required fields into a stable domain subtree (and optionally drop `payload` from `context`).
+- Treat `context.payload` as a per-submission scratch space populated for the synchronous processing that follows a step submission. Prefer a follow-up `transform` to project only the required fields into a stable domain subtree (and optionally drop `payload` from `context`).
   - Example (DataWeave): keep only a few fields and remove the raw payload:
 
     ```yaml
@@ -2424,12 +2424,16 @@ Semantics
     - `POST /api/v1/apis/{apiName}` (or `spec.bindings.http.route.path` when present) for `kind: Api`.
   - `headersToContext`: for each `headerName: contextField` entry, if the request has the header, its value is copied to `context.<contextField>`. Missing headers are ignored; requiredness should be expressed via JSON Schema on the journey `context`, not here.
   - `headersPassthrough`: for each mapping, the engine conceptually propagates the inbound header value from the start request to subsequent HTTP tasks as the specified outbound header, *even if it is not stored in `context`*.
-    - This is syntactic sugar for header value propagation; it behaves as if the value flowed via an internal, reserved context field.
+    - This is syntactic sugar for header value propagation; it behaves as if the value flowed via an internal, reserved field.
+    - Passthrough values are request-scoped:
+      - They apply only to outbound HTTP tasks executed while processing the current inbound request (start or step submission), and
+      - They MUST NOT be persisted in the journey instance across `wait`/`webhook` boundaries or across process restarts.
+      Use `headersToContext` (and/or an explicit `transform`) for header values that must persist across multiple requests in the same journey.
   - `queryToContext`: for each `paramName: contextField` entry, if the request has the query parameter, its (string) value is copied to `context.<contextField>`. Missing params are ignored; requiredness should be expressed via JSON Schema on `context` or a dedicated input schema, not here.
 - Step bindings:
   - `spec.bindings.http.steps.<stepId>` applies when `POST /api/v1/journeys/{journeyId}/steps/{stepId}` is called for the configured `stepId`.
   - `headersToContext` behaves as for the start request: copy inbound headers into `context` before evaluating `wait`/`webhook` predicates or mappers.
-  - `headersPassthrough` behaves as for start: propagate header values from the step request to subsequent HTTP tasks as outbound headers, without requiring an explicit `context` field.
+  - `headersPassthrough` behaves as for start: propagate header values from the step request to subsequent HTTP tasks executed for that step submission, without requiring an explicit `context` field.
   - `queryToContext` behaves as for the start request: copy inbound query parameter values into `context` before evaluating `wait`/`webhook` predicates or mappers.
 
 ### 17.2 Usage guidance

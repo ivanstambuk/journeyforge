@@ -113,7 +113,7 @@ Constraints:
 - Start and step bindings:
 - `start` applies when an HTTP client invokes the start endpoint for a journey (`POST /api/v1/journeys/{journeyName}/start`) or API (`POST /api/v1/apis/{apiName}` or `spec.bindings.http.route.path`).
   - `steps.<stepId>` applies when an HTTP client submits to the HTTP step endpoint for an external-input state (`POST /journeys/{journeyId}/steps/{stepId}`).
-  - `headersToContext`, `headersPassthrough`, and `queryToContext` behave as described in the HTTP binding section of the DSL reference; only the configuration location changes.
+  - `headersToContext`, `headersPassthrough`, and `queryToContext` behave as described in the HTTP binding section of the DSL reference; only the configuration location changes. In particular, `headersPassthrough` values are request-scoped and MUST NOT be persisted across external-input boundaries (`wait`/`webhook`) or process restarts.
 - HTTP surface for journeys:
   - The canonical Journeys API surface (`/api/v1/journeys/{journeyName}/start`, `/journeys/{journeyId}`, `/journeys/{journeyId}/result`, `/journeys/{journeyId}/steps/{stepId}`) remains as previously defined.
   - `spec.bindings.http` controls how these HTTP calls project metadata into `context` and how headers are propagated. Inbound authentication is expressed via task plugins in the state graph (see DSL reference §18).

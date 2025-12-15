@@ -12,7 +12,7 @@
 > Guardrail: This specification is the single normative source of truth for the feature. Track high‑ and medium‑impact questions in `docs/4-architecture/open-questions.md`, encode resolved answers directly in the Requirements/NFR/Behaviour/Telemetry sections below, and use ADRs under `docs/6-decisions/` for architecturally significant clarifications.
 
 ## Overview
-Introduce a spec‑first engine that executes YAML/JSON journey definitions using the full DSL surface defined in `docs/3-reference/dsl.md`. The DSL includes state types such as `task` (HTTP call, cache operations, and `schedule` via `task.kind: <pluginType>:v<major>`), `choice`, `transform`, `wait`, `webhook`, `parallel`, `timer`, `subjourney`, `succeed`, and `fail`, plus configuration blocks for schemas, policies, and error handling. Execution is initially synchronous and in‑memory, suitable for local runs and unit tests, and lays the foundation for later persistence, durable scheduling, timers, and parallelism.
+Introduce a spec‑first engine that parses and validates YAML/JSON journey definitions against the full DSL surface defined in `docs/3-reference/dsl.md`, and executes the subset supported by the current engine increment. The DSL includes state types such as `task` (HTTP call, cache operations, and `schedule` via `task.kind: <pluginType>:v<major>`), `choice`, `transform`, `wait`, `webhook`, `parallel`, `timer`, `subjourney`, `succeed`, and `fail`, plus configuration blocks for schemas, policies, and error handling. Execution is initially synchronous and in‑memory, suitable for local runs and unit tests, and lays the foundation for later persistence, durable scheduling, timers, and parallelism.
 
 ## Goals
 - Parse and validate the DSL from YAML/JSON into model types, including `spec.subjourneys` and `task.kind: schedule:v1`.
@@ -26,7 +26,7 @@ Introduce a spec‑first engine that executes YAML/JSON journey definitions usin
 - Provide a tiny runner (CLI or unit test harness) to execute a journey file and print the final outcome.
 
 ## Non-Goals
-- No persistence or resume across process restarts for interactive runs beyond what is required for scheduled-run execution; durable instance storage and full Journeys API semantics remain in Feature 002.
+- No durable persistence or resume across process restarts for interactive `kind: Journey` runs in this feature. Engines implementing only Feature 001 MUST reject specs that require durable constructs (`wait`/`webhook`/`timer`) until durable instance storage and full Journeys API semantics are delivered (Feature 002).
 - No advanced retries, circuit breakers, or auth enforcement beyond what is required for a minimal local engine; richer policy enforcement will be refined in later features.
 
 ## DSL (normative)
