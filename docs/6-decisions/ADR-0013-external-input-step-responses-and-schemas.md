@@ -28,7 +28,7 @@ We want a first-class, spec-visible way to project selected `context` fields int
 - Semantics:
   - Step requests (`POST /journeys/{journeyId}/steps/{stepId}`) continue to:
     - Validate the request body against the state’s `input.schema`, when present, and
-    - Drive the state machine as defined (including any `apply.mapper` and `on` branching).
+    - Drive the state machine as defined (including payload ingestion and any `on` branching).
   - After the state’s effects are applied, the engine:
     - Builds the `JourneyStatus` response object as today.
     - If `response.outputVar` is set and `context[outputVar]` is an object, shallow-merges its properties into the top-level JSON response, as additional fields alongside the standard `JourneyStatus` properties.

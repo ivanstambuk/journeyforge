@@ -108,7 +108,7 @@ Constraints:
 - All existing expression sites continue to use the same shape but treat `lang` as an engine selector:
   - `choice.when.predicate: { lang: <engineId>, expr: <string> }`.
   - `transform` states: `transform.lang: <engineId>`, `expr` or `mapper`.
-  - `mapper` blocks under `task`, `wait`/`webhook`/`schedule`, and `spec.errors`:
+  - `mapper` blocks under `task`, `schedule`, and `spec.errors`:
     - `mapper.lang: <engineId>`, `expr: <string>`.
 - All expression sites that use `expr` MUST declare `lang` explicitly; the DSL does not define a default expression engine. Engine availability and limits are controlled by configuration and engine registration, not by implicit defaults in specs.
 - Engines:
@@ -126,7 +126,6 @@ Support matrix (capabilities and validation expectations):
 | `choice.when.predicate`                   | Boolean predicates for branching                   | ✅              | ✅            | ❌                   | ✅             |
 | `transform.mapper` / `transform.expr`     | General JSON transforms                            | ✅              | ✅            | ✅                   | ✅             |
 | Task mappers (`task.*.mapper`)            | HTTP/event/cache/etc. request/response shaping     | ✅              | ✅            | ✅                   | ✅             |
-| `wait.apply.mapper` / `webhook.apply`     | Context updates on external input                  | ✅              | ✅            | ✅                   | ✅             |
 | Scheduler mappers (`schedule.*.mapper`)   | `startAt` / `interval` / `maxRuns` / `subjectId`   | ✅              | ✅            | ✅                   | ✅             |
 | Error mappers (`spec.errors.normalisers`) | Low-level error → Problem Details                  | ✅              | ✅            | ✅                   | ✅             |
 | Error envelope mapper (`spec.errors.envelope.mapper`) | Problem Details → external error body     | ✅              | ✅            | ✅                   | ✅             |

@@ -69,7 +69,7 @@ For each expression site that uses `lang: dataweave`:
 - `transform.expr` / `transform.mapper` and reusable mappers (`spec.mappers`):
   - Bindings: `context`, `payload` (when associated with a body/payload), `platform`; `error = null`.
   - Result: any DW value that can be serialised to JSON (object, array, string, number, boolean, null). Non-serialisable values (for example functions) are invalid.
-- Task/step mappers (`task.*.mapper`, `wait.apply.mapper`, `webhook.apply.mapper`):
+- Task mappers (`task.*.mapper`):
   - Bindings: `context`, `payload` (HTTP bodies, step payloads, etc.), `platform`; `error = null`.
   - Result: JSON-serialisable DW value whose shape is governed by the DSL for that mapper (for example body vs header vs key).
 - Scheduler mappers (`schedule.*.mapper`):

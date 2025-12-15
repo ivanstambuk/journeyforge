@@ -68,49 +68,59 @@ submitSignature:
           comment:
             type: string
         additionalProperties: true
-    apply:
-      mapper:
-        lang: dataweave
-        expr: |
-          do {
-            var isSequential = (context.signingMode default "PARALLEL") == "SEQUENTIAL"
-            var pendingSigners =
-              (context.signers default []) filter ((s) -> s.status == "PENDING")
-            var nextSignerId =
-              if (isSequential and sizeOf(pendingSigners) > 0)
+    default: ingestSubmitSignature
+
+ingestSubmitSignature:
+  type: transform
+  transform:
+    mapper:
+      lang: dataweave
+      expr: |
+        do {
+          var isSequential = (context.signingMode default "PARALLEL") == "SEQUENTIAL"
+          var pendingSigners =
+            (context.signers default []) filter ((s) -> s.status == "PENDING")
+          var nextSignerId =
+            if (isSequential and sizeOf(pendingSigners) > 0)
+            then
+              (pendingSigners
+                orderBy ((s1, s2) ->
+                  (s1.order default 0) <=> (s2.order default 0)))[0].signerId
+            else null
+          var updatedSigners =
+            (context.signers default []) map (s) ->
+              if (s.signerId == context.payload.signerId
+                  and s.status == "PENDING"
+                  and (not isSequential or context.payload.signerId == nextSignerId))
               then
-                (pendingSigners
-                  orderBy ((s1, s2) ->
-                    (s1.order default 0) <=> (s2.order default 0)))[0].signerId
-              else null
-            var updatedSigners =
-              (context.signers default []) map (s) ->
-                if (s.signerId == payload.signerId
-                    and s.status == "PENDING"
-                    and (not isSequential or payload.signerId == nextSignerId))
-                then
-                  s ++ {
-                    status: payload.decision,
-                    signedAt: now()
-                  }
-                else s
-            context ++ { signers: updatedSigners }
-          }
-    on:
-      - when:
-          predicate:
-            lang: dataweave
-            expr: |
-              (context.signers default []) any ((s) -> s.status == "DECLINED")
-        next: completeDeclined
-      - when:
-          predicate:
-            lang: dataweave
-            expr: |
-              (context.signers default []) != []
-                and (context.signers default []) all ((s) -> s.status == "SIGNED")
-        next: completeFullySigned
-    default: submitSignature
+                s ++ {
+                  status: context.payload.decision,
+                  signedAt: now()
+                }
+              else s
+          context ++ { signers: updatedSigners }
+        }
+    target:
+      kind: context
+  next: routeSubmitSignature
+
+routeSubmitSignature:
+  type: choice
+  choices:
+    - when:
+        predicate:
+          lang: dataweave
+          expr: |
+            (context.signers default []) any ((s) -> s.status == "DECLINED")
+      next: completeDeclined
+    - when:
+        predicate:
+          lang: dataweave
+          expr: |
+            (context.signers default []) != []
+              and (context.signers default []) all ((s) -> s.status == "SIGNED")
+      next: completeFullySigned
+  default: submitSignature
 ```
 
 Key ideas:
@@ -139,4 +149,3 @@ Key ideas:
   - Journeys should tolerate duplicate submissions from the same actor; the guard `s.status == "PENDING"` ensures later submissions don’t re-open decisions.
 - Observability:
   - Consider projecting key fields (for example current pending actors) into the `JourneyStatus` response via a `response.outputVar` on the `wait` state when needed; the core pattern here focuses on internal state and final outcome.  
-

@@ -147,67 +147,72 @@ spec:
                     schema:
                       title: SubmitSignatureInput
                       type: object
-                      required:
-                        - signerId
-                        - decision
+                      required: [signerId, decision]
                       properties:
                         signerId:
                           type: string
                         decision:
                           type: string
-                          enum:
-                            - SIGNED
-                            - DECLINED
+                          enum: [SIGNED, DECLINED]
                         comment:
                           type: string
                       additionalProperties: true
-                  apply:
-                    mapper:
-                      lang: dataweave
-                      expr: |
-                        do {
-                          var isSequential = (context.signingMode default "PARALLEL") == "SEQUENTIAL"
-                          var pendingSigners =
-                            (context.signers default []) filter ((s) -> s.status == "PENDING")
-                          var nextSignerId =
-                            if (isSequential and sizeOf(pendingSigners) > 0)
+                  default: ingestSubmitSignature
+
+              ingestSubmitSignature:
+                type: transform
+                transform:
+                  mapper:
+                    lang: dataweave
+                    expr: |
+                      do {
+                        var isSequential = (context.signingMode default "PARALLEL") == "SEQUENTIAL"
+                        var pendingSigners =
+                          (context.signers default []) filter ((s) -> s.status == "PENDING")
+                        var nextSignerId =
+                          if (isSequential and sizeOf(pendingSigners) > 0)
+                          then
+                            (pendingSigners
+                              orderBy ((s1, s2) ->
+                                (s1.order default 0) <=> (s2.order default 0)))[0].signerId
+                          else null
+                        var updatedSigners =
+                          (context.signers default []) map (s) ->
+                            if (s.signerId == context.payload.signerId
+                                and s.status == "PENDING"
+                                and (not isSequential or context.payload.signerId == nextSignerId))
                             then
-                              (pendingSigners
-                                orderBy ((s1, s2) ->
-                                  (s1.order default 0) <=> (s2.order default 0)))[0].signerId
-                            else null
-                          var updatedSigners =
-                            (context.signers default []) map (s) ->
-                              if (s.signerId == payload.signerId
-                                  and s.status == "PENDING"
-                                  and (not isSequential or payload.signerId == nextSignerId))
-                              then
-                                s ++ {
-                                  status: payload.decision,
-                                  signedAt: now()
-                                }
-                              else s
-                          context ++ {
-                            signers: updatedSigners
-                          }
+                              s ++ {
+                                status: context.payload.decision,
+                                signedAt: now()
+                              }
+                            else s
+                        context ++ {
+                          signers: updatedSigners
                         }
-                  on:
-                    - when:
-                        predicate:
-                          lang: dataweave
-                          expr: |
-                            // Any signer declined -> immediate terminal outcome
-                            (context.signers default []) any ((s) -> s.status == "DECLINED")
-                      next: completeDeclined
-                    - when:
-                        predicate:
-                          lang: dataweave
-                          expr: |
-                            // All signers signed -> fully signed
-                            (context.signers default []) != []
-                              and (context.signers default []) all ((s) -> s.status == "SIGNED")
-                      next: completeFullySigned
-                  default: submitSignature
+                      }
+                  target:
+                    kind: context
+                    path: ""
+                next: routeSubmitSignature
+
+              routeSubmitSignature:
+                type: choice
+                choices:
+                  - when:
+                      predicate:
+                        lang: dataweave
+                        expr: |
+                          (context.signers default []) any ((s) -> s.status == "DECLINED")
+                    next: completeDeclined
+                  - when:
+                      predicate:
+                        lang: dataweave
+                        expr: |
+                          (context.signers default []) != []
+                            and (context.signers default []) all ((s) -> s.status == "SIGNED")
+                    next: completeFullySigned
+                default: submitSignature
 
               completeDeclined:
                 type: transform
@@ -235,7 +240,7 @@ spec:
                   target:
                     kind: context
                     path: ""
-                next: documentCompleted
+                next: signingBranchDone
 
               completeFullySigned:
                 type: transform
@@ -255,7 +260,10 @@ spec:
                   target:
                     kind: context
                     path: ""
-                next: documentCompleted
+                next: signingBranchDone
+
+              signingBranchDone:
+                type: succeed
 
           - name: expiryBranch
             start: documentExpiryTimer
@@ -267,7 +275,6 @@ spec:
                     mapper:
                       lang: dataweave
                       expr: |
-                        // Convert hours to ISO-8601 duration, default 7 days
                         "PT" ++ ((context.documentExpiryHours default 168) as String) ++ "H"
                 next: markExpired
 
@@ -299,7 +306,19 @@ spec:
                   target:
                     kind: context
                     path: ""
-                next: documentCompleted
+                next: expiryBranchDone
+
+              expiryBranchDone:
+                type: succeed
+        join:
+          strategy: anyOf
+          errorPolicy: collectAll
+          mapper:
+            lang: dataweave
+            expr: |
+              branches.signingBranch.outcome default branches.expiryBranch.outcome
+          resultVar: outcome
+      next: documentCompleted
 
     documentCompleted:
       type: succeed

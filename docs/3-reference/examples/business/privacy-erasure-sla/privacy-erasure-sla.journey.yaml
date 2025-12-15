@@ -189,29 +189,40 @@ spec:
               reason:
                 type: string
             additionalProperties: true
-        apply:
-          mapper:
-            lang: dataweave
-            expr: |
-              context ++ {
-                privacyDeskDecision: payload
-              }
-        on:
-          - when:
-              predicate:
-                lang: dataweave
-                expr: |
-                  payload.decision == "APPROVE"
-            next: markApprovedByDesk
-          - when:
-              predicate:
-                lang: dataweave
-                expr: |
-                  payload.decision == "REJECT"
-            next: markRejectedByDesk
-        default: ignoreDeskUpdate
         timeoutSec: 172800
         onTimeout: escalateToSenior
+        default: ingestPrivacyDeskReview
+
+    ingestPrivacyDeskReview:
+      type: transform
+      transform:
+        mapper:
+          lang: dataweave
+          expr: |
+            context ++ {
+              privacyDeskDecision: context.payload
+            }
+        target:
+          kind: context
+          path: ""
+      next: routePrivacyDeskReview
+
+    routePrivacyDeskReview:
+      type: choice
+      choices:
+        - when:
+            predicate:
+              lang: dataweave
+              expr: |
+                context.payload.decision == "APPROVE"
+          next: markApprovedByDesk
+        - when:
+            predicate:
+              lang: dataweave
+              expr: |
+                context.payload.decision == "REJECT"
+          next: markRejectedByDesk
+      default: ignoreDeskUpdate
 
     ignoreDeskUpdate:
       type: transform
@@ -321,27 +332,38 @@ spec:
               reason:
                 type: string
             additionalProperties: true
-        apply:
-          mapper:
-            lang: dataweave
-            expr: |
-              context ++ {
-                seniorDecision: payload
-              }
-        on:
-          - when:
-              predicate:
-                lang: dataweave
-                expr: |
-                  payload.decision == "APPROVE"
-            next: markApprovedBySenior
-          - when:
-              predicate:
-                lang: dataweave
-                expr: |
-                  payload.decision == "REJECT"
-            next: markRejectedBySenior
-        default: ignoreSeniorUpdate
+        default: ingestSeniorReview
+
+    ingestSeniorReview:
+      type: transform
+      transform:
+        mapper:
+          lang: dataweave
+          expr: |
+            context ++ {
+              seniorDecision: context.payload
+            }
+        target:
+          kind: context
+          path: ""
+      next: routeSeniorReview
+
+    routeSeniorReview:
+      type: choice
+      choices:
+        - when:
+            predicate:
+              lang: dataweave
+              expr: |
+                context.payload.decision == "APPROVE"
+          next: markApprovedBySenior
+        - when:
+            predicate:
+              lang: dataweave
+              expr: |
+                context.payload.decision == "REJECT"
+          next: markRejectedBySenior
+      default: ignoreSeniorUpdate
 
     ignoreSeniorUpdate:
       type: transform

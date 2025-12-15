@@ -78,25 +78,35 @@ spec:
                 type: string
                 description: Optional free-text comment provided by the approver.
             additionalProperties: true
-        apply:
-          mapper:
-            lang: dataweave
-            expr: |
-              context ++ {
-                approval: payload,
-                stepResponse: {
-                  decision: payload.decision,
-                  comment: payload.comment
-                }
+        default: ingestWaitForApproval
+
+    ingestWaitForApproval:
+      type: transform
+      transform:
+        mapper:
+          lang: dataweave
+          expr: |
+            context ++ {
+              approval: context.payload,
+              stepResponse: {
+                decision: context.payload.decision,
+                comment: context.payload.comment
               }
-        on:
-          - when:
-              predicate:
-                lang: dataweave
-                expr: |
-                  payload.decision == 'approved'
-            next: finish
-        default: rejected
+            }
+        target:
+          kind: context
+      next: routeWaitForApproval
+
+    routeWaitForApproval:
+      type: choice
+      choices:
+        - when:
+            predicate:
+              lang: dataweave
+              expr: |
+                context.payload.decision == 'approved'
+          next: finish
+      default: rejected
 
     finish:
       type: succeed

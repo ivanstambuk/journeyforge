@@ -39,29 +39,39 @@ reviewRequest:
           reason:
             type: string
         additionalProperties: true
-    apply:
-      mapper:
-        lang: dataweave
-        expr: |
-          context ++ {
-            reviewDecision: payload
-          }
-    on:
-      - when:
-          predicate:
-            lang: dataweave
-            expr: |
-              payload.decision == "APPROVE"
-        next: approvedPath
-      - when:
-          predicate:
-            lang: dataweave
-            expr: |
-              payload.decision == "REJECT"
-        next: rejectedPath
-    default: ignoreUpdate
+    default: ingestReviewDecision
     timeoutSec: 172800            # ~2 days; model "2 business days" as needed
     onTimeout: escalatePath
+
+ingestReviewDecision:
+  type: transform
+  transform:
+    mapper:
+      lang: dataweave
+      expr: |
+        context ++ {
+          reviewDecision: context.payload
+        }
+    target:
+      kind: context
+  next: routeReviewDecision
+
+routeReviewDecision:
+  type: choice
+  choices:
+    - when:
+        predicate:
+          lang: dataweave
+          expr: |
+            context.payload.decision == "APPROVE"
+      next: approvedPath
+    - when:
+        predicate:
+          lang: dataweave
+          expr: |
+            context.payload.decision == "REJECT"
+      next: rejectedPath
+  default: ignoreUpdate
 ```
 
 Key points:
@@ -112,27 +122,30 @@ waitOrTimeout:
   type: parallel
   parallel:
     branches:
-      - name: humanBranch
-        start: waitForInput
-        states:
-          waitForInput:
-            type: wait
-            wait:
-              channel: manual
-              input:
-                schema: { /* ... */ }
-              on:
-                - when:
-                    predicate:
-                      lang: dataweave
-                      expr: |
-                        payload.decision == "COMPLETE"
-                  next: markCompleted
-              default: waitForInput
-          markCompleted:
-            type: transform
-            transform:
-              mapper:
+	      - name: humanBranch
+	        start: waitForInput
+	        states:
+	          waitForInput:
+	            type: wait
+	            wait:
+	              channel: manual
+	              input:
+	                schema: { /* ... */ }
+	            next: decideInput
+	          decideInput:
+	            type: choice
+	            choices:
+	              - when:
+	                  predicate:
+	                    lang: dataweave
+	                    expr: |
+	                      context.payload.decision == "COMPLETE"
+	                next: markCompleted
+	            default: waitForInput
+	          markCompleted:
+	            type: transform
+	            transform:
+	              mapper:
                 lang: dataweave
                 expr: |
                   context ++ {
@@ -262,4 +275,3 @@ Use `parallel` + `timer` when:
 Both patterns can be combined in larger journeys. For example:
 - `support-case-sla` uses `parallel` + `timer` to race **agent work**, **SLA escalation**, and **give-up auto-close**.
 - `privacy-erasure-sla` uses `wait.timeoutSec + onTimeout` to express a **review SLA** on a single state and then escalates to a second review state.
-

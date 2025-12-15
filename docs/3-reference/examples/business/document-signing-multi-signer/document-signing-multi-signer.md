@@ -101,7 +101,7 @@ Clients can infer partial progress and per-signer status from `JourneyStatus` pr
 - `signingOrExpiry` is a `parallel` state with two branches:
   - `signingBranch`:
     - `submitSignature` is a generic `wait` state that accepts signer decisions with `signerId` and `decision`.
-    - Its `apply` mapper:
+    - Its ingestion transform (`ingestSubmitSignature`):
       - For **sequential** mode, determines the next allowed signer based on the lowest `order` among `PENDING` signers and only applies updates when the payload’s `signerId` matches that expected signer.
       - For **parallel** mode, allows any `PENDING` signer to sign or decline.
       - Updates the matching signer’s `status` and `signedAt` timestamp.

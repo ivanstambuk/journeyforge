@@ -18,7 +18,7 @@ Expose a journey that:
 
 ## Relevant DSL Features
 
-- HTTP security policies under `spec.bindings.http.security` for inbound auth.
+- `jwtValidate:v1` for inbound JWT validation.
 - HTTP binding (`spec.bindings.http`) to project headers into `context`.
 - `transform` to normalise auth data into business fields.
 - HTTP `task` with `operationRef`.
@@ -37,7 +37,6 @@ metadata:
 spec:
   bindings:
     http:
-      # Security policies: the engine validates JWT on start requests
       # Bind relevant headers into context for tracing/correlation
       start:
         headersToContext:

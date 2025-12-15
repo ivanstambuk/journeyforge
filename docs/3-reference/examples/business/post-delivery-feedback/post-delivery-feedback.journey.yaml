@@ -134,32 +134,42 @@ spec:
                 type: string
                 format: date
             additionalProperties: true
-        apply:
-          mapper:
-            lang: dataweave
-            expr: |
-              context ++ {
-                delivery: payload,
-                deliveryDate: payload.deliveryDate,
-                deliveryResponse: {
-                  status: payload.status,
-                  deliveryDate: payload.deliveryDate
-                }
+        default: ingestWaitForDelivery
+
+    ingestWaitForDelivery:
+      type: transform
+      transform:
+        mapper:
+          lang: dataweave
+          expr: |
+            context ++ {
+              delivery: context.payload,
+              deliveryDate: context.payload.deliveryDate,
+              deliveryResponse: {
+                status: context.payload.status,
+                deliveryDate: context.payload.deliveryDate
               }
-        on:
-          - when:
-              predicate:
-                lang: dataweave
-                expr: |
-                  payload.status == "delivered"
-            next: completeDelivered
-          - when:
-              predicate:
-                lang: dataweave
-                expr: |
-                  payload.status == "cancelled"
-            next: completeCancelled
-        default: completeCancelled
+            }
+        target:
+          kind: context
+      next: routeWaitForDelivery
+
+    routeWaitForDelivery:
+      type: choice
+      choices:
+        - when:
+            predicate:
+              lang: dataweave
+              expr: |
+                context.payload.status == "delivered"
+          next: completeDelivered
+        - when:
+            predicate:
+              lang: dataweave
+              expr: |
+                context.payload.status == "cancelled"
+          next: completeCancelled
+      default: completeCancelled
 
     completeDelivered:
       type: succeed

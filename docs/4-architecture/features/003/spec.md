@@ -17,7 +17,7 @@ Introduce a spec‑first model for outbound HTTP authentication and secret refer
 - Refer to secrets via opaque `secretRef` strings without inlining sensitive material in DSL specs.
 - Rely on the engine to cache and reuse short‑lived tokens (such as access tokens) across journey instances until expiry.
 
-This feature extends the DSL and engine behaviour for *outbound* HTTP only; inbound auth remains modelled via HTTP security policies under `spec.bindings.http.security`.
+This feature extends the DSL and engine behaviour for *outbound* HTTP only; inbound authentication/authorisation is expressed via auth task plugins in the state graph and surrounding platform enforcement (see `docs/3-reference/dsl.md`, section 18).
 
 ## Goals
 - Add a `spec.policies.httpClientAuth` block to the DSL to configure outbound HTTP auth policies.

@@ -135,26 +135,36 @@ spec:
               notes:
                 type: string
             additionalProperties: true
-        apply:
-          mapper:
-            lang: dataweave
-            expr: |
-              context ++ {
-                fnolDetails: payload,
-                fnolDetailsResponse: {
-                  decision: payload.decision,
-                  documents: payload.documents,
-                  notes: payload.notes
-                }
+        default: ingestWaitForFnolDetails
+
+    ingestWaitForFnolDetails:
+      type: transform
+      transform:
+        mapper:
+          lang: dataweave
+          expr: |
+            context ++ {
+              fnolDetails: context.payload,
+              fnolDetailsResponse: {
+                decision: context.payload.decision,
+                documents: context.payload.documents,
+                notes: context.payload.notes
               }
-        on:
-          - when:
-              predicate:
-                lang: dataweave
-                expr: |
-                  payload.decision == "submit"
-            next: assessmentParallel
-        default: denied
+            }
+        target:
+          kind: context
+      next: routeWaitForFnolDetails
+
+    routeWaitForFnolDetails:
+      type: choice
+      choices:
+        - when:
+            predicate:
+              lang: dataweave
+              expr: |
+                context.payload.decision == "submit"
+          next: assessmentParallel
+      default: denied
 
     assessmentParallel:
       type: parallel
@@ -208,24 +218,31 @@ spec:
                                 notes:
                                   type: string
                               additionalProperties: true
-                          apply:
+                          default: ingestWaitForAdjusterReport
+
+                        ingestWaitForAdjusterReport:
+                          type: transform
+                          transform:
                             mapper:
                               lang: dataweave
                               expr: |
                                 context ++ {
                                   assessment: (context.assessment default {}) ++ {
                                     adjuster: {
-                                      decision: payload.decision,
-                                      recommendedAmount: payload.recommendedAmount,
-                                      notes: payload.notes
+                                      decision: context.payload.decision,
+                                      recommendedAmount: context.payload.recommendedAmount,
+                                      notes: context.payload.notes
                                     }
                                   },
                                   adjusterReportResponse: {
-                                    decision: payload.decision,
-                                    recommendedAmount: payload.recommendedAmount,
-                                    notes: payload.notes
+                                    decision: context.payload.decision,
+                                    recommendedAmount: context.payload.recommendedAmount,
+                                    notes: context.payload.notes
                                   }
                                 }
+                            target:
+                              kind: context
+                          next: adjusterReportDone
                         adjusterReportDone:
                           type: succeed
                     - name: adjusterSla
@@ -326,24 +343,31 @@ spec:
                                 notes:
                                   type: string
                               additionalProperties: true
-                          apply:
+                          default: ingestWaitForProviderEstimate
+
+                        ingestWaitForProviderEstimate:
+                          type: transform
+                          transform:
                             mapper:
                               lang: dataweave
                               expr: |
                                 context ++ {
                                   assessment: (context.assessment default {}) ++ {
                                     provider: {
-                                      decision: payload.decision,
-                                      estimatedCost: payload.estimatedCost,
-                                      notes: payload.notes
+                                      decision: context.payload.decision,
+                                      estimatedCost: context.payload.estimatedCost,
+                                      notes: context.payload.notes
                                     }
                                   },
                                   providerEstimateResponse: {
-                                    decision: payload.decision,
-                                    estimatedCost: payload.estimatedCost,
-                                    notes: payload.notes
+                                    decision: context.payload.decision,
+                                    estimatedCost: context.payload.estimatedCost,
+                                    notes: context.payload.notes
                                   }
                                 }
+                            target:
+                              kind: context
+                          next: providerEstimateDone
                         providerEstimateDone:
                           type: succeed
                     - name: providerSla
@@ -451,26 +475,36 @@ spec:
               notes:
                 type: string
             additionalProperties: true
-        apply:
-          mapper:
-            lang: dataweave
-            expr: |
-              context ++ {
-                settlementDecision: payload,
-                settlementApprovalResponse: {
-                  decision: payload.decision,
-                  settlementAmount: payload.settlementAmount,
-                  notes: payload.notes
-                }
+        default: ingestWaitForSettlementApproval
+
+    ingestWaitForSettlementApproval:
+      type: transform
+      transform:
+        mapper:
+          lang: dataweave
+          expr: |
+            context ++ {
+              settlementDecision: context.payload,
+              settlementApprovalResponse: {
+                decision: context.payload.decision,
+                settlementAmount: context.payload.settlementAmount,
+                notes: context.payload.notes
               }
-        on:
-          - when:
-              predicate:
-                lang: dataweave
-                expr: |
-                  payload.decision == "approve"
-            next: recordSettlement
-        default: denied
+            }
+        target:
+          kind: context
+      next: routeWaitForSettlementApproval
+
+    routeWaitForSettlementApproval:
+      type: choice
+      choices:
+        - when:
+            predicate:
+              lang: dataweave
+              expr: |
+                context.payload.decision == "approve"
+          next: recordSettlement
+      default: denied
 
     recordSettlement:
       type: task

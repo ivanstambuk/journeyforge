@@ -58,25 +58,34 @@ primaryKycRace:
             webhook:
               input:
                 schema: { /* jobId, status, reasons[] */ }
-              apply:
-                mapper:
-                  lang: dataweave
-                  expr: |
-                    context ++ { primaryKycCallback: payload }
-              on:
-                - when:
-                    predicate:
-                      lang: dataweave
-                      expr: |
-                        context.outcome != null
-                  next: ignorePrimaryCallback
-                - when:
-                    predicate:
-                      lang: dataweave
-                      expr: |
-                        payload.status == "APPROVED"
-                  next: completeFromPrimaryApproved
-              default: completeFromPrimaryRejected
+              default: ingestPrimaryKycCallback
+
+          ingestPrimaryKycCallback:
+            type: transform
+            transform:
+              mapper:
+                lang: dataweave
+                expr: |
+                  context ++ { primaryKycCallback: context.payload }
+              target: { kind: context, path: "" }
+            next: routePrimaryKycCallback
+
+          routePrimaryKycCallback:
+            type: choice
+            choices:
+              - when:
+                  predicate:
+                    lang: dataweave
+                    expr: |
+                      context.outcome != null
+                next: ignorePrimaryCallback
+              - when:
+                  predicate:
+                    lang: dataweave
+                    expr: |
+                      context.payload.status == "APPROVED"
+                next: completeFromPrimaryApproved
+            default: completeFromPrimaryRejected
 
           ignorePrimaryCallback:
             type: transform

@@ -67,25 +67,35 @@ spec:
               approvedBy:
                 type: string
             required: ["decision"]
-        apply:
-          mapper:
-            lang: dataweave
-            expr: |
-              context ++ {
-                approval: payload,
-                stepResponse: {
-                  decision: payload.decision,
-                  approvedBy: payload.approvedBy
-                }
+        default: ingestWaitForApproval
+
+    ingestWaitForApproval:
+      type: transform
+      transform:
+        mapper:
+          lang: dataweave
+          expr: |
+            context ++ {
+              approval: context.payload,
+              stepResponse: {
+                decision: context.payload.decision,
+                approvedBy: context.payload.approvedBy
               }
-        on:
-          - when:
-              predicate:
-                lang: dataweave
-                expr: |
-                  payload.decision == "approved"
-            next: finish
-        default: rejected
+            }
+        target:
+          kind: context
+      next: routeWaitForApproval
+
+    routeWaitForApproval:
+      type: choice
+      choices:
+        - when:
+            predicate:
+              lang: dataweave
+              expr: |
+                context.payload.decision == "approved"
+          next: finish
+      default: rejected
 ```
 
 ## Branch & Scenario Matrix

@@ -172,27 +172,37 @@ spec:
               notes:
                 type: string
             additionalProperties: true
-        apply:
-          mapper:
-            lang: dataweave
-            expr: |
-              context ++ {
-                orderId: order.body.orderId default context.orderId,
-                reservation: reservation.body,
-                confirmation: payload,
-                confirmationResponse: {
-                  decision: payload.decision,
-                  notes: payload.notes
-                }
+        default: ingestWaitForConfirmation
+
+    ingestWaitForConfirmation:
+      type: transform
+      transform:
+        mapper:
+          lang: dataweave
+          expr: |
+            context ++ {
+              orderId: order.body.orderId default context.orderId,
+              reservation: reservation.body,
+              confirmation: context.payload,
+              confirmationResponse: {
+                decision: context.payload.decision,
+                notes: context.payload.notes
               }
-        on:
-          - when:
-              predicate:
-                lang: dataweave
-                expr: |
-                  payload.decision == "proceed"
-            next: prepareShipments
-        default: completeCancelled
+            }
+        target:
+          kind: context
+      next: routeWaitForConfirmation
+
+    routeWaitForConfirmation:
+      type: choice
+      choices:
+        - when:
+            predicate:
+              lang: dataweave
+              expr: |
+                context.payload.decision == "proceed"
+          next: prepareShipments
+      default: completeCancelled
 
     prepareShipments:
       type: task
@@ -261,44 +271,71 @@ spec:
                 items:
                   type: object
             additionalProperties: true
-        security:
-          kind: sharedSecretHeader
-          header: X-Fulfillment-Secret
-          secretRef: secret://webhook/ecommerce-order-fulfillment
-        apply:
-          mapper:
-            lang: dataweave
-            expr: |
-              context ++ {
-                fulfillmentCallback: payload,
-                shipments: payload.shipments,
-                unavailableItems: payload.unavailableItems,
-                fulfillmentResponse: {
-                  overallStatus: payload.overallStatus,
-                  shipments: payload.shipments,
-                  unavailableItems: payload.unavailableItems
-                }
+      next: validateFulfillmentSecret
+
+    validateFulfillmentSecret:
+      type: task
+      task:
+        kind: apiKeyValidate:v1
+        profile: ecommerce-order-fulfillment
+        source:
+          location: header
+          name: X-Fulfillment-Secret
+      next: routeFulfillmentAuth
+
+    routeFulfillmentAuth:
+      type: choice
+      choices:
+        - when:
+            predicate:
+              lang: dataweave
+              expr: |
+                context.auth.apiKey.problem == null
+          next: ingestWaitForFulfillment
+      default: waitForFulfillment
+
+    ingestWaitForFulfillment:
+      type: transform
+      transform:
+        mapper:
+          lang: dataweave
+          expr: |
+            context ++ {
+              fulfillmentCallback: context.payload,
+              shipments: context.payload.shipments,
+              unavailableItems: context.payload.unavailableItems,
+              fulfillmentResponse: {
+                overallStatus: context.payload.overallStatus,
+                shipments: context.payload.shipments,
+                unavailableItems: context.payload.unavailableItems
               }
-        on:
-          - when:
-              predicate:
-                lang: dataweave
-                expr: |
-                  payload.overallStatus == "FULFILLED"
-            next: completeFulfilled
-          - when:
-              predicate:
-                lang: dataweave
-                expr: |
-                  payload.overallStatus == "PARTIALLY_FULFILLED"
-            next: completePartiallyFulfilled
-          - when:
-              predicate:
-                lang: dataweave
-                expr: |
-                  payload.overallStatus == "CANCELLED"
-            next: completeCancelled
-        default: failed
+            }
+        target:
+          kind: context
+      next: routeWaitForFulfillment
+
+    routeWaitForFulfillment:
+      type: choice
+      choices:
+        - when:
+            predicate:
+              lang: dataweave
+              expr: |
+                context.payload.overallStatus == "FULFILLED"
+          next: completeFulfilled
+        - when:
+            predicate:
+              lang: dataweave
+              expr: |
+                context.payload.overallStatus == "PARTIALLY_FULFILLED"
+          next: completePartiallyFulfilled
+        - when:
+            predicate:
+              lang: dataweave
+              expr: |
+                context.payload.overallStatus == "CANCELLED"
+          next: completeCancelled
+      default: failed
 
     completeFulfilled:
       type: succeed

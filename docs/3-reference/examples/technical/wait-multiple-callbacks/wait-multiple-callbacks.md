@@ -43,7 +43,7 @@ High-level behaviour:
 - The `waitForCallback` state:
   - Exposes `/steps/waitForCallback` with a flexible `payload` object.
   - On each submission:
-    - Appends `payload` to `context.callbacks`.
+    - Appends `context.payload` to `context.callbacks`.
     - Increments `context.receivedCount`.
   - Branches:
     - When `receivedCount < expectedCount` – loops back to `waitForCallback`.
@@ -65,22 +65,31 @@ states:
             payload:
               type: object
           additionalProperties: true
-      apply:
-        mapper:
-          lang: dataweave
-          expr: |
-            context ++ {
-              callbacks: (context.callbacks default []) ++ [payload],
-              receivedCount: (context.receivedCount default 0) + 1
-            }
-      on:
-        - when:
-            predicate:
-              lang: dataweave
-              expr: |
-                (context.receivedCount default 0) >= (context.expectedCount default 0)
-          next: projectOutcome
-      default: waitForCallback
+      default: ingestCallback
+
+  ingestCallback:
+    type: transform
+    transform:
+      mapper:
+        lang: dataweave
+        expr: |
+          context ++ {
+            callbacks: (context.callbacks default []) ++ [context.payload],
+            receivedCount: (context.receivedCount default 0) + 1
+          }
+      target: { kind: context, path: "" }
+    next: routeCallback
+
+  routeCallback:
+    type: choice
+    choices:
+      - when:
+          predicate:
+            lang: dataweave
+            expr: |
+              (context.receivedCount default 0) >= (context.expectedCount default 0)
+        next: projectOutcome
+    default: waitForCallback
 ```
 
 ## Variations and combinations
@@ -93,4 +102,3 @@ states:
 
 - All callbacks for a given journey instance share the same step id (`waitForCallback`); idempotence and retry handling should be considered at the API adapter level.
 - Because there is no dynamic parallel loop, the engine processes callbacks one at a time per journey instance; horizontal parallelism comes from running many journey instances in parallel, not from spawning N branches inside one instance.
-

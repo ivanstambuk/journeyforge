@@ -126,25 +126,35 @@ spec:
               comment:
                 type: string
             additionalProperties: true
-        apply:
-          mapper:
-            lang: dataweave
-            expr: |
-              context ++ {
-                customerAcceptance: payload,
-                customerAcceptanceResponse: {
-                  decision: payload.decision,
-                  comment: payload.comment
-                }
+        default: ingestWaitForCustomerAcceptance
+
+    ingestWaitForCustomerAcceptance:
+      type: transform
+      transform:
+        mapper:
+          lang: dataweave
+          expr: |
+            context ++ {
+              customerAcceptance: context.payload,
+              customerAcceptanceResponse: {
+                decision: context.payload.decision,
+                comment: context.payload.comment
               }
-        on:
-          - when:
-              predicate:
-                lang: dataweave
-                expr: |
-                  payload.decision == "accept"
-            next: initiateRateLock
-        default: declined
+            }
+        target:
+          kind: context
+      next: routeWaitForCustomerAcceptance
+
+    routeWaitForCustomerAcceptance:
+      type: choice
+      choices:
+        - when:
+            predicate:
+              lang: dataweave
+              expr: |
+                context.payload.decision == "accept"
+          next: initiateRateLock
+      default: declined
 
     initiateRateLock:
       type: task
@@ -221,32 +231,59 @@ spec:
               reason:
                 type: string
             additionalProperties: true
-        security:
-          kind: sharedSecretHeader
-          header: X-RateLock-Secret
-          secretRef: secret://webhook/mortgages-rate-lock
-        apply:
-          mapper:
-            lang: dataweave
-            expr: |
-              context ++ {
-                lockCallback: payload,
-                lockResponse: {
-                  status: payload.status,
-                  lockedRate: payload.lockedRate,
-                  lockExpiry: payload.lockExpiry,
-                  lockId: payload.lockId,
-                  reason: payload.reason
-                }
+      next: validateRateLockSecret
+
+    validateRateLockSecret:
+      type: task
+      task:
+        kind: apiKeyValidate:v1
+        profile: mortgages-rate-lock
+        source:
+          location: header
+          name: X-RateLock-Secret
+      next: routeRateLockAuth
+
+    routeRateLockAuth:
+      type: choice
+      choices:
+        - when:
+            predicate:
+              lang: dataweave
+              expr: |
+                context.auth.apiKey.problem == null
+          next: ingestWaitForLockConfirmation
+      default: waitForLockConfirmation
+
+    ingestWaitForLockConfirmation:
+      type: transform
+      transform:
+        mapper:
+          lang: dataweave
+          expr: |
+            context ++ {
+              lockCallback: context.payload,
+              lockResponse: {
+                status: context.payload.status,
+                lockedRate: context.payload.lockedRate,
+                lockExpiry: context.payload.lockExpiry,
+                lockId: context.payload.lockId,
+                reason: context.payload.reason
               }
-        on:
-          - when:
-              predicate:
-                lang: dataweave
-                expr: |
-                  payload.status == "LOCKED"
-            next: locked
-        default: expiredOrRejected
+            }
+        target:
+          kind: context
+      next: routeWaitForLockConfirmation
+
+    routeWaitForLockConfirmation:
+      type: choice
+      choices:
+        - when:
+            predicate:
+              lang: dataweave
+              expr: |
+                context.payload.status == "LOCKED"
+          next: locked
+      default: expiredOrRejected
 
     locked:
       type: succeed

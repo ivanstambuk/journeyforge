@@ -119,31 +119,42 @@ spec:
                         journeyPhase:
                           type: string
                       additionalProperties: true
-                  apply:
-                    mapper:
-                      lang: dataweave
-                      expr: |
-                        context ++ {
-                          providerCallback: payload,
-                          callbackStep: {
-                            status: payload.status,
-                            journeyPhase: "Running"
-                          }
+                  default: ingestWaitForCallback
+
+              ingestWaitForCallback:
+                type: transform
+                transform:
+                  mapper:
+                    lang: dataweave
+                    expr: |
+                      context ++ {
+                        providerCallback: context.payload,
+                        callbackStep: {
+                          status: context.payload.status,
+                          journeyPhase: "Running"
                         }
-                  on:
-                    - when:
-                        predicate:
-                          lang: dataweave
-                          expr: |
-                            context.outcome != null
-                      next: ignoreLateCallback
-                    - when:
-                        predicate:
-                          lang: dataweave
-                          expr: |
-                            payload.status == "COMPLETED"
-                      next: completeFromCallback
-                  default: failFromCallback
+                      }
+                  target:
+                    kind: context
+                    path: ""
+                next: routeWaitForCallback
+
+              routeWaitForCallback:
+                type: choice
+                choices:
+                  - when:
+                      predicate:
+                        lang: dataweave
+                        expr: |
+                          context.outcome != null
+                    next: ignoreLateCallback
+                  - when:
+                      predicate:
+                        lang: dataweave
+                        expr: |
+                          context.payload.status == "COMPLETED"
+                    next: completeFromCallback
+                default: failFromCallback
 
               ignoreLateCallback:
                 type: transform

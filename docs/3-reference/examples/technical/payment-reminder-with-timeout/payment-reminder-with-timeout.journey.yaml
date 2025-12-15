@@ -80,21 +80,32 @@ spec:
                           type: string
                           enum: [PAID]
                       additionalProperties: true
-                  apply:
-                    mapper:
-                      lang: dataweave
-                      expr: |
-                        context ++ {
-                          paymentStatus: payload.paymentStatus
-                        }
-                  on:
-                    - when:
-                        predicate:
-                          lang: dataweave
-                          expr: |
-                            payload.paymentStatus == "PAID"
-                      next: paymentReceived
-                  default: paymentNotCompleted
+                  default: ingestWaitForPayment
+
+              ingestWaitForPayment:
+                type: transform
+                transform:
+                  mapper:
+                    lang: dataweave
+                    expr: |
+                      context ++ {
+                        paymentStatus: context.payload.paymentStatus
+                      }
+                  target:
+                    kind: context
+                    path: ""
+                next: routeWaitForPayment
+
+              routeWaitForPayment:
+                type: choice
+                choices:
+                  - when:
+                      predicate:
+                        lang: dataweave
+                        expr: |
+                          context.payload.paymentStatus == "PAID"
+                    next: paymentReceived
+                default: paymentNotCompleted
 
               paymentReceived:
                 type: transform

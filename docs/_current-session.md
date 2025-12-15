@@ -67,3 +67,13 @@
 - 2025-12-10: Marked Feature 004 (“HTTP Cookies & Journey Cookie Jar”) as `Status | Ready` with `Last updated: 2025-12-10`: updated the feature header, ticked Feature 004 as complete in `docs/4-architecture/features/refinement-backlog.md`, and removed Q-012 from `docs/4-architecture/open-questions.md` now that cookie jar and return-to-client semantics are treated as normative.
 
 - 2025-12-10: Marked Feature 007 (“External-Input Step Responses & Schemas”) as `Status | Ready` with `Last updated: 2025-12-10`: updated the feature header, ticked Feature 007 as complete in `docs/4-architecture/features/refinement-backlog.md`, and removed Q-013 from `docs/4-architecture/open-questions.md` now that step response projection semantics and OpenAPI shape are treated as normative.
+
+- 2025-12-14: Updated the agent interaction protocol to require “Decision Card isolation” and disallow “quick A/B clarifications”; extended the Decision Card template so every decision includes sufficient high/medium-level context (`AGENTS.md`, `docs/4-architecture/spec-guidelines/open-questions-format.md`).
+
+- 2025-12-14: Removed `wait`/`webhook` `apply` from the DSL reference and examples; step submissions now stash the validated input payload under `context.payload` and journeys use explicit post-step `transform`/`choice` states for auth, projection, and branching. Updated affected how-to guides, feature specs, ADR snippets, and diagrams accordingly.
+
+- 2025-12-14: Removed inline external-input branching (`wait.on` / `webhook.on`) from the DSL; external-input states now always transition via state-level `next`, and routing is expressed via ordinary `choice` states that inspect `context.payload`. Updated the DSL reference, expression engine docs/specs, and the SLA timers/waits use-case snippet; removed the corresponding open question row from `docs/4-architecture/open-questions.md`.
+
+- 2025-12-14: Adopted “auth as task plugins only” for inbound authentication: removed `spec.bindings.http.security` and `webhook.security` from the DSL/ADR-0029 and updated docs to use `jwtValidate:v1`, `mtlsValidate:v1`, and `apiKeyValidate:v1` task plugins (with non-failing business validation that writes Problem Details into `context.auth.*.problem`). Migrated webhook examples to validate shared secrets via `apiKeyValidate:v1` + normal control flow. Updated affected use-cases and feature specs; removed the corresponding open questions from `docs/4-architecture/open-questions.md`.
+
+- 2025-12-14: Reverted accidental ADR header status flips; ADRs remain `Status: Proposed` until explicitly accepted (see `docs/6-decisions/project-constitution.md` ADR lifecycle guidance).

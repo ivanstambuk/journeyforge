@@ -1,6 +1,6 @@
 # Open Questions – Decision Card Format
 
-Status: Draft | Last updated: 2025-12-10
+Status: Draft | Last updated: 2025-12-14
 
 This document defines the standard “Decision Card” format for all medium‑ and high‑impact open questions that are presented to humans (for example in chat, design docs, or reviews).
 
@@ -16,6 +16,16 @@ When formatting an open question, use the following structure verbatim, adapting
 **Status:** Open  
 **Feature:** F-XXX – Short feature name  
 **Preferred option:** 🅰️ (**recommended**) Option A – Option title  
+
+**Context**  
+High/medium-level context that makes the decision self-contained. Include enough detail that the human can decide without follow-up questions.
+
+- **Current behaviour / contract today:** What the repo currently specifies or implies (cite file paths/sections).
+- **Why this is a decision (what’s ambiguous):** The conflict, gap, or choice that must be settled.
+- **Decision scope:** What this decision covers (and, optionally, what it explicitly does not cover).
+- **Stakeholders / impact:** Who/what is affected (security, UX, compatibility, ops).
+- **Key references:** Bullet list of the most relevant authoritative docs (DSL sections, ADRs, feature specs, OpenAPI).
+- **Example (optional but recommended):** A tiny snippet or scenario illustrating the issue (avoid long code unless necessary).
 
 **Question**  
 Short, human-readable question text (one or a few sentences).
@@ -70,6 +80,7 @@ Who needs to decide what, and where/when (for example:
 - Always mark exactly one option as preferred in the metadata line and in its section heading, using `(**recommended**)` **immediately after the emoji**, before the option title.
 - Options must be listed in **preference order** (A is most preferred, then B, then C, etc.), consistent with `docs/4-architecture/open-questions.md`.
 - If there are more or fewer options than A/B/C, extend or shrink the list while keeping the same pattern (🅰️, 🅱️, 🅲, 🅳, …).
+- The Decision Card MUST include the **Context** section and it MUST be sufficient for an informed decision without follow-ups.
 - Do **not** add extra meta sections (no TL;DR, summary, criticism, etc.) beyond what is defined in the template.
 
 ## 2. Relationship to `open-questions.md`

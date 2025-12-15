@@ -182,25 +182,35 @@ spec:
               comment:
                 type: string
             additionalProperties: true
-        apply:
-          mapper:
-            lang: dataweave
-            expr: |
-              context ++ {
-                approval: payload,
-                approvalResponse: {
-                  decision: payload.decision,
-                  comment: payload.comment
-                }
+        default: ingestWaitForApproval
+
+    ingestWaitForApproval:
+      type: transform
+      transform:
+        mapper:
+          lang: dataweave
+          expr: |
+            context ++ {
+              approval: context.payload,
+              approvalResponse: {
+                decision: context.payload.decision,
+                comment: context.payload.comment
               }
-        on:
-          - when:
-              predicate:
-                lang: dataweave
-                expr: |
-                  payload.decision == "approve"
-            next: initiateTransfer
-        default: rejected
+            }
+        target:
+          kind: context
+      next: routeWaitForApproval
+
+    routeWaitForApproval:
+      type: choice
+      choices:
+        - when:
+            predicate:
+              lang: dataweave
+              expr: |
+                context.payload.decision == "approve"
+          next: initiateTransfer
+      default: rejected
 
     initiateTransfer:
       type: task
@@ -275,30 +285,58 @@ spec:
                         reason:
                           type: string
                       additionalProperties: true
-                  security:
-                    kind: sharedSecretHeader
-                    header: X-Settlement-Secret
-                    secretRef: secret://webhook/high-value-transfer-settlement
-                  apply:
-                    mapper:
-                      lang: dataweave
-                      expr: |
-                        context ++ {
-                          settlementCallback: payload,
-                          settlementResponse: {
-                            status: payload.status,
-                            settlementTime: payload.settlementTime,
-                            reason: payload.reason
-                          }
+                next: validateSettlementSecret
+
+              validateSettlementSecret:
+                type: task
+                task:
+                  kind: apiKeyValidate:v1
+                  profile: high-value-transfer-settlement
+                  source:
+                    location: header
+                    name: X-Settlement-Secret
+                next: routeSettlementAuth
+
+              routeSettlementAuth:
+                type: choice
+                choices:
+                  - when:
+                      predicate:
+                        lang: dataweave
+                        expr: |
+                          context.auth.apiKey.problem == null
+                    next: ingestWaitForSettlementCallback
+                default: waitForSettlement
+
+              ingestWaitForSettlementCallback:
+                type: transform
+                transform:
+                  mapper:
+                    lang: dataweave
+                    expr: |
+                      context ++ {
+                        settlementCallback: context.payload,
+                        settlementResponse: {
+                          status: context.payload.status,
+                          settlementTime: context.payload.settlementTime,
+                          reason: context.payload.reason
                         }
-                  on:
-                    - when:
-                        predicate:
-                          lang: dataweave
-                          expr: |
-                            payload.status == "SETTLED"
-                      next: settlementSucceeded
-                  default: settlementFailed
+                      }
+                  target:
+                    kind: context
+                    path: ""
+                next: routeWaitForSettlementCallback
+
+              routeWaitForSettlementCallback:
+                type: choice
+                choices:
+                  - when:
+                      predicate:
+                        lang: dataweave
+                        expr: |
+                          context.payload.status == "SETTLED"
+                    next: settlementSucceeded
+                default: settlementFailed
 
               settlementSucceeded:
                 type: succeed
@@ -308,7 +346,6 @@ spec:
                 type: fail
                 errorCode: HIGH_VALUE_TRANSFER_FAILED
                 reason: "High-value transfer settlement failed as reported by provider"
-
           - name: timeoutBranch
             start: settlementTimer
             states:

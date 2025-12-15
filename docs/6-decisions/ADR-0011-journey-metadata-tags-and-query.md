@@ -171,8 +171,8 @@ To support journeys that can be invoked both with and without JWTs, JWT validati
 
 - JWT validation profiles define the default issuer/audience/JWKS settings and may carry defaults for:
   - `mode`:
-    - `required` (default): a missing or invalid token SHOULD cause the request to be rejected (for example, 401/403); journeys and APIs typically place a `jwtValidate:v1` state at the start of each entry path and treat failures as authentication errors.
-    - `optional`: a missing token is allowed and treated as anonymous; an invalid token is still rejected. When no token is present, `context.auth.jwt` remains unset and no subject is derived.
+    - `required` (default): a missing or invalid token results in a JWT validation Problem (via the `jwtValidate:v1` task) and no subject is derived. Journeys and APIs typically place a `jwtValidate:v1` state at the start of each entry path and branch explicitly on `context.auth.jwt.problem` to enforce authentication.
+    - `optional`: a missing token is allowed and treated as anonymous. When no token is present, `context.auth.jwt` remains unset and no subject is derived. When a token is present but invalid, the task records a Problem and no subject is derived; journeys and APIs may treat this as an authentication failure.
   - `anonymousSubjects`:
     - Optional list of subject values that should be treated as anonymous even when the token is otherwise valid (for example, a nil UUID subject injected by some gateways).
     - When the JWT `sub` matches one of these values, the engine MUST NOT derive `attributes.subjectId` from it.

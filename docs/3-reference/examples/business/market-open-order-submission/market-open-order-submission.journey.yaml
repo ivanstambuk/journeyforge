@@ -139,34 +139,28 @@ spec:
                       properties:
                         action:
                           type: string
-                          enum:
-                            - submit
-                            - cancel
+                        enum:
+                          - submit
+                          - cancel
                       additionalProperties: true
-                  apply:
-                    mapper:
-                      lang: dataweave
-                      expr: |
-                        context ++ {
-                          preOpenAction: payload.action,
-                          preOpenActionResponse: {
-                            action: payload.action
-                          }
+                  default: ingestWaitForPreOpenAction
+
+              ingestWaitForPreOpenAction:
+                type: transform
+                transform:
+                  mapper:
+                    lang: dataweave
+                    expr: |
+                      context ++ {
+                        preOpenAction: context.payload.action,
+                        preOpenActionResponse: {
+                          action: context.payload.action
                         }
-                  on:
-                    - when:
-                        predicate:
-                          lang: dataweave
-                          expr: |
-                            payload.action == "submit"
-                      next: preOpenActionDone
-                    - when:
-                        predicate:
-                          lang: dataweave
-                          expr: |
-                            payload.action == "cancel"
-                      next: preOpenActionDone
-                  default: preOpenActionDone
+                      }
+                  target:
+                    kind: context
+                    path: ""
+                next: preOpenActionDone
 
               preOpenActionDone:
                 type: succeed

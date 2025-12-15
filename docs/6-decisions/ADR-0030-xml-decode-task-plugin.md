@@ -134,4 +134,3 @@ We may still revisit a `bodyFormat` hint as syntactic sugar on top of `xmlDecode
   - Add `xmlDecode:v1` to the state type table.
   - Define the `xmlDecode:v1` task plugin shape and semantics.
 - Add a feature spec for implementing `xmlDecode:v1` in the engine and tests that cover representative XML→JSON mappings.
-

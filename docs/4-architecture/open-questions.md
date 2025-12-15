@@ -13,3 +13,4 @@ Hard rules:
 
 | ID | Owner | Question | Options (A preferred) | Status | Asked | Notes |
 |----|-------|----------|------------------------|--------|-------|-------|
+| Q-017 | Maintainer | When an external-input step submission is rejected by journey logic (for example auth fails) and the graph loops back to the same `wait`/`webhook` state, should the engine/journey clear `context.payload` to avoid persisting untrusted data? | A: Keep engine semantics; journeys explicitly clear `context.payload` on reject loops (docs + lint guidance) · B: Engine auto-clears `context.payload` when entering any `wait`/`webhook` state · C: Add a DSL flag on `wait`/`webhook` to control payload persistence/clearing | Open | 2025-12-14 | Impacts security posture, authoring ergonomics, and whether payload is treated as ephemeral scratch vs durable context. |

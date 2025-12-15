@@ -78,6 +78,9 @@ Single-line `expr: "..."` is still valid but should be avoided in new specs and 
   - **Phase 2 – Options & decision.**
     4. After the human has answered the clarification questions (when any are needed), present 2–4 options labelled A, B, C, … with short pros/cons, and explicitly ask the human to choose or refine. When presenting an open question to the human (for example from `open-questions.md`), format it as a **Decision Card** following `docs/4-architecture/spec-guidelines/open-questions-format.md` (emoji and headings as defined there, with the `(**recommended**)` marker immediately after the preferred option’s emoji).
     5. Only after the human confirms a choice may the agent draft or modify ADRs, specs, DSL/docs, or code, and it MUST mention the relevant `Q-xxx` ID in its chat summary for that change (do not embed `Q-xxx` IDs in normative specs/ADRs/docs; see `docs/4-architecture/open-questions.md`).
+    6. **Decision Card isolation:** when asking for a decision, the assistant MUST send a message that contains **only** the Decision Card (no additional background/explanations, no extra questions). If the human asks for background or a definition, answer that in a separate message and then re-send the Decision Card in the next message.
+    7. **No “quick A/B” questions:** the assistant MUST NOT ask A/B (or multiple-choice) questions outside the Decision Card format. If a choice is needed, it MUST be tracked in `docs/4-architecture/open-questions.md` and asked as an isolated Decision Card. Purely factual clarifications (no options) are still allowed as short questions.
+    8. **Decision Card context:** every Decision Card MUST include sufficient high/medium-level context (as defined by `docs/4-architecture/spec-guidelines/open-questions-format.md`) so the human can make an informed decision without follow-up questions.
 
 ### Owner preference – options-first for design
 

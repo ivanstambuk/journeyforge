@@ -17,7 +17,7 @@ Introduce a metadata model and query surface for journeys that allows:
 - Journey instances to carry tags and attributes for identity, tenancy, and correlation.
 - The Journeys API to expose these fields and support filtered listing (for operators and self‑service “my journeys” flows).
 
-This feature also defines configurable limits for tags/attributes via a `MetadataLimits` document, and extends HTTP security policies to support mixed‑mode JWT authentication (required vs optional, anonymous subjects) without introducing a first‑class subject field into the DSL.
+This feature also defines configurable limits for tags/attributes via a `MetadataLimits` document, and standardises how subject identity is represented via `attributes.subjectId` without introducing a first‑class subject field into the DSL.
 
 Primary references:
 - ADR: `docs/6-decisions/ADR-0011-journey-metadata-tags-and-query.md`.
@@ -29,7 +29,7 @@ Primary references:
 - Add `metadata.tags` to the DSL for `kind: Journey` and `kind: Api`, with clear semantics and limits.
 - Introduce instance‑level `journey.tags` and `journey.attributes` in the engine’s journey model and Journeys API, with reserved keys for subject/tenant/correlation.
 - Provide a `MetadataLimits` configuration document to externalise limits for definition tags, instance tags, and attributes.
-- Extend HTTP security policies under `spec.bindings.http.security` with `mode: required|optional` and `anonymousSubjects` to support mixed‑mode authentication and safe subject mapping.
+- Define how subject identity (`attributes.subjectId`) is sourced safely (for example via authenticated headers/baggage) to support self-service and operator queries.
 - Add an operator‑oriented `GET /journeys` listing endpoint with filters over journey name, phase, tags, and selected attributes, and keep room for a self‑service “my journeys” endpoint built on top of `subjectId`.
 
 ## Non-Goals
@@ -46,9 +46,9 @@ Primary references:
 | FR-002-02 | Record instance tags (`journey.tags`). | The engine derives instance tags from `metadata.tags` and spec-defined sourcing (payload/headers/baggage) and exposes them in `JourneyStatus`/`JourneyOutcome`. | Enforce `MetadataLimits.instanceTags.maxCount`/`maxLength` at validation/engine level. | Start or execution fails fast when tag limits are exceeded. | Log per-journey tag counts (debug/trace), no tag values at INFO. | ADR-0011 |
 | FR-002-03 | Record instance attributes (`journey.attributes`). | The engine populates attributes (subjectId, tenantId, channel, correlation ids) from configured sources and exposes them in `JourneyStatus`/`JourneyOutcome`. | Attribute keys/values validated against `MetadataLimits.attributes.*`; reserved keys validated for shape when present. | Start or execution fails fast when attribute limits are exceeded or reserved key types are violated. | Emit metrics on usage of reserved attributes (subjectId, tenantId, orderId, etc.). | ADR-0011 |
 | FR-002-04 | Load and enforce `MetadataLimits`. | At startup, the engine loads a `MetadataLimits` document and uses it for validation; in its absence, uses documented defaults equivalent to the reference. | Static config validation rejects malformed `MetadataLimits`; spec validation uses loaded limits. | Startup fails with clear error if `MetadataLimits` is malformed or missing when required. | Log effective limits at startup; include limit breaches in error telemetry. | ADR-0011 |
-| FR-002-05 | Extend JWT HTTP security policies for mixed‑mode auth. | JWT policies honour `mode: required|optional` and `anonymousSubjects`; when a valid non‑anonymous subject is present, `attributes.subjectId` is derived; otherwise it is unset. | Validation rejects unknown `mode` values and invalid `anonymousSubjects` entries; unit tests cover required vs optional behaviour. | Requests with invalid tokens are rejected; missing tokens are rejected only when `mode=required`. | Trace whether a given journey run is authenticated, anonymous, or anonymous-with-token. | ADR-0011, DSL §18 |
+| FR-002-05 | Define subject identity sourcing contract. | `attributes.subjectId` can be derived at journey start via `spec.metadata.bindings.attributes` from platform-authenticated sources (for example a trusted header or W3C baggage key). When no subject identity is available, `attributes.subjectId` remains unset. | Validation ensures reserved attribute keys (including `subjectId`) are strings when present and that bindings refer to supported sources. | Journeys without `subjectId` simply do not appear in self-service “my journeys” queries. | Emit telemetry indicating whether `subjectId` is present (boolean), without recording its value at INFO. | ADR-0011, DSL §2.8 |
 | FR-002-06 | Provide operator journeys listing with filters. | `GET /api/v1/journeys` supports filters over `journeyName`, `phase`, `subjectId`, `tenantId`, `tag`, `orderId`, `paymentIntentId`, `crmCaseId`, returning `JourneyStatus` items with `tags` and `attributes`. | OpenAPI validation and contract tests ensure the schema matches DSL semantics. | Invalid filter values yield 4xx responses; unsupported combinations are rejected with clear errors. | Expose query usage metrics (which filters are common, result counts). | ADR-0011, journeys.openapi.yaml |
-| FR-002-07 | Enable “my journeys” via subjectId (directional). | A self‑service listing endpoint (for example `/api/v1/my/journeys`) may filter on `attributes.subjectId` using the caller JWT `sub`; auth layer hides or ignores explicit `subjectId` query params for self‑service callers. | End-to-end tests confirm that anonymous and “anonymous subject” journeys never appear in self‑service results. | Requests from unauthenticated clients or with anonymous subjects are rejected or yield empty lists, depending on policy. | Log per-subject query usage (aggregate, no PII); ensure no subjectId is logged at INFO. | ADR-0011 |
+| FR-002-07 | Enable “my journeys” via subjectId (directional). | A self‑service listing endpoint (for example `/api/v1/my/journeys`) may filter on `attributes.subjectId` using the caller’s authenticated subject identity from the transport boundary; the API layer hides or ignores explicit `subjectId` query params for self‑service callers. | End-to-end tests confirm that unauthenticated callers cannot access self-service listings and that only journeys with `attributes.subjectId` matching the caller are returned. | Requests from unauthenticated clients are rejected. | Log query usage in aggregate (no PII); ensure no subjectId is logged at INFO. | ADR-0011 |
 
 ## Primary Use Cases
 
@@ -61,9 +61,8 @@ Problem:
 
 Proposed pattern:
 - On journey start, the engine:
-- Validates the JWT using the configured HTTP security policy when a JWT policy is attached.
-  - Extracts the subject (for example, `context.auth.jwt.claims.sub`) when present and not in the policy’s `anonymousSubjects` list.
-  - Sets `attributes.subjectId` to that value internally (not visible in the start request contract). When no valid, non-anonymous subject is available (for example, anonymous tokens with an all-zero UUID or no token in an `optional` policy), `attributes.subjectId` remains unset.
+- Authenticates the caller at the transport boundary (gateway/ingress/service mesh) and provides a trusted subject identifier to the engine (for example via a header or W3C baggage key).
+  - Binds that identifier into `attributes.subjectId` via `spec.metadata.bindings.attributes` at start.
   - Optionally sets `attributes.initiatedBy = "user"` and adds a `self-service` tag.
 - The Journeys API exposes a query like:
 - `GET /api/v1/journeys?subjectId=<sub>&phase=RUNNING`
@@ -211,19 +210,17 @@ Response:
 |-------------|--------------------------------|
 | S-002-01 | Workflow defines `metadata.tags` within limits; journey instances reflect those tags in `JourneyStatus`/`JourneyOutcome`. |
 | S-002-02 | Workflow configures attribute sourcing from headers/payload; attributes appear in `JourneyStatus` and can be queried by `tenantId` and `orderId`. |
-| S-002-03 | JWT policy `mode=required`: missing token → request rejected; `subjectId` never set. |
-| S-002-04 | JWT policy `mode=optional` and no token: journey starts, `subjectId` unset, journey is visible only to operator queries (not self‑service). |
-| S-002-05 | JWT policy `anonymousSubjects` includes nil UUID; such tokens are treated as anonymous and do not set `subjectId`. |
+| S-002-03 | Start request includes a trusted subject identifier (for example a header injected by the auth layer) and the spec binds it to `attributes.subjectId`; journey is visible in self‑service queries. |
+| S-002-04 | Start request has no subject identifier available; journey starts, `subjectId` is unset, journey is visible only to operator queries (not self‑service). |
+| S-002-05 | Deployment prevents subject spoofing: user-supplied headers/baggage cannot override the platform-authenticated subject identity used for self‑service queries. |
 | S-002-06 | Attempts to exceed `MetadataLimits` (too many tags/attributes or oversize values) are rejected with clear errors. |
 
 ## Test Strategy
 - DSL validation tests:
   - `metadata.tags` happy‑path and invalid shapes/limits.
   - `MetadataLimits` loading and malformed/missing config behaviour.
-  - JWT policy `mode` and `anonymousSubjects` parsing and validation.
 - Engine behaviour tests:
   - Tag/attribute sourcing from payload, headers, and `baggage` using representative specs.
-  - Mixed‑mode JWT: `required` vs `optional`, anonymous vs real subjects, and `subjectId` derivation.
   - Limits enforcement: journeys that approach and exceed `MetadataLimits`.
 - API contract tests:
   - `GET /journeys` filters (`journeyName`, `phase`, `subjectId`, `tenantId`, `tag`).

@@ -211,25 +211,35 @@ spec:
               comment:
                 type: string
             additionalProperties: true
-        apply:
-          mapper:
-            lang: dataweave
-            expr: |
-              context ++ {
-                approval: payload,
-                approvalStepResponse: {
-                  decision: payload.decision,
-                  comment: payload.comment default null
-                }
+        default: ingestWaitForFinanceApproval
+
+    ingestWaitForFinanceApproval:
+      type: transform
+      transform:
+        mapper:
+          lang: dataweave
+          expr: |
+            context ++ {
+              approval: context.payload,
+              approvalStepResponse: {
+                decision: context.payload.decision,
+                comment: context.payload.comment default null
               }
-        on:
-          - when:
-              predicate:
-                lang: dataweave
-                expr: |
-                  payload.decision == "APPROVED"
-            next: sendInvoices
-        default: recordRejection
+            }
+        target:
+          kind: context
+      next: routeWaitForFinanceApproval
+
+    routeWaitForFinanceApproval:
+      type: choice
+      choices:
+        - when:
+            predicate:
+              lang: dataweave
+              expr: |
+                context.payload.decision == "APPROVED"
+          next: sendInvoices
+      default: recordRejection
 
     recordValidationFailure:
       type: transform

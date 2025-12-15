@@ -86,4 +86,3 @@ Negative / trade-offs:
 Follow-ups:
 - Feature 011 and Feature 022 may reference this ADR when describing the Task Plugin and Telemetry SPIs and their usage by connectors.
 - New connector modules and features that introduce protocol-specific behaviour must explicitly confirm that their design respects this boundary, or add a new ADR if they need an exception.
-

@@ -879,7 +879,7 @@ Potential benefit:
 For v1 of the JourneyForge DSL, we **ban** external DataWeave modules and `exprRef` references in the DSL surface:
 
 - DSL fields:
-  - The DSL MUST NOT support `exprRef` fields anywhere (for example in `transform.mapper`, `choice` predicates, HTTP `errorMapping`, event `value.mapper`, `wait.apply`, `webhook.apply`, or any other mapper surfaces).
+  - The DSL MUST NOT support `exprRef` fields anywhere (for example in `transform.mapper`, `choice` predicates, HTTP `errorMapping`, event `value.mapper`, external-input predicates, or any other expression/mapping surfaces).
   - All DataWeave expressions in the DSL MUST be authored inline via `expr`.
 - DataWeave imports:
   - Authors MUST NOT rely on importing external `.dwl` modules from within `expr` for reusable behaviour in v1.

@@ -124,26 +124,36 @@ spec:
               notes:
                 type: string
             additionalProperties: true
-        apply:
-          mapper:
-            lang: dataweave
-            expr: |
-              context ++ {
-                kycDocuments: payload,
-                kycDocumentsResponse: {
-                  decision: payload.decision,
-                  documents: payload.documents,
-                  notes: payload.notes
-                }
+        default: ingestWaitForKycDocuments
+
+    ingestWaitForKycDocuments:
+      type: transform
+      transform:
+        mapper:
+          lang: dataweave
+          expr: |
+            context ++ {
+              kycDocuments: context.payload,
+              kycDocumentsResponse: {
+                decision: context.payload.decision,
+                documents: context.payload.documents,
+                notes: context.payload.notes
               }
-        on:
-          - when:
-              predicate:
-                lang: dataweave
-                expr: |
-                  payload.decision == "submit"
-            next: triggerChecks
-        default: rejected
+            }
+        target:
+          kind: context
+      next: routeWaitForKycDocuments
+
+    routeWaitForKycDocuments:
+      type: choice
+      choices:
+        - when:
+            predicate:
+              lang: dataweave
+              expr: |
+                context.payload.decision == "submit"
+          next: triggerChecks
+      default: rejected
 
     triggerChecks:
       type: parallel
@@ -242,30 +252,57 @@ spec:
                 items:
                   type: string
             additionalProperties: true
-        security:
-          kind: sharedSecretHeader
-          header: X-Kyc-Result-Secret
-          secretRef: secret://webhook/customer-onboarding-kyc-kyc
-        apply:
-          mapper:
-            lang: dataweave
-            expr: |
-              context ++ {
-                kycResult: payload,
-                kycResultResponse: {
-                  status: payload.status,
-                  reasons: payload.reasons
-                }
+      next: validateKycResultSecret
+
+    validateKycResultSecret:
+      type: task
+      task:
+        kind: apiKeyValidate:v1
+        profile: customer-onboarding-kyc-kyc
+        source:
+          location: header
+          name: X-Kyc-Result-Secret
+      next: routeKycResultAuth
+
+    routeKycResultAuth:
+      type: choice
+      choices:
+        - when:
+            predicate:
+              lang: dataweave
+              expr: |
+                context.auth.apiKey.problem == null
+          next: ingestWaitForKycResult
+      default: waitForKycResult
+
+    ingestWaitForKycResult:
+      type: transform
+      transform:
+        mapper:
+          lang: dataweave
+          expr: |
+            context ++ {
+              kycResult: context.payload,
+              kycResultResponse: {
+                status: context.payload.status,
+                reasons: context.payload.reasons
               }
-        on:
-          - when:
-              predicate:
-                lang: dataweave
-                expr: |
-                  payload.status == "APPROVED"
-                    or payload.status == "REFERRED"
-            next: waitForAmlResult
-        default: rejected
+            }
+        target:
+          kind: context
+      next: routeWaitForKycResult
+
+    routeWaitForKycResult:
+      type: choice
+      choices:
+        - when:
+            predicate:
+              lang: dataweave
+              expr: |
+                context.payload.status == "APPROVED"
+                  or context.payload.status == "REFERRED"
+          next: waitForAmlResult
+      default: rejected
 
     waitForAmlResult:
       type: webhook
@@ -305,30 +342,57 @@ spec:
                 items:
                   type: string
             additionalProperties: true
-        security:
-          kind: sharedSecretHeader
-          header: X-Aml-Result-Secret
-          secretRef: secret://webhook/customer-onboarding-kyc-aml
-        apply:
-          mapper:
-            lang: dataweave
-            expr: |
-              context ++ {
-                amlResult: payload,
-                amlResultResponse: {
-                  status: payload.status,
-                  reasons: payload.reasons
-                }
+      next: validateAmlResultSecret
+
+    validateAmlResultSecret:
+      type: task
+      task:
+        kind: apiKeyValidate:v1
+        profile: customer-onboarding-kyc-aml
+        source:
+          location: header
+          name: X-Aml-Result-Secret
+      next: routeAmlResultAuth
+
+    routeAmlResultAuth:
+      type: choice
+      choices:
+        - when:
+            predicate:
+              lang: dataweave
+              expr: |
+                context.auth.apiKey.problem == null
+          next: ingestWaitForAmlResult
+      default: waitForAmlResult
+
+    ingestWaitForAmlResult:
+      type: transform
+      transform:
+        mapper:
+          lang: dataweave
+          expr: |
+            context ++ {
+              amlResult: context.payload,
+              amlResultResponse: {
+                status: context.payload.status,
+                reasons: context.payload.reasons
               }
-        on:
-          - when:
-              predicate:
-                lang: dataweave
-                expr: |
-                  payload.status == "CLEAR"
-                    or payload.status == "REFERRED"
-            next: waitForRiskDecision
-        default: rejected
+            }
+        target:
+          kind: context
+      next: routeWaitForAmlResult
+
+    routeWaitForAmlResult:
+      type: choice
+      choices:
+        - when:
+            predicate:
+              lang: dataweave
+              expr: |
+                context.payload.status == "CLEAR"
+                  or context.payload.status == "REFERRED"
+          next: waitForRiskDecision
+      default: rejected
 
     waitForRiskDecision:
       type: webhook
@@ -367,30 +431,57 @@ spec:
               reason:
                 type: string
             additionalProperties: true
-        security:
-          kind: sharedSecretHeader
-          header: X-Risk-Decision-Secret
-          secretRef: secret://webhook/customer-onboarding-kyc-risk
-        apply:
-          mapper:
-            lang: dataweave
-            expr: |
-              context ++ {
-                riskDecision: payload,
-                riskDecisionResponse: {
-                  decision: payload.decision,
-                  riskRating: payload.riskRating,
-                  reason: payload.reason
-                }
+      next: validateRiskDecisionSecret
+
+    validateRiskDecisionSecret:
+      type: task
+      task:
+        kind: apiKeyValidate:v1
+        profile: customer-onboarding-kyc-risk
+        source:
+          location: header
+          name: X-Risk-Decision-Secret
+      next: routeRiskDecisionAuth
+
+    routeRiskDecisionAuth:
+      type: choice
+      choices:
+        - when:
+            predicate:
+              lang: dataweave
+              expr: |
+                context.auth.apiKey.problem == null
+          next: ingestWaitForRiskDecision
+      default: waitForRiskDecision
+
+    ingestWaitForRiskDecision:
+      type: transform
+      transform:
+        mapper:
+          lang: dataweave
+          expr: |
+            context ++ {
+              riskDecision: context.payload,
+              riskDecisionResponse: {
+                decision: context.payload.decision,
+                riskRating: context.payload.riskRating,
+                reason: context.payload.reason
               }
-        on:
-          - when:
-              predicate:
-                lang: dataweave
-                expr: |
-                  payload.decision == "APPROVE"
-            next: createAccount
-        default: rejected
+            }
+        target:
+          kind: context
+      next: routeWaitForRiskDecision
+
+    routeWaitForRiskDecision:
+      type: choice
+      choices:
+        - when:
+            predicate:
+              lang: dataweave
+              expr: |
+                context.payload.decision == "APPROVE"
+          next: createAccount
+      default: rejected
 
     createAccount:
       type: task

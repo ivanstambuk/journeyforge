@@ -86,19 +86,28 @@ spec:
                 enum: [approved, rejected]
               comment:
                 type: string
-        apply:
-          mapper:
-            lang: dataweave
-            expr: |
-              context ++ { 'approval': payload }
-        on:
-          - when:
-              predicate:
-                lang: dataweave
-                expr: |
-                  payload.decision == 'approved'
-            next: finish
-        default: rejected
+        default: ingestWaitForApproval
+
+    ingestWaitForApproval:
+      type: transform
+      transform:
+        mapper:
+          lang: dataweave
+          expr: |
+            context ++ { 'approval': context.payload }
+        target: { kind: context, path: "" }
+      next: routeWaitForApproval
+
+    routeWaitForApproval:
+      type: choice
+      choices:
+        - when:
+            predicate:
+              lang: dataweave
+              expr: |
+                context.payload.decision == 'approved'
+          next: finish
+      default: rejected
 
     finish:
       type: succeed
@@ -184,22 +193,49 @@ spec:
                 type: string
                 enum: [SUCCESS, FAILED]
               reason: { type: string }
-        security:
-          kind: sharedSecretHeader
-          header: X-Webhook-Secret
-          secretRef: secret://webhook/payments-callback
-        apply:
-          mapper:
-            lang: dataweave
-            expr: |
-              context ++ { 'webhook': payload }
-        on:
-          - when:
-              predicate:
-                lang: dataweave
-                expr: \"payload.status == 'SUCCESS'\"
-            next: captured
-        default: failed
+      next: validateWebhookSecret
+
+    validateWebhookSecret:
+      type: task
+      task:
+        kind: apiKeyValidate:v1
+        profile: payments-callback
+        source:
+          location: header
+          name: X-Webhook-Secret
+      next: routeWebhookAuth
+
+    routeWebhookAuth:
+      type: choice
+      choices:
+        - when:
+            predicate:
+              lang: dataweave
+              expr: |
+                context.auth.apiKey.problem == null
+          next: ingestWaitCallback
+      default: waitCallback
+
+    ingestWaitCallback:
+      type: transform
+      transform:
+        mapper:
+          lang: dataweave
+          expr: |
+            context ++ { 'webhook': context.payload }
+        target: { kind: context, path: "" }
+      next: routeWaitCallback
+
+    routeWaitCallback:
+      type: choice
+      choices:
+        - when:
+            predicate:
+              lang: dataweave
+              expr: |
+                context.payload.status == 'SUCCESS'
+          next: captured
+      default: failed
 
     captured:
       type: succeed

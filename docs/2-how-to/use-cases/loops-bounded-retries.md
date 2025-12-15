@@ -83,23 +83,34 @@ spec:
               decision: { type: string }
         timeoutSec: 300
         onTimeout: timedOut
-        apply:
-          mapper:
-            lang: dataweave
-            expr: |
-              context ++ { decision: payload.decision }
-      on:
+        default: ingestApprovalDecision
+
+    ingestApprovalDecision:
+      type: transform
+      transform:
+        mapper:
+          lang: dataweave
+          expr: |
+            context ++ { decision: context.payload.decision }
+        target:
+          kind: context
+          path: ''
+      next: routeApprovalDecision
+
+    routeApprovalDecision:
+      type: choice
+      choices:
         - when:
             predicate:
               lang: dataweave
               expr: |
-                payload.decision == "approved"
+                context.payload.decision == "approved"
           next: approved
         - when:
             predicate:
               lang: dataweave
               expr: |
-                payload.decision == "needs_more_info"
+                context.payload.decision == "needs_more_info"
           next: incrementAttempts
       default: rejected
 

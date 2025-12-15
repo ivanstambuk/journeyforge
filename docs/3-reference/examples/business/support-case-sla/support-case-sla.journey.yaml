@@ -105,28 +105,40 @@ spec:
                             resolutionSummary:
                               type: string
                           additionalProperties: true
-                      apply:
-                        mapper:
-                          lang: dataweave
-                          expr: |
-                            context ++ {
-                              agentUpdate: payload
-                            }
-                      on:
-                        - when:
-                            predicate:
-                              lang: dataweave
-                              expr: |
-                                payload.status == "RESOLVED"
-                          next: markResolved
-                      default: ignoreUpdate
+                      default: ingestWaitForAgentUpdate
+
+                  ingestWaitForAgentUpdate:
+                    type: transform
+                    transform:
+                      mapper:
+                        lang: dataweave
+                        expr: |
+                          context ++ {
+                            agentUpdate: context.payload
+                          }
+                      target:
+                        kind: context
+                        path: ""
+                    next: routeWaitForAgentUpdate
+
+                  routeWaitForAgentUpdate:
+                    type: choice
+                    choices:
+                      - when:
+                          predicate:
+                            lang: dataweave
+                            expr: |
+                              context.payload.status == "RESOLVED"
+                        next: markResolved
+                    default: ignoreUpdate
 
                   ignoreUpdate:
                     type: transform
                     transform:
                       mapper:
                         lang: dataweave
-                        expr: context
+                        expr: |
+                          context
                       target:
                         kind: context
                         path: ""

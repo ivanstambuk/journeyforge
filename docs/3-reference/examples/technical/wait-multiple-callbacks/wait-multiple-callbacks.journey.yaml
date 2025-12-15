@@ -70,23 +70,34 @@ spec:
                 description: Arbitrary callback payload to aggregate.
                 type: object
             additionalProperties: true
-        apply:
-          mapper:
-            lang: dataweave
-            expr: |
-              // Append each callback payload into context.callbacks and bump receivedCount.
-              context ++ {
-                callbacks: (context.callbacks default []) ++ [payload],
-                receivedCount: (context.receivedCount default 0) + 1
-              }
-        on:
-          - when:
-              predicate:
-                lang: dataweave
-                expr: |
-                  (context.receivedCount default 0) >= (context.expectedCount default 0)
-            next: complete
-        default: waitForCallback
+        default: ingestWaitForCallback
+
+    ingestWaitForCallback:
+      type: transform
+      transform:
+        mapper:
+          lang: dataweave
+          expr: |
+            // Append each callback payload into context.callbacks and bump receivedCount.
+            context ++ {
+              callbacks: (context.callbacks default []) ++ [context.payload],
+              receivedCount: (context.receivedCount default 0) + 1
+            }
+        target:
+          kind: context
+          path: ""
+      next: routeWaitForCallback
+
+    routeWaitForCallback:
+      type: choice
+      choices:
+        - when:
+            predicate:
+              lang: dataweave
+              expr: |
+                (context.receivedCount default 0) >= (context.expectedCount default 0)
+          next: projectOutcome
+      default: waitForCallback
 
     complete:
       type: succeed

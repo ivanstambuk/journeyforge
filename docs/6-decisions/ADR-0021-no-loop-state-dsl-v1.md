@@ -256,22 +256,32 @@ waitForCallback:
           payload:
             type: object
         additionalProperties: true
-    apply:
-      mapper:
-        lang: dataweave
-        expr: |
-          context ++ {
-            callbacks: (context.callbacks default []) ++ [payload],
-            receivedCount: (context.receivedCount default 0) + 1
-          }
-    on:
-      - when:
-          predicate:
-            lang: dataweave
-            expr: |
-              (context.receivedCount default 0) >= (context.expectedCount default 0)
-        next: done
-    default: waitForCallback
+    default: ingestCallback
+
+ingestCallback:
+  type: transform
+  transform:
+    mapper:
+      lang: dataweave
+      expr: |
+        context ++ {
+          callbacks: (context.callbacks default []) ++ [context.payload],
+          receivedCount: (context.receivedCount default 0) + 1
+        }
+    target:
+      kind: context
+  next: routeCallback
+
+routeCallback:
+  type: choice
+  choices:
+    - when:
+        predicate:
+          lang: dataweave
+          expr: |
+            (context.receivedCount default 0) >= (context.expectedCount default 0)
+      next: done
+  default: waitForCallback
 
 done:
   type: succeed

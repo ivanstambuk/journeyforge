@@ -284,33 +284,60 @@ spec:
                 type: string
               reasons:
                 type: array
-                items:
-                  type: string
+            items:
+              type: string
             additionalProperties: true
-        security:
-          kind: sharedSecretHeader
-          header: X-Kyc-Result-Secret
-          secretRef: secret://webhook/customer-onboarding-kyc-kyb-kyc
-        apply:
-          mapper:
-            lang: dataweave
-            expr: |
-              context ++ {
-                kycResult: payload,
-                kycResultResponse: {
-                  status: payload.status,
-                  reasons: payload.reasons
-                }
+      next: validateKycResultSecret
+
+    validateKycResultSecret:
+      type: task
+      task:
+        kind: apiKeyValidate:v1
+        profile: customer-onboarding-kyc-kyb-kyc
+        source:
+          location: header
+          name: X-Kyc-Result-Secret
+      next: routeKycResultAuth
+
+    routeKycResultAuth:
+      type: choice
+      choices:
+        - when:
+            predicate:
+              lang: dataweave
+              expr: |
+                context.auth.apiKey.problem == null
+          next: ingestWaitForKycCallbacks
+      default: waitForKycCallbacks
+
+    ingestWaitForKycCallbacks:
+      type: transform
+      transform:
+        mapper:
+          lang: dataweave
+          expr: |
+            context ++ {
+              kycResult: context.payload,
+              kycResultResponse: {
+                status: context.payload.status,
+                reasons: context.payload.reasons
               }
-        on:
-          - when:
-              predicate:
-                lang: dataweave
-                expr: |
-                  payload.status == "APPROVED"
-                    or payload.status == "REFERRED"
-            next: waitForKybAndRisk
-        default: onboardingRejected
+            }
+        target:
+          kind: context
+      next: routeWaitForKycCallbacks
+
+    routeWaitForKycCallbacks:
+      type: choice
+      choices:
+        - when:
+            predicate:
+              lang: dataweave
+              expr: |
+                context.payload.status == "APPROVED"
+                  or context.payload.status == "REFERRED"
+          next: waitForKybAndRisk
+      default: onboardingRejected
 
     waitForKybAndRisk:
       type: webhook
@@ -369,59 +396,86 @@ spec:
               complianceDecision:
                 type: object
             additionalProperties: true
-        security:
-          kind: sharedSecretHeader
-          header: X-Kyb-Risk-Secret
-          secretRef: secret://webhook/customer-onboarding-kyc-kyb-kyb-risk
-        apply:
-          mapper:
-            lang: dataweave
-            expr: |
-              do {
-                var incomingUboStatuses = payload.kybUboStatuses default []
-                var mergedUbos =
-                  (context.ubos default []) map (u) ->
-                    do {
-                      var match =
-                        (incomingUboStatuses filter ((iu) -> iu.uboId == u.uboId))
-                      if (sizeOf(match) > 0)
-                      then
-                        u ++ {
-                          status: match[0].status,
-                          reasons: match[0].reasons default []
-                        }
-                      else u
-                    }
-                context ++ {
-                  kybResult: {
-                    status: payload.kybStatus
-                  },
-                  ubos: mergedUbos,
-                  creditDecision: payload.creditDecision,
-                  complianceDecision: payload.complianceDecision,
-                  kybRiskResponse: {
-                    kybStatus: payload.kybStatus
+      next: validateKybRiskSecret
+
+    validateKybRiskSecret:
+      type: task
+      task:
+        kind: apiKeyValidate:v1
+        profile: customer-onboarding-kyc-kyb-kyb-risk
+        source:
+          location: header
+          name: X-Kyb-Risk-Secret
+      next: routeKybRiskAuth
+
+    routeKybRiskAuth:
+      type: choice
+      choices:
+        - when:
+            predicate:
+              lang: dataweave
+              expr: |
+                context.auth.apiKey.problem == null
+          next: ingestWaitForKybAndRisk
+      default: waitForKybAndRisk
+
+    ingestWaitForKybAndRisk:
+      type: transform
+      transform:
+        mapper:
+          lang: dataweave
+          expr: |
+            do {
+              var incomingUboStatuses = context.payload.kybUboStatuses default []
+              var mergedUbos =
+                (context.ubos default []) map (u) ->
+                  do {
+                    var match =
+                      (incomingUboStatuses filter ((iu) -> iu.uboId == u.uboId))
+                    if (sizeOf(match) > 0)
+                    then
+                      u ++ {
+                        status: match[0].status,
+                        reasons: match[0].reasons default []
+                      }
+                    else u
                   }
+              context ++ {
+                kybResult: {
+                  status: context.payload.kybStatus
+                },
+                ubos: mergedUbos,
+                creditDecision: context.payload.creditDecision,
+                complianceDecision: context.payload.complianceDecision,
+                kybRiskResponse: {
+                  kybStatus: context.payload.kybStatus
                 }
               }
-        on:
-          - when:
-              predicate:
-                lang: dataweave
-                expr: |
-                  (payload.kybStatus default "REFERRED") == "APPROVED"
-                    and (payload.creditDecision.overallStatus default "APPROVED") == "APPROVED"
-                    and (payload.complianceDecision.overallStatus default "APPROVED") == "APPROVED"
-            next: completeApproved
-          - when:
-              predicate:
-                lang: dataweave
-                expr: |
-                  (payload.kybStatus default "REFERRED") == "REFERRED"
-                    or (payload.creditDecision.overallStatus default "REFERRED") == "REFERRED"
-                    or (payload.complianceDecision.overallStatus default "REFERRED") == "REFERRED"
-            next: completeReferred
-        default: onboardingRejected
+            }
+        target:
+          kind: context
+      next: routeWaitForKybAndRisk
+
+    routeWaitForKybAndRisk:
+      type: choice
+      choices:
+        - when:
+            predicate:
+              lang: dataweave
+              expr: |
+                (context.payload.kybStatus default "REFERRED") == "APPROVED"
+                  and (context.payload.creditDecision.overallStatus default "APPROVED") == "APPROVED"
+                  and (context.payload.complianceDecision.overallStatus default "APPROVED") == "APPROVED"
+          next: completeApproved
+        - when:
+            predicate:
+              lang: dataweave
+              expr: |
+                (context.payload.kybStatus default "REFERRED") == "REFERRED"
+                  or (context.payload.creditDecision.overallStatus default "REFERRED") == "REFERRED"
+                  or (context.payload.complianceDecision.overallStatus default "REFERRED") == "REFERRED"
+          next: completeReferred
+      default: onboardingRejected
 
     completeApproved:
       type: transform

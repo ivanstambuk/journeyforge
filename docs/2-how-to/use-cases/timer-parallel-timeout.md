@@ -57,20 +57,19 @@ waitOrTimeout:
                       type: string
                       enum: [PAID]
                   additionalProperties: true
-              apply:
-                mapper:
-                  lang: dataweave
-                  expr: |
-                    context ++ {
-                      paymentStatus: payload.paymentStatus
-                    }
-              on:
-                - when:
-                    predicate:
-                      lang: dataweave
-                      expr: |
-                        payload.paymentStatus == "PAID"
-                  next: paymentReceived
+              default: ingestPaymentConfirmation
+
+          ingestPaymentConfirmation:
+            type: transform
+            transform:
+              mapper:
+                lang: dataweave
+                expr: |
+                  context ++ {
+                    paymentStatus: context.payload.paymentStatus
+                  }
+              target: { kind: context, path: "" }
+            next: paymentReceived
           paymentReceived:
             type: transform
             transform:

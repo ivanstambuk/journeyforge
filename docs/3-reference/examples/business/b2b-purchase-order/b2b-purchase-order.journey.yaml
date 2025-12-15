@@ -140,30 +140,40 @@ spec:
               comment:
                 type: string
             additionalProperties: true
-        apply:
-          mapper:
-            lang: dataweave
-            expr: |
-              context ++ {
-                approvals: (context.approvals default {}) ++ {
-                  level1: {
-                    decision: payload.decision,
-                    comment: payload.comment
-                  }
-                },
-                level1ApprovalResponse: {
-                  decision: payload.decision,
-                  comment: payload.comment
+        default: ingestWaitForLevel1Approval
+
+    ingestWaitForLevel1Approval:
+      type: transform
+      transform:
+        mapper:
+          lang: dataweave
+          expr: |
+            context ++ {
+              approvals: (context.approvals default {}) ++ {
+                level1: {
+                  decision: context.payload.decision,
+                  comment: context.payload.comment
                 }
+              },
+              level1ApprovalResponse: {
+                decision: context.payload.decision,
+                comment: context.payload.comment
               }
-        on:
-          - when:
-              predicate:
-                lang: dataweave
-                expr: |
-                  payload.decision == "approve"
-            next: level2ParallelApprovals
-        default: rejectedLevel1
+            }
+        target:
+          kind: context
+      next: routeWaitForLevel1Approval
+
+    routeWaitForLevel1Approval:
+      type: choice
+      choices:
+        - when:
+            predicate:
+              lang: dataweave
+              expr: |
+                context.payload.decision == "approve"
+          next: level2ParallelApprovals
+      default: rejectedLevel1
 
     level2ParallelApprovals:
       type: parallel
@@ -206,27 +216,35 @@ spec:
                         comment:
                           type: string
                       additionalProperties: true
-                  apply:
-                    mapper:
-                      lang: dataweave
-                      expr: |
-                        context ++ {
-                          approvals: (context.approvals default {}) ++ {
-                            level2: (context.approvals.level2 default {}) ++ {
-                              department: {
-                                decision: payload.decision,
-                                comment: payload.comment
-                              }
+                  default: ingestDepartmentApproval
+
+              ingestDepartmentApproval:
+                type: transform
+                transform:
+                  mapper:
+                    lang: dataweave
+                    expr: |
+                      context ++ {
+                        approvals: (context.approvals default {}) ++ {
+                          level2: (context.approvals.level2 default {}) ++ {
+                            department: {
+                              decision: context.payload.decision,
+                              comment: context.payload.comment
                             }
-                          },
-                          departmentApprovalResponse: {
-                            decision: payload.decision,
-                            comment: payload.comment
                           }
+                        },
+                        departmentApprovalResponse: {
+                          decision: context.payload.decision,
+                          comment: context.payload.comment
                         }
+                      }
+                  target:
+                    kind: context
                 next: done
+
               done:
                 type: succeed
+
           - name: finance
             start: waitForFinanceApproval
             states:
@@ -264,25 +282,32 @@ spec:
                         comment:
                           type: string
                       additionalProperties: true
-                  apply:
-                    mapper:
-                      lang: dataweave
-                      expr: |
-                        context ++ {
-                          approvals: (context.approvals default {}) ++ {
-                            level2: (context.approvals.level2 default {}) ++ {
-                              finance: {
-                                decision: payload.decision,
-                                comment: payload.comment
-                              }
+                  default: ingestFinanceApproval
+
+              ingestFinanceApproval:
+                type: transform
+                transform:
+                  mapper:
+                    lang: dataweave
+                    expr: |
+                      context ++ {
+                        approvals: (context.approvals default {}) ++ {
+                          level2: (context.approvals.level2 default {}) ++ {
+                            finance: {
+                              decision: context.payload.decision,
+                              comment: context.payload.comment
                             }
-                          },
-                          financeApprovalResponse: {
-                            decision: payload.decision,
-                            comment: payload.comment
                           }
+                        },
+                        financeApprovalResponse: {
+                          decision: context.payload.decision,
+                          comment: context.payload.comment
                         }
+                      }
+                  target:
+                    kind: context
                 next: done
+
               done:
                 type: succeed
         join:
@@ -336,30 +361,40 @@ spec:
               comment:
                 type: string
             additionalProperties: true
-        apply:
-          mapper:
-            lang: dataweave
-            expr: |
-              context ++ {
-                approvals: (context.approvals default {}) ++ {
-                  level3: {
-                    decision: payload.decision,
-                    comment: payload.comment
-                  }
-                },
-                level3ApprovalResponse: {
-                  decision: payload.decision,
-                  comment: payload.comment
+        default: ingestWaitForLevel3Approval
+
+    ingestWaitForLevel3Approval:
+      type: transform
+      transform:
+        mapper:
+          lang: dataweave
+          expr: |
+            context ++ {
+              approvals: (context.approvals default {}) ++ {
+                level3: {
+                  decision: context.payload.decision,
+                  comment: context.payload.comment
                 }
+              },
+              level3ApprovalResponse: {
+                decision: context.payload.decision,
+                comment: context.payload.comment
               }
-        on:
-          - when:
-              predicate:
-                lang: dataweave
-                expr: |
-                  payload.decision == "approve"
-            next: completeApproved
-        default: rejectedLevel3
+            }
+        target:
+          kind: context
+      next: routeWaitForLevel3Approval
+
+    routeWaitForLevel3Approval:
+      type: choice
+      choices:
+        - when:
+            predicate:
+              lang: dataweave
+              expr: |
+                context.payload.decision == "approve"
+          next: completeApproved
+      default: rejectedLevel3
 
     completeApproved:
       type: succeed

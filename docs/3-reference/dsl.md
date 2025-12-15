@@ -25,7 +25,7 @@ This document normatively defines the JourneyForge journey DSL (for `kind: Journ
 - [15. Cache Resources & Operations](#dsl-15-cache)
 - [16. Parallel State (branches with join)](#dsl-16-parallel-state)
 - [17. Inbound Bindings (spec.bindings)](#dsl-17-bindings)
-- [18. HTTP Security Policies (Auth)](#dsl-18-http-security-policies)
+- [18. Inbound Auth (task plugins)](#dsl-18-inbound-auth)
 - [19. Outbound HTTP Auth (httpClientAuth)](#dsl-19-outbound-http-auth)
 - [20. Named Outcomes (spec.outcomes)](#dsl-20-named-outcomes)
 - [21. Metadata limits (MetadataLimits)](#dsl-21-metadata-limits)
@@ -52,18 +52,19 @@ The DSL surface defines the following state types and configuration blocks. All 
 | `task` (`kind: schedule:v1`)             | Create/update schedule bindings for future runs  | Fully specified for `kind: Journey`                    |
 | `task` (`kind: jwtValidate:v1`)          | JWT validation and claim projection              | Core task plugin; see section 18.6                     |
 | `task` (`kind: mtlsValidate:v1`)         | mTLS client certificate validation               | Core task plugin; see section 18.7                     |
+| `task` (`kind: apiKeyValidate:v1`)       | API key validation and key-id projection         | Core task plugin; see section 18.8                     |
 | `choice`                                 | Predicate-based, data-driven branching on context | Fully specified; predicates use pluggable expression engines via `lang` |
 | `succeed`                                | Terminal success                                 | Fully specified                                        |
 | `fail`                                   | Terminal failure with error code/reason          | Fully specified; aligned with RFC 9457 Problem Details |
 | `transform`                              | Expression-based mapping into context/vars       | Fully specified; uses expression engines via `lang`    |
 | `wait`                                   | Manual/external input                            | DSL shape + REST step surface defined                  |
-| `webhook`                                | Callback input                                   | DSL shape + callback surface and security hooks defined|
+| `webhook`                                | Callback input                                   | DSL shape + callback surface defined                   |
 | `timer`                                  | Durable time-based delay within a journey        | Journeys only; non-interactive, see section 12.3       |
 | `subjourney`                             | Local subjourney call within one spec            | Fully specified for v1; local, synchronous only (ADR-0020) |
 | `parallel`                               | Parallel branches with join                      | DSL shape + join contract defined                      |
 | `task` (`kind: cache:v1`)                | Cache lookup/store against a global cache   | DSL shape defined; cache semantics described in section 15 |
 | `task` (`kind: xmlDecode:v1`)            | Decode XML string in context into JSON      | DSL shape defined; semantics described in section 5.3      |
-| Policies (`httpResilience`, HTTP security, `httpClientAuth`) | Resiliency/auth configuration (inbound & outbound) | Configuration surface defined; policy semantics described in sections 17–19 |
+| Policies (`httpResilience`, `httpClientAuth`) | Resiliency/auth configuration (outbound)     | Configuration surface defined; policy semantics described in sections 13 and 19 |
 
 <a id="dsl-2-top-level-shape"></a>
 ## 2. Top-level shape
@@ -211,6 +212,7 @@ HTTP status and journey outcome
 - For journeys, HTTP status codes on the Journeys API surface (including `/start`, `/journeys/{journeyId}`, and `/journeys/{journeyId}/result`) indicate the success or failure of the *API call* itself, not the business outcome of the journey.
 - `GET /api/v1/journeys/{journeyId}/result` MUST return HTTP 200 when it successfully returns a `JourneyOutcome` document for a terminal journey, even when `JourneyOutcome.phase = "FAILED"`.
 - For synchronous journeys (`startMode: sync`), `POST /api/v1/journeys/{journeyName}/start` likewise uses HTTP 200 for both successful and failed terminal outcomes; clients MUST inspect `JourneyOutcome.phase` (and `error`) to distinguish success from failure.
+- Journeys do not support a per-journey HTTP status mapping block (there is no `apiResponses`-equivalent for the Journeys API endpoints). Tools and clients SHOULD treat non-200 responses from the Journeys API as transport/protocol errors (for example invalid requests, conflicts, or platform-level authentication/authorisation failures), not as journey-defined business outcomes.
 
 The semantics of `succeed`/`fail` for journeys are defined in sections 5.4–5.7, which describe the `JourneyOutcome` envelope.
 
@@ -780,9 +782,8 @@ distinguishes:
   - Clients do not send an `attributes` property in the start request; they provide only the
     normal JSON payload and headers.
 - Reserved keys:
-  - `subjectId` – identity of the subject derived from the validated JWT at journey start
-    (for example `context.auth.jwt.claims.sub`), when present and not configured as
-    anonymous by the HTTP security policy.
+  - `subjectId` – identity of the caller/subject for this journey instance, when available
+    from configured metadata bindings (for example from an authenticated header or baggage value).
   - `tenantId` – logical tenant identifier.
   - `channel` – origin channel.
   - `initiatedBy` – who initiated the journey (`user`, `system`, `admin`).
@@ -1617,7 +1618,7 @@ spec:
 - No persistence/resume across process restarts.
 - No dynamic parallel loops / map state: the DSL does not support runtime‑determined fan‑out into N parallel branches or step endpoints (for example “callback‑0 … callback‑N‑1”). Patterns such as “wait for N callbacks” are expressed via a single external‑input state (`wait`/`webhook`) that can be revisited in a loop, using counters/aggregates in `context` to decide when all expected callbacks have been processed. See ADR‑0021 for rationale and loop pattern examples.
 
-Secrets & `secretRef`: Secrets in the DSL are referenced only via `secretRef` fields (for example in webhook security, outbound HTTP client-auth policies, Kafka connection configuration for `kafkaPublish:v1`, and any future secret-consuming policies or task kinds). Engines resolve `secretRef` values against an implementation-defined secret store; raw secret material is never exposed to DataWeave expressions, interpolation, `context`, or logs.
+Secrets & `secretRef`: Secrets in the DSL are referenced only via `secretRef` fields (for example in outbound HTTP client-auth policies, Kafka connection configuration for `kafkaPublish:v1`, and any future secret-consuming policies or task kinds). Engines resolve `secretRef` values against an implementation-defined secret store; raw secret material is never exposed to DataWeave expressions, interpolation, `context`, or logs.
 
 <a id="dsl-8-naming-and-terminology"></a>
 ## 8. Naming & terminology
@@ -1871,9 +1872,10 @@ External-input and timer states pause the journey instance and resume it later, 
 
 External-input states (`wait`, `webhook`) expose a step surface: they require a step submission to continue. Submissions are sent to `/journeys/{journeyId}/steps/{stepId}` where `stepId` equals the state id.
 
-Bindings available to expressions during external-input step handling:
-- `context`: the current journey context JSON object.
-- `payload`: the submitted step input JSON (validated against the state’s `input.schema`, when present).
+Step payload handling for external-input submissions:
+- The submitted step body is validated against the state’s `input.schema`.
+- After validation succeeds, the engine MUST copy the submitted JSON value into `context.payload` (overwriting any previous value at that path).
+- Subsequent states executed as part of the same step submission can read the submitted payload from `context.payload`.
 
 ### 12.1 `wait` (manual/external input)
 ```yaml
@@ -1885,40 +1887,52 @@ wait:
   response:                             # optional – project extra fields into step response
     outputVar: <string>                 # context.<outputVar> object is merged into the top-level response
     schema: <JsonSchema>                # JSON Schema for the additional top-level fields
-  apply:                                # optional – update context before branching
-    mapper:
-      lang: <engineId>                   # e.g. dataweave
-      expr
-  on:                                     # ordered branch evaluation
-    - when:
-        predicate:
-          lang: <engineId>               # e.g. dataweave
-          expr: |
-            payload.decision == 'approved'
-      next: approved
-  default: rejected                       # optional
   timeoutSec: <int>                       # optional
   onTimeout: <stateId>                    # required if timeoutSec is set
+next: <stateId>                           # required
 ```
 
 Semantics
 - When entering a `wait` state, the journey phase is `RUNNING`, and the step subresource is considered active.
 - A submission must target the active step; otherwise respond 409 Conflict.
-- The request body is validated against `wait.input.schema` when present; invalid → 400 with schema errors.
-- If `apply.mapper` is provided, it runs with `context` and `payload` and replaces `context` with the mapper result.
+- The request body is validated against `wait.input.schema` when present; invalid → 400 with schema errors and the journey remains at the same active step.
+- After request body validation succeeds, the engine MUST copy the submitted step payload into `context.payload` before executing subsequent states. This write is a shallow assignment (it overwrites any previous value at `context.payload`).
+- After payload ingestion, the engine continues execution by transitioning to the state’s `next`.
+- To branch based on the submitted payload, use a subsequent `choice` state and inspect `context.payload`.
 - Step responses:
-  - After applying the `wait` state (including any `apply.mapper` and branching), the engine builds a `JourneyStatus` object to describe the updated journey state.
+  - After processing the step submission (including payload ingestion and any synchronous execution that follows), the engine builds a `JourneyStatus` object to describe the updated journey state.
   - When `response.outputVar` is set and `context.<outputVar>` is an object, its properties are shallow-merged into the top level of the JSON response alongside the standard `JourneyStatus` fields.
   - If `context.<outputVar>` is absent or not an object, the response is a plain `JourneyStatus` without extra fields.
   - The following top-level properties are reserved and MUST NOT be overridden by projected fields: `journeyId`, `journeyName`, `phase`, `currentState`, `updatedAt`, `tags`, `attributes`, `_links`.
-- The `on` array is evaluated in order; first predicate returning `true` selects `next`. If none match, `default` is used; if absent, the spec is invalid.
 - If `timeoutSec` elapses without submission, transition to `onTimeout`.
+
+Usage guidance
+- Treat `context.payload` as a “last external-input submission” scratch space. Prefer a follow-up `transform` to project only the required fields into a stable domain subtree (and optionally drop `payload` from `context`).
+  - Example (DataWeave): keep only a few fields and remove the raw payload:
+
+    ```yaml
+    ingestStep:
+      type: transform
+      transform:
+        mapper:
+          lang: dataweave
+          expr: |
+            (context - "payload") ++ {
+              approval: {
+                decision: context.payload.decision,
+                comment: context.payload.comment
+              }
+            }
+        target:
+          kind: context
+      next: routeStep
+    ```
 
 Validation
 - `wait.channel` must be `manual`; use `webhook` state for callback semantics.
 - `wait.input.schema` is required.
 - If `timeoutSec` is set, `onTimeout` is required.
-- Either `on` (non-empty) or `default` must be present.
+- `next` is required and MUST refer to a state id in `spec.states`.
 - When present:
   - `response.outputVar` must be a non-empty string matching the variable identifier pattern (`[A-Za-z_][A-Za-z0-9_]*`).
   - `response.schema` must be a JSON Schema object describing additional top-level fields.
@@ -1933,33 +1947,20 @@ webhook:
   response:                              # optional – project extra fields into step response
     outputVar: <string>                  # context.<outputVar> object is merged into the top-level response
     schema: <JsonSchema>                 # JSON Schema for the additional top-level fields
-  security:                               # optional – minimal guard
-    kind: sharedSecretHeader
-    header: X-Webhook-Secret
-    secretRef: secret://webhook/<name>
-  apply:
-    mapper:
-      lang: <engineId>                   # e.g. dataweave
-      expr: <expr>
-  on:
-    - when:
-        predicate:
-          lang: <engineId>               # e.g. dataweave
-          expr: |
-            payload.status == 'OK'
-      next: success
-  default: failure
   timeoutSec: <int>
   onTimeout: <stateId>
+next: <stateId>                           # required
 ```
 
 Semantics
 - Same as `wait`, but intended for third-party callbacks.
-- If `security.kind == sharedSecretHeader`, the exporter documents the header; enforcement is implementation-defined.
+- Webhook authentication/authorisation is expressed via auth task plugins (for example `apiKeyValidate:v1`) executed after the webhook step submission; the DSL does not define a special `webhook.security` block.
 - Step responses follow the same projection rules as `wait` when `response.outputVar` is configured: the engine returns a `JourneyStatus` body with additional top-level fields taken from `context.<outputVar>` when it is an object.
 
 Validation
 - `webhook.input.schema` is required.
+- If `timeoutSec` is set, `onTimeout` is required.
+- `next` is required and MUST refer to a state id in `spec.states`.
 - `response` (when present) follows the same rules as for `wait.response`: `outputVar` must be a valid variable name, `schema` a JSON Schema object, and projected properties MUST NOT collide with reserved `JourneyStatus` fields.
 
 ### 12.3 `timer` (durable in-journey delay)
@@ -2658,177 +2659,83 @@ Validation
 Notes
 - This section defines the DSL hook for cloud-function deployment and its relationship to existing HTTP and queue bindings. Provider-specific deployment details (API Gateway configuration, function runtimes, triggers) and error/status mapping rules are defined in cloud-function binding feature specs and deployment documentation, not in the DSL.
 
-<a id="dsl-18-http-security-policies"></a>
-## 18. HTTP Security Policies (Auth)
+<a id="dsl-18-inbound-auth"></a>
+## 18. Inbound Auth (task plugins)
 
-HTTP security policies define reusable authentication constraints for inbound HTTP requests (start and step calls) for mechanisms that are not modelled as task plugins. In this version, JWT validation is expressed via the `jwtValidate:v1` task plugin (section 18.6); HTTP security policies cover mTLS and API key validation only. They are configured under `spec.bindings.http.security.policies` and attached via `spec.bindings.http.security.attach.*` at journey and step levels.
+JourneyForge models inbound authentication and authorisation as explicit, versioned `task` plugins executed as part of the state graph (for example `jwtValidate:v1`, `mtlsValidate:v1`, `apiKeyValidate:v1`). The DSL does not define a binding-level `spec.bindings.http.security` policy model.
 
-### 18.1 Policy definitions
+Transport-level enforcement (gateway/ingress/service-mesh/function platform auth) is outside the DSL. Journeys/APIs that require authentication MUST include appropriate auth task states in their graphs.
 
-```yaml
-spec:
-  bindings:
-    http:
-      security:
-        policies:
-          default: apiKeyDefault      # optional default policy id
-          definitions:
-            apiKeyDefault:
-              kind: apiKey
-              location: header        # header | query
-              name: X-Api-Key
-              keys:
-                - secretRef: secret://apikeys/backend-service
-```
+### 18.1 Where auth runs
 
-Kinds
-- `apiKey` – API key policy.
-  - `location`: where to read the key (header or query).
-  - `name`: header or query parameter name.
-  - `keys`: list of references to key material (static or externally resolved).
+- `kind: Api`: auth tasks are typically the first states in the graph, before any downstream calls.
+- `kind: Journey`:
+  - For `/start`, journeys MAY validate caller identity at start if they need a subject-bound instance.
+  - For external-input steps (`wait`, `webhook`), journeys SHOULD validate on each step submission by placing auth tasks immediately after the external-input state.
 
-### 18.2 Attaching policies
+### 18.2 Pattern for external-input steps
+
+When a step submission is accepted (schema-valid), the engine copies the submitted body into `context.payload` (§12). Auth tasks can then inspect inbound credentials and decide whether to accept the submission.
+
+Typical pattern:
 
 ```yaml
-spec:
-  bindings:
-    http:
-      security:
-        attach:
-          journeyPolicyRef: apiKeyDefault       # applied to all inbound endpoints by default
-          start:
-            securityPolicyRef: apiKeyDefault   # optional override for start
-          steps:
-            waitForCallback:
-              securityPolicyRef: clientCertDefault
+waitForInput:
+  type: wait
+  wait:
+    channel: manual
+    input: { schema: <JsonSchema> }
+  next: checkAuth
+
+checkAuth:
+  type: task
+  task:
+    kind: jwtValidate:v1
+  next: routeAuth
+
+routeAuth:
+  type: choice
+  choices:
+    - when:
+        predicate:
+          lang: dataweave
+          expr: |
+            context.auth.jwt.problem == null
+      next: mainFlow
+  default: waitForInput
 ```
 
-Semantics
-- `journeyPolicyRef` (if set) applies to `POST /journeys/{journeyName}/start` and all step endpoints unless overridden.
-- `securityPolicyRef` under `start` overrides `journeyPolicyRef` specifically for the start endpoint.
-- `securityPolicyRef` under `steps.<stepId>` overrides both for that particular step endpoint.
-- If no policy is resolved for an endpoint, authentication behaviour is implementation-defined (for example, relying on upstream gateway enforcement).
+### 18.3 Failure semantics (auth tasks)
 
-### 18.3 Validation
-- `spec.bindings.http.security.policies.definitions` must be a map of ids to policy objects.
-- Any `journeyPolicyRef` / `securityPolicyRef` must refer to an existing id in `definitions` (or to a platform-level policy); unknown ids are a validation error.
-- API key policies (`kind: apiKey`) must configure a location, header/query name, and at least one key entry; client-certificate policies (`kind: mtls`, when supported) must specify at least one `trustAnchors` entry.
+- Business validation failures (missing/invalid token, untrusted certificate, unknown API key) MUST NOT fail the run by themselves. Instead, auth tasks MUST write a Problem Details object into `context.auth.<mechanism>.problem` (or the configured `authVar` namespace), and journeys route/deny explicitly via normal control flow.
+- Misconfiguration and engine-side issues (for example missing profile, invalid trust anchors, unusable key material) are internal configuration errors and MUST surface as internal Problems (failing the run) rather than being treated as “unauthenticated”.
 
-### 18.4 Usage guidance
-- Use HTTP security policies when:
-  - You need specs to be explicit about how journeys are authenticated via mTLS and API keys.
-  - You want the same authentication behaviour reused across multiple journeys or steps.
-- Combine with the HTTP binding when:
-  - You also need to project authentication metadata into `context` (for example, subject ids or key identifiers) or forward headers downstream.
-  - HTTP security policies enforce *who* can call for mTLS/API-key mechanisms; `jwtValidate:v1` and `mtlsValidate:v1` are used as explicit task states for JWT/mTLS authentication, and `spec.bindings.http` controls *how* inbound metadata is made available to the journey instance and downstream calls.
+### 18.4 Mapping inbound metadata into `context`
 
-Notes
-- This section defines the configuration model only; enforcement belongs to the security implementation in the engine and is out of scope for the DSL reference.
- - Secret-bearing fields in HTTP security policies are opaque `secretRef` identifiers; see section 7 (“Secrets & `secretRef`”) for the generic secrets model.
-
-<a id="dsl-19-outbound-http-auth"></a>
-## 19. Outbound HTTP Auth (httpClientAuth)
-
-Outbound HTTP auth policies define how HTTP tasks authenticate *to* downstream services (for example, using static bearer tokens, OAuth2 client credentials, or mTLS client certificates). They are configured under `spec.policies.httpClientAuth` and referenced from HTTP `task` definitions.
-
-### 19.1 Policy definitions
-
-```yaml
-spec:
-  policies:
-    httpClientAuth:
-      default: backendDefault        # optional default policy id
-      definitions:
-        backendDefault:
-          kind: oauth2ClientCredentials
-          tokenEndpoint: https://auth.example.com/oauth2/token
-          auth:
-            method: clientSecretPost   # clientSecretPost | clientSecretBasic | tlsClientAuth
-            clientId: orders-service
-            clientSecretRef: secret://oauth/clients/orders-service
-            # or, for mTLS client auth at the token endpoint:
-            # clientCertRef: secret://certs/orders-service
-          form:
-            grant_type: client_credentials
-            scope: orders.read orders.write
-            audience: https://api.example.com
-        staticToken:
-          kind: bearerStatic
-          tokenRef: secret://tokens/static-backend-token
-        mtlsClient:
-          kind: mtlsClient
-          clientCertRef: secret://certs/backend-client
-          # optional outbound trust anchors for this client
-          trustAnchors:
-            - pemRef: trust/roots/root-ca.pem
-```
-
-Kinds
-- `bearerStatic` – static bearer token auth.
-  - `tokenRef`: `secretRef` pointing to a secret that resolves to the bearer token value.
-- `oauth2ClientCredentials` – OAuth2 client credentials flow.
-  - `tokenEndpoint`: URL of the token endpoint.
-  - `auth.method`: how the client authenticates to the token endpoint:
-    - `clientSecretPost`: send `client_id` and `client_secret` in the form body.
-    - `clientSecretBasic`: send `Authorization: Basic base64(client_id:client_secret)`.
-    - `tlsClientAuth`: authenticate with mTLS using a client certificate.
-  - `auth.clientId`: OAuth2 client id.
-  - `auth.clientSecretRef`: `secretRef` for client secret (required for secret-based methods).
-  - `auth.clientCertRef`: `secretRef` for client cert/key (required for `tlsClientAuth`).
-  - `form`: x-www-form-urlencoded payload fields to send to the token endpoint; must include `grant_type: client_credentials` (either explicitly or implied by the engine).
-- `mtlsClient` – outbound client certificate on data-plane calls.
-  - `clientCertRef`: `secretRef` for the client certificate/key pair.
-  - `trustAnchors`: optional list of `pemRef` entries describing trusted roots for outbound TLS.
-
-Semantics
-- Policy resolution:
-  - `spec.policies.httpClientAuth.default` is an optional documentation/authoring hint for the spec and tooling; it MUST NOT cause the engine to apply any outbound auth policy implicitly to HTTP tasks that omit `auth.policyRef`.
-  - `definitions` is a map from policy id to policy object; unknown `kind` values are invalid.
-- Secret references:
-  - All secret-bearing fields (`tokenRef`, `auth.clientSecretRef`, `auth.clientCertRef`) are opaque `secretRef` identifiers.
-  - The DSL never exposes raw secret values; engines resolve `secretRef` against an implementation-defined secret store.
-- OAuth2 token acquisition:
-  - For policies with `kind: oauth2ClientCredentials`, the engine obtains an access token by calling `tokenEndpoint` with the configured `auth` method and `form` payload.
-  - The engine MUST treat `grant_type` as `client_credentials`; other grant types are invalid in this version.
-- Token caching and refresh:
-  - Engines MUST cache access tokens per effective token request (at minimum: policy id, `tokenEndpoint`, `auth.method`, and `form` payload) and reuse them across journey instances until expiry.
-  - Engines MUST determine token lifetime from standard token metadata when available (for example the `exp` claim for JWT access tokens and/or `expires_in` fields in token responses) and apply a small pre‑expiry skew when deciding whether a token is still valid. When lifetime cannot be determined, caching behaviour is implementation-defined but MUST NOT violate auth server contracts.
-  - When a cached token is available and not expired (after applying skew), the engine MUST reuse it rather than calling the token endpoint again.
-  - For data-plane HTTP calls that use a `kind: oauth2ClientCredentials` policy, when the downstream service returns `401 Unauthorized`, the engine MUST treat this as a potential token invalidation and:
-    - Discard the cached token for that effective request.
-    - Obtain a fresh access token once.
-    - Retry the original HTTP request once with the new token.
-    - If the retry still fails with `401`, surface the error to the journey (for example as an HTTP error in the task result) and emit telemetry for diagnosis; the engine MUST NOT perform further automatic retries for that call.
-  - Implementations MAY provide configuration to disable the automatic `401` refresh/retry behaviour for specific policies or HTTP clients; such configuration is engine- or platform-level and not part of the DSL surface.
-
-Validation
-- `spec.policies.httpClientAuth.definitions` must be a map of ids to policy objects.
-- Each policy must specify a supported `kind`.
-- `bearerStatic` policies must set a non-empty `tokenRef`.
-- `oauth2ClientCredentials` policies must set `tokenEndpoint`, `auth.method`, and `auth.clientId` and at least one of `auth.clientSecretRef` or `auth.clientCertRef` consistent with `auth.method`.
-- `mtlsClient` policies must set `clientCertRef`.
-
-Notes
-- This section defines the configuration model only; token acquisition, secret storage, and caching live in the engine and secret store.
- - Secret-bearing fields in outbound HTTP auth policies are opaque `secretRef` identifiers; engines MUST NOT expose resolved secret material to DataWeave expressions, interpolation, `context`, or logs; see section 7 (“Secrets & `secretRef`”) for the generic secrets model.
+- Use the HTTP binding (`spec.bindings.http.start.headersToContext`, `spec.bindings.http.steps.*.headersToContext`, and query equivalents) when the journey needs specific inbound headers/query params in `context` for downstream calls or decision logic.
+- Auth task plugins MUST NOT expose raw secret material (for example API key values) into `context` or logs; they may expose only non-sensitive identifiers (for example `keyId`) and Problem Details objects on failure (see §7 and ADR‑0025/ADR‑0026).
 
 ### 18.5 Mapping auth into journey context
 
 Authentication data becomes available to journeys via:
-- JWT validation task plugin `jwtValidate:v1` (section 18.6), which writes into `context.auth.jwt.*` or a caller-configured namespace when validation succeeds.
-- HTTP security policies for mTLS and API keys, which write into `context.auth.mtls.*` / `context.auth.apiKey.*` after successful validation.
+- JWT validation task plugin `jwtValidate:v1` (section 18.6), which writes into `context.auth.jwt.*` (or a caller-configured namespace) when validation succeeds and writes a Problem Details view into `*.problem` when validation fails.
+- mTLS validation task plugin `mtlsValidate:v1` (section 18.7), which writes into `context.auth.mtls.*` (or a caller-configured namespace) when validation succeeds and writes a Problem Details view into `*.problem` when validation fails.
+- API key validation task plugin `apiKeyValidate:v1` (section 18.8), which writes into `context.auth.apiKey.*` (or a caller-configured namespace) when validation succeeds and writes a Problem Details view into `*.problem` when validation fails.
 
 The engine MUST populate the following views under `context.auth` so DataWeave expressions and `transform` states can use authentication data:
 
 - JWT validation (`jwtValidate:v1` with default target):
   - `context.auth.jwt.header` – JOSE header (non-sensitive fields only, for example `alg`, `kid`, `typ`).
   - `context.auth.jwt.claims` – decoded claims object as JSON (e.g., `sub`, `scope`, `aud`, `iss`).
-- mTLS policies (`kind: mtls`):
+  - `context.auth.jwt.problem` – RFC 9457 Problem Details object describing the most recent JWT validation failure (when validation fails). When `problem` is present, `header` and `claims` MUST be absent. When validation succeeds, `problem` MUST be absent.
+- mTLS validation (`mtlsValidate:v1` with default target):
   - `context.auth.mtls.subjectDn` – subject distinguished name of the validated client certificate.
   - `context.auth.mtls.issuerDn` – issuer DN (optional).
   - `context.auth.mtls.fingerprintSha256` – certificate fingerprint (optional, for correlation/logging).
-- API key policies (`kind: apiKey`):
-  - `context.auth.apiKey.keyId` – stable identifier for the validated key (for example derived from `secretRef`); the raw key MUST NOT be exposed.
+  - `context.auth.mtls.problem` – RFC 9457 Problem Details object describing the most recent mTLS validation failure. When `problem` is present, `subjectDn`/`issuerDn`/`fingerprintSha256` MUST be absent. When validation succeeds, `problem` MUST be absent.
+- API key validation (`apiKeyValidate:v1` with default target):
+  - `context.auth.apiKey.keyId` – stable identifier for the validated key; the raw key MUST NOT be exposed.
+  - `context.auth.apiKey.problem` – RFC 9457 Problem Details object describing the most recent API key validation failure. When `problem` is present, `keyId` MUST be absent. When validation succeeds, `problem` MUST be absent.
 
 Mapping auth data into shorter context fields can be done via a `transform` state. For example:
 
@@ -2863,15 +2770,14 @@ mtls-normalise:
 ```
 
 This keeps `context` as the canonical place for data that influences journey behaviour, while:
-- `jwtValidate:v1` and `mtlsValidate:v1` govern JWT and mTLS authentication, and
-- HTTP security policies (under `spec.bindings.http.security`) govern API key validation, and
+- `jwtValidate:v1`, `mtlsValidate:v1`, and `apiKeyValidate:v1` govern inbound authentication, and
 - the HTTP binding (`spec.bindings.http`) governs how inbound metadata becomes available to the journey instance and downstream calls.
 
 ### 18.6 JWT validation task plugin (`jwtValidate:v1`)
 
 Journeys use the `jwtValidate:v1` task plugin to perform JWT validation as part of the state graph. This is useful for:
 - Enforcing JWT-based authentication for entry paths and internal steps (for example as the first state on a journey/API).
-- Applying additional, step-level JWT checks beyond mTLS/API-key policies.
+- Applying additional, step-level JWT checks beyond transport-level gateway enforcement.
 - Extracting claims into `context` to drive downstream logic.
 
 Shape (under a `type: task` state):
@@ -2936,7 +2842,13 @@ Semantics
     - Using `choice` predicates to enforce scopes/roles/subject-based rules (for example self-service checks as in `subject-step-guard`).
 
 Error handling
-- On failure, `jwtValidate:v1` returns a Problem Details object; the engine maps this into `JourneyOutcome` and HTTP responses according to the error model and HTTP-mapping ADRs.
+- On business validation failure (missing/invalid token), `jwtValidate:v1` MUST NOT fail the run by itself. Instead, it MUST write a Problem Details object to:
+  - `context.auth.jwt.problem` when `authVar` is omitted, or
+  - `context.<authVar>.jwt.problem` when `authVar` is set,
+  and then continue to `next`. Journeys and APIs MUST implement the desired behaviour explicitly via `choice`/`transform` (for example: treat `JWT_TOKEN_MISSING` as anonymous, loop back to a `wait` state, or terminate via `fail`).
+- The plugin MUST avoid stale auth data:
+  - When `*.problem` is present, `*.header` and `*.claims` MUST be absent.
+  - When validation succeeds and `*.header`/`*.claims` are present, `*.problem` MUST be absent.
 - The plugin MUST use the following stable, fine-grained error codes for its primary business failure modes so journeys can branch on them or map them via `apiResponses`/`spec.errors`:
   - `JWT_TOKEN_MISSING` – no token present at the configured source.
   - `JWT_TOKEN_MALFORMED` – token cannot be parsed as a valid JWT.
@@ -3055,7 +2967,13 @@ Semantics
   - `mtlsValidate:v1` is responsible only for validating client certificates and projecting selected metadata into `context.auth.mtls.*` or `context.<authVar>.mtls.*`; journeys express any additional authorisation rules (for example subject-based access, per-tenant SAN policies) via predicates and `choice`/`fail` states over `context` and `context.auth.*`.
 
 Error handling
-- On failure, `mtlsValidate:v1` returns a Problem Details object; the engine maps this into `JourneyOutcome` and HTTP responses according to the error model and HTTP-mapping ADRs.
+- On business validation failure (missing/invalid/untrusted certificate), `mtlsValidate:v1` MUST NOT fail the run by itself. Instead, it MUST write a Problem Details object to:
+  - `context.auth.mtls.problem` when `authVar` is omitted, or
+  - `context.<authVar>.mtls.problem` when `authVar` is set,
+  and then continue to `next`. Journeys and APIs MUST implement the desired behaviour explicitly via `choice`/`transform` (for example: loop back to a `wait` state, accept specific certificate failures as anonymous, or terminate via `fail`).
+- The plugin MUST avoid stale auth data:
+  - When `*.problem` is present, `*.subjectDn`/`*.issuerDn`/`*.fingerprintSha256` MUST be absent.
+  - When validation succeeds and `*.subjectDn` is present, `*.problem` MUST be absent.
 - The plugin MUST use the following stable, fine-grained error codes for its primary business failure modes so journeys can branch on them or map them via `apiResponses`/`spec.errors`:
   - `MTLS_CERT_MISSING` – no client certificate was presented.
   - `MTLS_CERT_UNPARSEABLE` – certificate could not be parsed.
@@ -3069,6 +2987,168 @@ Error handling
   - A stable `type` URI that is 1:1 with the code (for example `https://journeyforge.dev/problem/plugins/mtls/cert-untrusted`).
   Journeys SHOULD treat unknown codes as generic mTLS validation failures.
 - Misconfiguration and engine-side issues (for example missing profile or unusable `trustAnchors` configuration) are considered internal configuration errors and MUST surface as internal Problems with separate `MTLS_CONFIG_*` codes (for example `MTLS_CONFIG_PROFILE_MISSING`, `MTLS_CONFIG_TRUST_ANCHORS_INVALID`, `MTLS_CONFIG_INVALID`), not as journey-authored business failures.
+
+### 18.8 API key validation task plugin (`apiKeyValidate:v1`)
+
+Journeys use the `apiKeyValidate:v1` task plugin to validate API keys as part of the state graph. This is useful for:
+- Enforcing API-key-based authentication for entry paths and step submissions (for example as the first state on a journey/API, or immediately after a `wait`/`webhook` state).
+- Projecting a non-sensitive key identifier into `context` for auditing and routing.
+
+Shape (under a `type: task` state):
+
+```yaml
+checkApiKey:
+  type: task
+  task:
+    kind: apiKeyValidate:v1
+
+    # Optional profile selector – when omitted, defaults to "default"
+    profile: default
+
+    # Optional source override; when omitted, the profile’s source is used
+    # source:
+    #   location: header       # header | query
+    #   name: X-Api-Key
+
+    # Optional override for where to store auth data
+    # - when omitted, plugin writes under context.auth.apiKey.*
+    # - when set, plugin writes under context.<authVar>.apiKey.*
+    authVar: auth
+  next: nextState
+```
+
+Fields
+- `profile`:
+  - Optional string; when omitted, the effective profile name is `"default"`.
+  - Profiles are defined in engine configuration under a plugin-specific subtree (for example `plugins.apiKeyValidate.profiles.<name>`); they typically capture key material references and a default key source.
+- `source` (optional override):
+  - `location`: where to read the API key from:
+    - `header` – read from an HTTP header.
+    - `query` – read from a query parameter.
+  - `name`: header or query parameter name.
+  - When `source` is omitted in the DSL, the plugin uses the source configured for the selected `profile`. If neither the DSL nor the profile provides a usable source, the configuration is invalid and MUST be treated as an internal configuration error.
+- `authVar` (optional override):
+  - When omitted, successful validation populates `context.auth.apiKey.keyId` as described in section 18.5.
+  - When set to a non-empty string (for example `auth`), successful validation populates `context.<authVar>.apiKey.*`. Engines MAY still mirror selected fields into `context.auth` for compatibility, but the primary write target MUST be the configured namespace.
+
+Semantics
+- Execution:
+  - `apiKeyValidate:v1` executes synchronously as a normal `task` state and MUST NOT introduce implicit waits; it reads the current HTTP request context (when available) and the current `context`.
+  - It MAY be used in both `kind: Journey` and `kind: Api` specs. When no HTTP request binding is available, the plugin behaves as if the key were missing.
+- Key sourcing:
+  - The effective key source is determined by:
+    1. `task.source` when present; otherwise
+    2. The configured `source` for the selected `profile`.
+  - The plugin reads the raw key value from the effective source. Engines SHOULD treat empty-string keys as missing.
+- Validation:
+  - Validation behaviour (key material, hashing, rotation, and any allowed key identifiers) is driven by the selected profile and engine configuration, not by the DSL.
+  - On successful validation, the plugin MUST populate `*.keyId` with a stable identifier for the validated key. The raw key MUST NOT be exposed via `context` or logs.
+  - The plugin MUST honour privacy rules from ADR-0025 and MUST NOT log raw API key values.
+- Authorisation:
+  - `apiKeyValidate:v1` is responsible only for authentication (validating the key and projecting a key identifier); journeys express authorisation rules explicitly via predicates and `choice`/`fail` states over `context` and `context.auth.*`.
+
+Error handling
+- On business validation failure (missing/invalid key), `apiKeyValidate:v1` MUST NOT fail the run by itself. Instead, it MUST write a Problem Details object to:
+  - `context.auth.apiKey.problem` when `authVar` is omitted, or
+  - `context.<authVar>.apiKey.problem` when `authVar` is set,
+  and then continue to `next`.
+- The plugin MUST avoid stale auth data:
+  - When `*.problem` is present, `*.keyId` MUST be absent.
+  - When validation succeeds and `*.keyId` is present, `*.problem` MUST be absent.
+- The plugin MUST use the following stable, fine-grained error codes for its primary business failure modes so journeys can branch on them or map them via `apiResponses`/`spec.errors`:
+  - `APIKEY_MISSING` – no key present at the configured source.
+  - `APIKEY_INVALID` – key does not match any configured key material.
+- These error codes are conveyed via Problem Details using both:
+  - A stable `code` extension member set to the exact error code string (for example `"APIKEY_INVALID"`), and
+  - A stable `type` URI that is 1:1 with the code (for example `https://journeyforge.dev/problem/plugins/apikey/invalid`).
+  Journeys SHOULD treat unknown codes as generic API key validation failures.
+- Misconfiguration and engine-side issues (for example missing profile or unusable key material configuration) are considered internal configuration errors and MUST surface as internal Problems with separate `APIKEY_CONFIG_*` codes (for example `APIKEY_CONFIG_PROFILE_MISSING`, `APIKEY_CONFIG_KEYS_UNUSABLE`, `APIKEY_CONFIG_INVALID`), not as journey-authored business failures.
+
+<a id="dsl-19-outbound-http-auth"></a>
+## 19. Outbound HTTP Auth (httpClientAuth)
+
+Outbound HTTP auth policies define how HTTP tasks authenticate *to* downstream services (for example, using static bearer tokens, OAuth2 client credentials, or mTLS client certificates). They are configured under `spec.policies.httpClientAuth` and referenced from HTTP `task` definitions.
+
+### 19.1 Policy definitions
+
+```yaml
+spec:
+  policies:
+    httpClientAuth:
+      default: backendDefault        # optional default policy id
+      definitions:
+        backendDefault:
+          kind: oauth2ClientCredentials
+          tokenEndpoint: https://auth.example.com/oauth2/token
+          auth:
+            method: clientSecretPost   # clientSecretPost | clientSecretBasic | tlsClientAuth
+            clientId: orders-service
+            clientSecretRef: secret://oauth/clients/orders-service
+            # or, for mTLS client auth at the token endpoint:
+            # clientCertRef: secret://certs/orders-service
+          form:
+            grant_type: client_credentials
+            scope: orders.read orders.write
+            audience: https://api.example.com
+        staticToken:
+          kind: bearerStatic
+          tokenRef: secret://tokens/static-backend-token
+        mtlsClient:
+          kind: mtlsClient
+          clientCertRef: secret://certs/backend-client
+          # optional outbound trust anchors for this client
+          trustAnchors:
+            - pemRef: trust/roots/root-ca.pem
+```
+
+Kinds
+- `bearerStatic` – static bearer token auth.
+  - `tokenRef`: `secretRef` pointing to a secret that resolves to the bearer token value.
+- `oauth2ClientCredentials` – OAuth2 client credentials flow.
+  - `tokenEndpoint`: URL of the token endpoint.
+  - `auth.method`: how the client authenticates to the token endpoint:
+    - `clientSecretPost`: send `client_id` and `client_secret` in the form body.
+    - `clientSecretBasic`: send `Authorization: Basic base64(client_id:client_secret)`.
+    - `tlsClientAuth`: authenticate with mTLS using a client certificate.
+  - `auth.clientId`: OAuth2 client id.
+  - `auth.clientSecretRef`: `secretRef` for client secret (required for secret-based methods).
+  - `auth.clientCertRef`: `secretRef` for client cert/key (required for `tlsClientAuth`).
+  - `form`: x-www-form-urlencoded payload fields to send to the token endpoint; must include `grant_type: client_credentials` (either explicitly or implied by the engine).
+- `mtlsClient` – outbound client certificate on data-plane calls.
+  - `clientCertRef`: `secretRef` for the client certificate/key pair.
+  - `trustAnchors`: optional list of `pemRef` entries describing trusted roots for outbound TLS.
+
+Semantics
+- Policy resolution:
+  - `spec.policies.httpClientAuth.default` is an optional documentation/authoring hint for the spec and tooling; it MUST NOT cause the engine to apply any outbound auth policy implicitly to HTTP tasks that omit `auth.policyRef`.
+  - `definitions` is a map from policy id to policy object; unknown `kind` values are invalid.
+- Secret references:
+  - All secret-bearing fields (`tokenRef`, `auth.clientSecretRef`, `auth.clientCertRef`) are opaque `secretRef` identifiers.
+  - The DSL never exposes raw secret values; engines resolve `secretRef` against an implementation-defined secret store.
+- OAuth2 token acquisition:
+  - For policies with `kind: oauth2ClientCredentials`, the engine obtains an access token by calling `tokenEndpoint` with the configured `auth` method and `form` payload.
+  - The engine MUST treat `grant_type` as `client_credentials`; other grant types are invalid in this version.
+- Token caching and refresh:
+  - Engines MUST cache access tokens per effective token request (at minimum: policy id, `tokenEndpoint`, `auth.method`, and `form` payload) and reuse them across journey instances until expiry.
+  - Engines MUST determine token lifetime from standard token metadata when available (for example the `exp` claim for JWT access tokens and/or `expires_in` fields in token responses) and apply a small pre‑expiry skew when deciding whether a token is still valid. When lifetime cannot be determined, caching behaviour is implementation-defined but MUST NOT violate auth server contracts.
+  - When a cached token is available and not expired (after applying skew), the engine MUST reuse it rather than calling the token endpoint again.
+  - For data-plane HTTP calls that use a `kind: oauth2ClientCredentials` policy, when the downstream service returns `401 Unauthorized`, the engine MUST treat this as a potential token invalidation and:
+    - Discard the cached token for that effective request.
+    - Obtain a fresh access token once.
+    - Retry the original HTTP request once with the new token.
+    - If the retry still fails with `401`, surface the error to the journey (for example as an HTTP error in the task result) and emit telemetry for diagnosis; the engine MUST NOT perform further automatic retries for that call.
+  - Implementations MAY provide configuration to disable the automatic `401` refresh/retry behaviour for specific policies or HTTP clients; such configuration is engine- or platform-level and not part of the DSL surface.
+
+Validation
+- `spec.policies.httpClientAuth.definitions` must be a map of ids to policy objects.
+- Each policy must specify a supported `kind`.
+- `bearerStatic` policies must set a non-empty `tokenRef`.
+- `oauth2ClientCredentials` policies must set `tokenEndpoint`, `auth.method`, and `auth.clientId` and at least one of `auth.clientSecretRef` or `auth.clientCertRef` consistent with `auth.method`.
+- `mtlsClient` policies must set `clientCertRef`.
+
+Notes
+- This section defines the configuration model only; token acquisition, secret storage, and caching live in the engine and secret store.
+- Secret-bearing fields in outbound HTTP auth policies are opaque `secretRef` identifiers; engines MUST NOT expose resolved secret material to DataWeave expressions, interpolation, `context`, or logs; see section 7 (“Secrets & `secretRef`”) for the generic secrets model.
 
 <a id="dsl-20-named-outcomes"></a>
 ## 20. Named Outcomes (spec.outcomes)
@@ -3241,7 +3321,7 @@ Semantics
   - Jars are created at run start and destroyed at the terminal state.
 - When `spec.cookies` is omitted:
   - No jar is created.
-  - HTTP behaviour remains defined solely by other sections (`task`, `spec.bindings.http`, HTTP security policies, etc.).
+  - HTTP behaviour remains defined solely by other sections (`task`/plugins and `spec.bindings.http`).
   - No cookies are emitted back to clients from a jar (there is no jar and no `returnToClient` configuration).
 
 Validation

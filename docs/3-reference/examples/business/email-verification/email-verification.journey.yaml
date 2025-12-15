@@ -105,24 +105,35 @@ spec:
                         code:
                           type: string
                       additionalProperties: true
-                  apply:
-                    mapper:
-                      lang: dataweave
-                      expr: |
-                        context ++ {
-                          verificationAttempt: {
-                            code: payload.code,
-                            isValid: payload.code == context.verificationCode
-                          }
+                  default: ingestWaitForVerification
+
+              ingestWaitForVerification:
+                type: transform
+                transform:
+                  mapper:
+                    lang: dataweave
+                    expr: |
+                      context ++ {
+                        verificationAttempt: {
+                          code: context.payload.code,
+                          isValid: context.payload.code == context.verificationCode
                         }
-                  on:
-                    - when:
-                        predicate:
-                          lang: dataweave
-                          expr: |
-                            payload.code == context.verificationCode
-                      next: markVerified
-                  default: invalidCode
+                      }
+                  target:
+                    kind: context
+                    path: ""
+                next: routeWaitForVerification
+
+              routeWaitForVerification:
+                type: choice
+                choices:
+                  - when:
+                      predicate:
+                        lang: dataweave
+                        expr: |
+                          context.payload.code == context.verificationCode
+                    next: markVerified
+                default: invalidCode
 
               markVerified:
                 type: transform
@@ -296,3 +307,13 @@ spec:
         join:
           strategy: anyOf
           errorPolicy: collectAll
+          mapper:
+            lang: dataweave
+            expr: |
+              branches.waitBranch.outcome default branches.expiryBranch.outcome
+          resultVar: outcome
+      next: complete
+
+    complete:
+      type: succeed
+      outputVar: outcome

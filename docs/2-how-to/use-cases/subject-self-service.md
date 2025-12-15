@@ -25,8 +25,7 @@ We want a pattern where:
 
 ## Relevant DSL Features
 
-- HTTP security policies under `spec.bindings.http.security` for enforcing that only
-  authenticated users can start journeys.
+- `jwtValidate:v1` task plugin for validating JWT on start and on step submissions.
 - `transform` states for normalising identity from auth context into `context` (for example
   copying `context.auth.jwt.claims.sub`).
 - `wait` state for external/manual input and step endpoints.
@@ -48,17 +47,16 @@ metadata:
   name: subject-step-guard
   version: 0.1.0
 spec:
-  start: validateJwt
+  start: validateJwtOnStart
 
   states:
-    validateJwt:
+    validateJwtOnStart:
       type: task
       task:
         kind: jwtValidate:v1
         profile: default
       next: captureOwner
 
-  states:
     captureOwner:
       type: transform
       transform:
@@ -84,26 +82,55 @@ spec:
               # step-specific payload fields, e.g. approval decision
               decision: { type: string }
             additionalProperties: true
-        apply:
-          mapper:
-            lang: dataweave
-            expr: |
-              context ++ {
-                stepUserId: context.auth.jwt.claims.sub,
-                lastPayload: payload
-              }
-        on:
-          - when:
-              predicate:
-                lang: dataweave
-                expr: |
-                  context.stepUserId == context.ownerUserId
-            next: proceed
-        default: subjectMismatch
+      next: validateJwtOnStep
+
+    validateJwtOnStep:
+      type: task
+      task:
+        kind: jwtValidate:v1
+        profile: default
+      next: ingestUserAction
+
+    ingestUserAction:
+      type: transform
+      transform:
+        mapper:
+          lang: dataweave
+          expr: |
+            context ++ {
+              stepUserId: context.auth.jwt.claims.sub,
+              lastPayload: context.payload
+            }
+        target:
+          kind: context
+          path: ''
+      next: routeUserAction
+
+    routeUserAction:
+      type: choice
+      choices:
+        - when:
+            predicate:
+              lang: dataweave
+              expr: |
+                context.auth.jwt.problem != null
+          next: authFailed
+        - when:
+            predicate:
+              lang: dataweave
+              expr: |
+                context.stepUserId == context.ownerUserId
+          next: proceed
+      default: subjectMismatch
 
     proceed:
       type: succeed
       outputVar: lastPayload
+
+    authFailed:
+      type: fail
+      errorCode: AUTH_FAILED
+      reason: "JWT validation failed for follow-up step submission"
 
     subjectMismatch:
       type: fail

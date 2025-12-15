@@ -164,9 +164,9 @@ spec:
                     path: ""
                 next: patientDecision
 
-              patientDecision:
-                type: wait
-                wait:
+                patientDecision:
+                  type: wait
+                  wait:
                   channel: manual
                   input:
                     schema:
@@ -183,16 +183,20 @@ spec:
                             - CANCEL
                         appointmentId:
                           type: string
-                        comment:
-                          type: string
-                      additionalProperties: true
-                  apply:
+                          comment:
+                            type: string
+                        additionalProperties: true
+                    default: ingestPatientDecision
+
+                ingestPatientDecision:
+                  type: transform
+                  transform:
                     mapper:
                       lang: dataweave
                       expr: |
                         do {
-                          var action = payload.action
-                          var chosenId = payload.appointmentId
+                          var action = context.payload.action
+                          var chosenId = context.payload.appointmentId
                           var updatedAppointments =
                             (context.appointments default []) map (a) ->
                               if (action == "CONFIRM" and a.appointmentId == chosenId) a ++ { status: "PENDING_PROVIDER" }
@@ -206,24 +210,31 @@ spec:
                             appointments: updatedAppointments
                           }
                         }
-                  on:
+                    target:
+                      kind: context
+                      path: ""
+                  next: routePatientDecision
+
+                routePatientDecision:
+                  type: choice
+                  choices:
                     - when:
                         predicate:
                           lang: dataweave
                           expr: |
-                            payload.action == "CANCEL"
+                            context.payload.action == "CANCEL"
                       next: completePatientCancelled
                     - when:
                         predicate:
                           lang: dataweave
                           expr: |
-                            payload.action == "RESCHEDULE"
+                            context.payload.action == "RESCHEDULE"
                       next: requestAppointments
                     - when:
                         predicate:
                           lang: dataweave
                           expr: |
-                            payload.action == "CONFIRM"
+                            context.payload.action == "CONFIRM"
                       next: bookConfirmedAppointment
                   default: patientDecision
 
@@ -249,9 +260,9 @@ spec:
                   resultVar: bookingResult
                 next: waitForAppointmentStatus
 
-              waitForAppointmentStatus:
-                type: webhook
-                webhook:
+                waitForAppointmentStatus:
+                  type: webhook
+                  webhook:
                   input:
                     schema:
                       title: AppointmentStatusCallback
@@ -267,41 +278,52 @@ spec:
                           enum:
                             - CONFIRMED
                             - COMPLETED
-                            - CANCELLED
-                            - FAILED
-                      additionalProperties: true
-                  apply:
+                              - CANCELLED
+                              - FAILED
+                        additionalProperties: true
+                    default: ingestWaitForAppointmentStatus
+
+                ingestWaitForAppointmentStatus:
+                  type: transform
+                  transform:
                     mapper:
                       lang: dataweave
                       expr: |
                         do {
                           var updatedAppointments =
                             (context.appointments default []) map (a) ->
-                              if (a.appointmentId == payload.appointmentId)
-                              then a ++ { status: payload.status }
+                              if (a.appointmentId == context.payload.appointmentId)
+                              then a ++ { status: context.payload.status }
                               else a
                           context ++ {
                             appointments: updatedAppointments
                           }
                         }
-                  on:
+                    target:
+                      kind: context
+                      path: ""
+                  next: routeWaitForAppointmentStatus
+
+                routeWaitForAppointmentStatus:
+                  type: choice
+                  choices:
                     - when:
                         predicate:
                           lang: dataweave
                           expr: |
-                            payload.status == "CONFIRMED"
+                            context.payload.status == "CONFIRMED"
                       next: completeAppointmentConfirmed
                     - when:
                         predicate:
                           lang: dataweave
                           expr: |
-                            payload.status == "COMPLETED"
+                            context.payload.status == "COMPLETED"
                       next: completeAppointmentCompleted
                     - when:
                         predicate:
                           lang: dataweave
                           expr: |
-                            payload.status == "CANCELLED" or payload.status == "FAILED"
+                            context.payload.status == "CANCELLED" or context.payload.status == "FAILED"
                       next: noProviderAvailable
                   default: waitForAppointmentStatus
 

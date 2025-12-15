@@ -38,21 +38,39 @@ spec:
             properties:
               decision: { type: string }
             additionalProperties: true
-        apply:
-          mapper:
-            lang: dataweave
-            expr: |
-              context ++ {
-                stepUserId: context.auth.jwt.claims.sub,
-                lastPayload: payload
-              }
-        on:
-          - when:
-              predicate:
-                lang: dataweave
-                expr: |
-                  context.stepUserId == context.ownerUserId
-            next: proceed
+        default: validateStepJwt
+
+    validateStepJwt:
+      type: task
+      task:
+        kind: jwtValidate:v1
+        profile: default
+      next: ingestWaitForUserAction
+
+    ingestWaitForUserAction:
+      type: transform
+      transform:
+        mapper:
+          lang: dataweave
+          expr: |
+            context ++ {
+              stepUserId: context.auth.jwt.claims.sub,
+              lastPayload: context.payload
+            }
+        target:
+          kind: context
+          path: ""
+      next: routeWaitForUserAction
+
+    routeWaitForUserAction:
+      type: choice
+      choices:
+        - when:
+            predicate:
+              lang: dataweave
+              expr: |
+                context.stepUserId == context.ownerUserId
+          next: proceed
       default: subjectMismatch
 
     proceed:

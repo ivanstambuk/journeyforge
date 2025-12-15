@@ -7,13 +7,17 @@ title wait-approval – internal DSL state graph
 
 state submit
 state waitForApproval
+state ingestWaitForApproval
+state routeWaitForApproval
 state finish
 state rejected
 
 submit --> waitForApproval : task httpCall\noperationRef items.createItem
 
-waitForApproval --> finish : payload.decision == 'approved'
-waitForApproval --> rejected : default (decision == 'rejected')
+waitForApproval --> ingestWaitForApproval : submit step
+ingestWaitForApproval --> routeWaitForApproval
+routeWaitForApproval --> finish : context.payload.decision == 'approved'
+routeWaitForApproval --> rejected : default
 
 finish --> [*]
 rejected --> [*]
@@ -22,7 +26,7 @@ note right of waitForApproval
   type: wait (manual channel)
   input: approval payload { decision, comment }
   response.outputVar: stepResponse
-  apply.mapper: context ++ { approval, stepResponse }
+  engine copies validated payload to context.payload
 end note
 
 @enduml

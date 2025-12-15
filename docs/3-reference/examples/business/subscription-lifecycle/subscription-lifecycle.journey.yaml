@@ -86,13 +86,11 @@ spec:
                     schema:
                       description: Customer decision to upgrade the trial subscription.
                       type: object
-                      required:
-                        - decision
+                      required: [decision]
                       properties:
                         decision:
                           type: string
-                          enum:
-                            - upgrade
+                          enum: [upgrade]
                       additionalProperties: false
                   response:
                     outputVar: upgradeResponse
@@ -103,29 +101,28 @@ spec:
                       properties:
                         decision:
                           type: string
-                          enum:
-                            - upgrade
+                          enum: [upgrade]
                       additionalProperties: true
-                  apply:
-                    mapper:
-                      lang: dataweave
-                      expr: |
-                        context ++ {
-                          subscriptionId: trial.body.subscriptionId,
-                          upgradeDecision: payload,
-                          upgradeResponse: {
-                            decision: payload.decision
-                          },
-                          trialOutcome: "UPGRADED"
-                        }
-                  on:
-                    - when:
-                        predicate:
-                          lang: dataweave
-                          expr: |
-                            payload.decision == "upgrade"
-                      next: upgradeBranchDone
-                  default: upgradeBranchDone
+                  default: ingestWaitForUpgrade
+
+              ingestWaitForUpgrade:
+                type: transform
+                transform:
+                  mapper:
+                    lang: dataweave
+                    expr: |
+                      context ++ {
+                        subscriptionId: trial.body.subscriptionId,
+                        upgradeDecision: context.payload,
+                        upgradeResponse: {
+                          decision: context.payload.decision
+                        },
+                        trialOutcome: "UPGRADED"
+                      }
+                  target:
+                    kind: context
+                    path: ""
+                next: upgradeBranchDone
 
               upgradeBranchDone:
                 type: succeed
@@ -275,14 +272,11 @@ spec:
                     schema:
                       description: Customer decision to cancel or reactivate the subscription.
                       type: object
-                      required:
-                        - action
+                      required: [action]
                       properties:
                         action:
                           type: string
-                          enum:
-                            - cancel
-                            - reactivate
+                          enum: [cancel, reactivate]
                       additionalProperties: false
                   response:
                     outputVar: statusChangeResponse
@@ -293,34 +287,43 @@ spec:
                       properties:
                         action:
                           type: string
-                          enum:
-                            - cancel
-                            - reactivate
+                          enum: [cancel, reactivate]
                       additionalProperties: true
-                  apply:
-                    mapper:
-                      lang: dataweave
-                      expr: |
-                        context ++ {
-                          statusChange: payload,
-                          statusChangeResponse: {
-                            action: payload.action
-                          }
+                  default: ingestWaitForStatusChange
+
+              ingestWaitForStatusChange:
+                type: transform
+                transform:
+                  mapper:
+                    lang: dataweave
+                    expr: |
+                      context ++ {
+                        statusChange: context.payload,
+                        statusChangeResponse: {
+                          action: context.payload.action
                         }
-                  on:
-                    - when:
-                        predicate:
-                          lang: dataweave
-                          expr: |
-                            payload.action == "cancel"
-                      next: cancelSubscription
-                    - when:
-                        predicate:
-                          lang: dataweave
-                          expr: |
-                            payload.action == "reactivate"
-                      next: reactivateSubscription
-                  default: completeActive
+                      }
+                  target:
+                    kind: context
+                    path: ""
+                next: routeWaitForStatusChange
+
+              routeWaitForStatusChange:
+                type: choice
+                choices:
+                  - when:
+                      predicate:
+                        lang: dataweave
+                        expr: |
+                          context.payload.action == "cancel"
+                    next: cancelSubscription
+                  - when:
+                      predicate:
+                        lang: dataweave
+                        expr: |
+                          context.payload.action == "reactivate"
+                    next: reactivateSubscription
+                default: completeActive
 
               cancelSubscription:
                 type: task

@@ -144,38 +144,49 @@ spec:
                           items:
                             type: string
                       additionalProperties: true
-                  apply:
-                    mapper:
-                      lang: dataweave
-                      expr: |
-                        context ++ {
-                          primaryKycCallback: payload,
-                          primaryKycStep: {
-                            status: payload.status,
-                            reasons: payload.reasons
-                          }
+                  default: ingestWaitForPrimaryKyc
+
+              ingestWaitForPrimaryKyc:
+                type: transform
+                transform:
+                  mapper:
+                    lang: dataweave
+                    expr: |
+                      context ++ {
+                        primaryKycCallback: context.payload,
+                        primaryKycStep: {
+                          status: context.payload.status,
+                          reasons: context.payload.reasons
                         }
-                  on:
-                    - when:
-                        predicate:
-                          lang: dataweave
-                          expr: |
-                            // Ignore late callbacks once outcome is decided
-                            context.outcome != null
-                          next: ignorePrimaryCallback
-                    - when:
-                        predicate:
-                          lang: dataweave
-                          expr: |
-                            payload.status == "APPROVED"
-                          next: completeFromPrimaryApproved
-                    - when:
-                        predicate:
-                          lang: dataweave
-                          expr: |
-                            payload.status == "REJECTED"
-                          next: completeFromPrimaryRejected
-                  default: ignorePrimaryCallback
+                      }
+                  target:
+                    kind: context
+                    path: ""
+                next: routeWaitForPrimaryKyc
+
+              routeWaitForPrimaryKyc:
+                type: choice
+                choices:
+                  - when:
+                      predicate:
+                        lang: dataweave
+                        expr: |
+                          // Ignore late callbacks once outcome is decided
+                          context.outcome != null
+                    next: ignorePrimaryCallback
+                  - when:
+                      predicate:
+                        lang: dataweave
+                        expr: |
+                          context.payload.status == "APPROVED"
+                    next: completeFromPrimaryApproved
+                  - when:
+                      predicate:
+                        lang: dataweave
+                        expr: |
+                          context.payload.status == "REJECTED"
+                    next: completeFromPrimaryRejected
+                default: ignorePrimaryCallback
 
               ignorePrimaryCallback:
                 type: transform
@@ -372,17 +383,13 @@ spec:
                     schema:
                       title: FallbackKycCallbackInput
                       type: object
-                      required:
-                        - jobId
-                        - status
+                      required: [jobId, status]
                       properties:
                         jobId:
                           type: string
                         status:
                           type: string
-                          enum:
-                            - APPROVED
-                            - REJECTED
+                          enum: [APPROVED, REJECTED]
                       additionalProperties: true
                   response:
                     outputVar: fallbackKycStep
@@ -393,30 +400,41 @@ spec:
                         status:
                           type: string
                       additionalProperties: true
-                  apply:
-                    mapper:
-                      lang: dataweave
-                      expr: |
-                        context ++ {
-                          fallbackKycCallback: payload,
-                          fallbackKycStep: {
-                            status: payload.status
-                          }
+                  default: ingestWaitForFallbackResult
+
+              ingestWaitForFallbackResult:
+                type: transform
+                transform:
+                  mapper:
+                    lang: dataweave
+                    expr: |
+                      context ++ {
+                        fallbackKycCallback: context.payload,
+                        fallbackKycStep: {
+                          status: context.payload.status
                         }
-                  on:
-                    - when:
-                        predicate:
-                          lang: dataweave
-                          expr: |
-                            payload.status == "APPROVED"
-                      next: completeFromFallbackApproved
-                    - when:
-                        predicate:
-                          lang: dataweave
-                          expr: |
-                            payload.status == "REJECTED"
-                      next: completeFromFallbackRejected
-                  default: completeFromFallbackRejected
+                      }
+                  target:
+                    kind: context
+                    path: ""
+                next: routeWaitForFallbackResult
+
+              routeWaitForFallbackResult:
+                type: choice
+                choices:
+                  - when:
+                      predicate:
+                        lang: dataweave
+                        expr: |
+                          context.payload.status == "APPROVED"
+                    next: completeFromFallbackApproved
+                  - when:
+                      predicate:
+                        lang: dataweave
+                        expr: |
+                          context.payload.status == "REJECTED"
+                    next: completeFromFallbackRejected
+                default: completeFromFallbackRejected
 
               completeFromFallbackApproved:
                 type: transform

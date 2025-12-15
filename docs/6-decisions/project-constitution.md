@@ -1,5 +1,7 @@
 # JourneyForge Project Constitution
 
+Status: Accepted | Last updated: 2025-12-14
+
 This document governs how JourneyForge evolves. It encodes the spec‑driven development (SDD) workflow, decision records, and repository guardrails.
 
 - Specifications are the single source of truth. Plans/tasks/tests follow specs.
@@ -11,6 +13,16 @@ This document governs how JourneyForge evolves. It encodes the spec‑driven dev
 - Keep increments small (≤90 minutes), verifiable, and committed with formatting + checks.
 - Governance artifacts: roadmap, knowledge map, ADRs, open questions, and `_current-session.md`.
 - When a medium- or high-impact feature ships, mirror the approved change across the roadmap, knowledge map, and any relevant feature plans/runbooks so there is a traceable link from specs and ADRs to implementation and docs.
+
+## ADR Lifecycle
+- `Proposed`: candidate design decision under review.
+- `Accepted`: binding decision for specs and implementation.
+- `Deprecated`: no longer recommended; kept for history and migration guidance.
+- `Superseded`: replaced by a newer ADR (which should explain the change).
+
+Before implementation work begins for a feature:
+- The governing feature spec SHOULD be `Status: Ready`.
+- Any ADRs that the spec treats as normative prerequisites SHOULD be `Status: Accepted`.
 
 ## Roles
 - Maintainers: own architecture and releases.

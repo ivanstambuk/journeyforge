@@ -70,18 +70,28 @@ spec:
             additionalProperties: true
         timeoutSec: 10
         onTimeout: timedOut
-        apply:
-          mapper:
-            lang: dataweave
-            expr: |
-              context ++ { 'event': payload }
-        on:
-          - when:
-              predicate:
-                lang: dataweave
-                expr: |
-                  payload.status == 'DONE'
-            next: done
+        default: ingestWaitStep
+
+    ingestWaitStep:
+      type: transform
+      transform:
+        mapper:
+          lang: dataweave
+          expr: |
+            context ++ { 'event': context.payload }
+        target: { kind: context, path: "" }
+      next: routeWaitStep
+
+    routeWaitStep:
+      type: choice
+      choices:
+        - when:
+            predicate:
+              lang: dataweave
+              expr: |
+                context.payload.status == 'DONE'
+          next: done
+      default: waitStep
 
     done:
       type: succeed

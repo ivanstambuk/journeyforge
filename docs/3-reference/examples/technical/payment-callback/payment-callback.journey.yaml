@@ -94,30 +94,57 @@ spec:
                 type: string
                 description: Optional failure reason when status is FAILED.
             additionalProperties: true
-        security:
-          kind: sharedSecretHeader
-          header: X-Webhook-Secret
-          secretRef: secret://webhook/payments-callback
-        apply:
-          mapper:
-            lang: dataweave
-            expr: |
-              context ++ {
-                webhook: payload,
-                callbackResponse: {
-                  paymentId: payload.paymentId,
-                  status: payload.status,
-                  reason: payload.reason
-                }
+      next: validateWebhookSecret
+
+    validateWebhookSecret:
+      type: task
+      task:
+        kind: apiKeyValidate:v1
+        profile: payments-callback
+        source:
+          location: header
+          name: X-Webhook-Secret
+      next: routeWebhookAuth
+
+    routeWebhookAuth:
+      type: choice
+      choices:
+        - when:
+            predicate:
+              lang: dataweave
+              expr: |
+                context.auth.apiKey.problem == null
+          next: ingestWaitForCallback
+      default: waitForCallback
+
+    ingestWaitForCallback:
+      type: transform
+      transform:
+        mapper:
+          lang: dataweave
+          expr: |
+            context ++ {
+              webhook: context.payload,
+              callbackResponse: {
+                paymentId: context.payload.paymentId,
+                status: context.payload.status,
+                reason: context.payload.reason
               }
-        on:
-          - when:
-              predicate:
-                lang: dataweave
-                expr: |
-                  payload.status == 'SUCCESS'
-            next: captured
-        default: failed
+            }
+        target:
+          kind: context
+      next: routeWaitForCallback
+
+    routeWaitForCallback:
+      type: choice
+      choices:
+        - when:
+            predicate:
+              lang: dataweave
+              expr: |
+                context.payload.status == 'SUCCESS'
+          next: captured
+      default: failed
 
     captured:
       type: succeed

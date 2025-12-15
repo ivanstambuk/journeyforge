@@ -38,7 +38,7 @@ JOLT is primarily a JSON transformation language. Within JourneyForge, it uses t
 
 - Supported expression sites for `lang: jolt`:
   - ✅ `transform.expr` / `transform.mapper` and reusable mappers (`spec.mappers`).
-  - ✅ Task and step mappers (`task.*.mapper`, `wait.apply.mapper`, `webhook.apply.mapper`).
+  - ✅ Task mappers (`task.*.mapper`).
   - ✅ Scheduler mappers (`schedule.*.mapper`).
   - ❌ Predicates (`choice.when.predicate`, `apiResponses.when.predicate`) – using `lang: jolt` at predicate sites is a validation error.
   - ❌ `apiResponses.statusExpr.expr` – using `lang: jolt` for HTTP status expressions is a validation error.

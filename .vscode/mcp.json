@@ -1,0 +1,12 @@
+{
+  "servers": {
+    "sdd-bundle": {
+      "type": "stdio",
+      "command": "node",
+      "args": [
+        "/home/ivan/dev/sdd-bundle-editor/packages/mcp-server/dist/index.js",
+        "/home/ivan/dev/sdd-sample-bundle"
+      ]
+    }
+  }
+}   

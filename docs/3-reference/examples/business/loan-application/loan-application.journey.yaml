@@ -217,27 +217,37 @@ spec:
               comment:
                 type: string
             additionalProperties: true
-        apply:
-          mapper:
-            lang: dataweave
-            expr: |
-              context ++ {
-                underwriterDecision: payload,
-                underwriterResponse: {
-                  decision: payload.decision,
-                  approvedAmount: payload.approvedAmount,
-                  interestRate: payload.interestRate,
-                  comment: payload.comment
-                }
+        default: ingestWaitForUnderwriter
+
+    ingestWaitForUnderwriter:
+      type: transform
+      transform:
+        mapper:
+          lang: dataweave
+          expr: |
+            context ++ {
+              underwriterDecision: context.payload,
+              underwriterResponse: {
+                decision: context.payload.decision,
+                approvedAmount: context.payload.approvedAmount,
+                interestRate: context.payload.interestRate,
+                comment: context.payload.comment
               }
-        on:
-          - when:
-              predicate:
-                lang: dataweave
-                expr: |
-                  payload.decision == "approved"
-            next: issueApprovedLoan
-        default: rejected
+            }
+        target:
+          kind: context
+      next: routeWaitForUnderwriter
+
+    routeWaitForUnderwriter:
+      type: choice
+      choices:
+        - when:
+            predicate:
+              lang: dataweave
+              expr: |
+                context.payload.decision == "approved"
+          next: issueApprovedLoan
+      default: rejected
 
     issueApprovedLoan:
       type: task

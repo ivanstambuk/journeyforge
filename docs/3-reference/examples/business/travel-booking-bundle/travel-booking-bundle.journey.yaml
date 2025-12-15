@@ -233,25 +233,35 @@ spec:
               notes:
                 type: string
             additionalProperties: true
-        apply:
-          mapper:
-            lang: dataweave
-            expr: |
-              context ++ {
-                travelerConfirmation: payload,
-                travelerConfirmationResponse: {
-                  decision: payload.decision,
-                  notes: payload.notes
-                }
+        default: ingestWaitForTravelerConfirmation
+
+    ingestWaitForTravelerConfirmation:
+      type: transform
+      transform:
+        mapper:
+          lang: dataweave
+          expr: |
+            context ++ {
+              travelerConfirmation: context.payload,
+              travelerConfirmationResponse: {
+                decision: context.payload.decision,
+                notes: context.payload.notes
               }
-        on:
-          - when:
-              predicate:
-                lang: dataweave
-                expr: |
-                  payload.decision == "confirm"
-            next: initiatePayment
-        default: completeCancelled
+            }
+        target:
+          kind: context
+      next: routeWaitForTravelerConfirmation
+
+    routeWaitForTravelerConfirmation:
+      type: choice
+      choices:
+        - when:
+            predicate:
+              lang: dataweave
+              expr: |
+                context.payload.decision == "confirm"
+          next: initiatePayment
+      default: completeCancelled
 
     initiatePayment:
       type: task
@@ -316,36 +326,63 @@ spec:
               notes:
                 type: string
             additionalProperties: true
-        security:
-          kind: sharedSecretHeader
-          header: X-Trip-Update-Secret
-          secretRef: secret://webhook/travel-booking-bundle
-        apply:
-          mapper:
-            lang: dataweave
-            expr: |
-              context ++ {
-                tripStatusUpdate: payload,
-                tripStatusResponse: {
-                  status: payload.status,
-                  notes: payload.notes
-                }
+      next: validateTripUpdateSecret
+
+    validateTripUpdateSecret:
+      type: task
+      task:
+        kind: apiKeyValidate:v1
+        profile: travel-booking-bundle
+        source:
+          location: header
+          name: X-Trip-Update-Secret
+      next: routeTripUpdateAuth
+
+    routeTripUpdateAuth:
+      type: choice
+      choices:
+        - when:
+            predicate:
+              lang: dataweave
+              expr: |
+                context.auth.apiKey.problem == null
+          next: ingestWaitForTripUpdates
+      default: waitForTripUpdates
+
+    ingestWaitForTripUpdates:
+      type: transform
+      transform:
+        mapper:
+          lang: dataweave
+          expr: |
+            context ++ {
+              tripStatusUpdate: context.payload,
+              tripStatusResponse: {
+                status: context.payload.status,
+                notes: context.payload.notes
               }
-        on:
-          - when:
-              predicate:
-                lang: dataweave
-                expr: |
-                  payload.status == "CONFIRMED"
-                    or payload.status == "PARTIALLY_CONFIRMED"
-            next: changeOrCancelOrTimeout
-          - when:
-              predicate:
-                lang: dataweave
-                expr: |
-                  payload.status == "CANCELLED"
-            next: prepareOutcome
-        default: failed
+            }
+        target:
+          kind: context
+      next: routeWaitForTripUpdates
+
+    routeWaitForTripUpdates:
+      type: choice
+      choices:
+        - when:
+            predicate:
+              lang: dataweave
+              expr: |
+                context.payload.status == "CONFIRMED"
+                  or context.payload.status == "PARTIALLY_CONFIRMED"
+          next: changeOrCancelOrTimeout
+        - when:
+            predicate:
+              lang: dataweave
+              expr: |
+                context.payload.status == "CANCELLED"
+          next: prepareOutcome
+      default: failed
 
     changeOrCancelOrTimeout:
       type: parallel
@@ -357,59 +394,58 @@ spec:
               waitForChangeOrCancel:
                 type: wait
                 wait:
-                  channel: manual
-                  input:
-                    schema:
-                      description: Post-booking change or cancel request from the traveler or agent.
-                      type: object
-                      required:
-                        - action
-                      properties:
-                        action:
-                          type: string
-                          enum:
-                            - complete
-                            - change
-                            - cancel
-                        notes:
-                          type: string
-                      additionalProperties: false
-                  response:
-                    outputVar: changeOrCancelResponse
-                    schema:
-                      title: ChangeOrCancelProjection
-                      type: object
-                      description: Additional top-level fields returned from the changeOrCancel step.
-                      properties:
-                        action:
-                          type: string
-                          enum:
-                            - complete
-                            - change
-                            - cancel
+                channel: manual
+                input:
+                  schema:
+                    description: Post-booking change or cancel request from the traveler or agent.
+                    type: object
+                    required:
+                      - action
+                    properties:
+                      action:
+                        type: string
+                        enum:
+                          - complete
+                          - change
+                          - cancel
+                      notes:
+                        type: string
+                    additionalProperties: false
+                response:
+                  outputVar: changeOrCancelResponse
+                  schema:
+                    title: ChangeOrCancelProjection
+                    type: object
+                    description: Additional top-level fields returned from the changeOrCancel step.
+                    properties:
+                      action:
+                        type: string
+                        enum:
+                          - complete
+                          - change
+                          - cancel
                         notes:
                           type: string
                       additionalProperties: true
-                  apply:
-                    mapper:
-                      lang: dataweave
-                      expr: |
-                        context ++ {
-                          changeRequest: payload,
-                          overrideStatus: if (payload.action == "cancel") "CANCELLED" else null,
-                          changeOrCancelResponse: {
-                            action: payload.action,
-                            notes: payload.notes
-                          }
+                  default: ingestWaitForChangeOrCancel
+
+              ingestWaitForChangeOrCancel:
+                type: transform
+                transform:
+                  mapper:
+                    lang: dataweave
+                    expr: |
+                      context ++ {
+                        changeRequest: context.payload,
+                        overrideStatus: if (context.payload.action == "cancel") "CANCELLED" else null,
+                        changeOrCancelResponse: {
+                          action: context.payload.action,
+                          notes: context.payload.notes
                         }
-                  on:
-                    - when:
-                        predicate:
-                          lang: dataweave
-                          expr: |
-                            payload.action == "cancel"
-                      next: changeOrCancelBranchDone
-                  default: changeOrCancelBranchDone
+                      }
+                  target:
+                    kind: context
+                next: changeOrCancelBranchDone
 
               changeOrCancelBranchDone:
                 type: succeed
@@ -503,17 +539,23 @@ spec:
                         comments:
                           type: string
                       additionalProperties: true
-                  apply:
-                    mapper:
-                      lang: dataweave
-                      expr: |
-                        context ++ {
-                          feedback: payload,
-                          feedbackResponse: {
-                            rating: payload.rating,
-                            comments: payload.comments
-                          }
+                  default: ingestWaitForFeedback
+
+              ingestWaitForFeedback:
+                type: transform
+                transform:
+                  mapper:
+                    lang: dataweave
+                    expr: |
+                      context ++ {
+                        feedback: context.payload,
+                        feedbackResponse: {
+                          rating: context.payload.rating,
+                          comments: context.payload.comments
                         }
+                      }
+                  target:
+                    kind: context
                 next: feedbackBranchDone
 
               feedbackBranchDone:
