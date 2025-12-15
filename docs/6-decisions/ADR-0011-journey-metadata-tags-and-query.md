@@ -71,7 +71,7 @@ The engine’s journey model gains two metadata surfaces:
 - Semantics:
   - Instance tags are derived from:
     - Definition tags (`metadata.tags`).
-    - Explicit tag sourcing rules in the journey spec (`spec.metadata.tags`) that can lift
+    - Explicit tag sourcing rules in the journey spec (`spec.metadata.bindings.tags`) that can lift
       values from payload, headers, or W3C `baggage`.
       - Clients **do not** set tags directly in the start payload; they send only the normal
         JSON body. Tags are derived by the engine according to the spec.
@@ -94,25 +94,29 @@ The engine’s journey model gains two metadata surfaces:
     - Channel: `channel` (for example, `web`, `mobile`).
     - Initiator: `initiatedBy` (`user`, `system`, `admin`).
     - Correlation: `orderId`, `paymentIntentId`, `crmCaseId`, etc.
-      - Attributes are populated by the engine based on explicit mapping configuration in the
-    journey definition; clients never send an `attributes` field.
+    - Attributes are populated by the engine and/or journey logic based on explicit, visible configuration; clients
+      never send an `attributes` field.
   - Sourcing inputs:
-    - Security context (JWT claims, mTLS information).
-    - HTTP headers (for example, `X-Tenant-Id`, `X-Channel`).
-    - W3C `baggage` key/value entries.
-    - Well-known paths in the request body.
+    - Start request payload/headers/W3C `baggage` via `spec.metadata.bindings`.
+    - Journey-authored authentication/authorisation logic:
+      - Auth task plugins (`jwtValidate:v1`, `mtlsValidate:v1`, `apiKeyValidate:v1`) project validated signals into
+        `context.auth.*`, and
+      - Journeys explicitly persist selected values into `journey.attributes` using write-once attribute writes (DSL
+        `transform.target.kind: attributes`).
 - Reserved attribute keys:
-  - `subjectId` – canonical owner identity derived from JWT claims at journey start, **when
-    present and not configured as “anonymous”** in the HTTP security policy.
+  - `subjectId` – canonical owner identity, when available, for self-service queries and per-subject limits.
   - `tenantId` – logical tenant id.
   - `channel` – origin channel.
   - `initiatedBy` – `user` / `system` / `admin`.
   - Additional correlation keys (for example, `orderId`, `paymentIntentId`, `crmCaseId`)
     are recommended and may be reserved by documentation rather than schema.
 - Immutability:
-  - For v1, attributes are immutable after the journey is started.
-  - Future enrichment, if introduced, must be append-only (new keys only, no in-place
-    changes), via auditable APIs.
+  - For v1, attribute keys are write-once:
+    - Bindings and journeys MAY set an attribute key only when it is absent.
+    - Attempts to overwrite an existing key are rejected (no silent overwrite).
+  - This allows anonymous start → authenticated completion journeys to bind `subjectId` later (for example after an
+    in-journey login step) while keeping attributes stable for querying once set.
+  - Future enrichment, if introduced beyond write-once, must be explicitly specified and auditable.
 - Limits:
   - Attribute cardinality and key/value lengths are controlled by `MetadataLimits`, with
     recommended defaults of ≤ 16 keys, key length ≤ 32 characters, value length ≤ 256
@@ -164,25 +168,24 @@ spec:
 - The engine evaluates these bindings exactly once per journey instance, when processing the
   start request for a `kind: Journey` journey, and uses them to populate `journey.tags` and
   `journey.attributes` subject to `MetadataLimits`.
+- Metadata bindings are one source of tags/attributes. Journeys may also set attributes explicitly in-graph using
+  write-once attribute writes (`transform.target.kind: attributes`), typically after auth task plugins.
 
 ### 4. Mixed-mode JWT validation and anonymous subjects
 
 To support journeys that can be invoked both with and without JWTs, JWT validation is modelled via the `jwtValidate:v1` task plugin and engine configuration profiles rather than `kind: jwt` HTTP security policies.
 
-- JWT validation profiles define the default issuer/audience/JWKS settings and may carry defaults for:
-  - `mode`:
-    - `required` (default): a missing or invalid token results in a JWT validation Problem (via the `jwtValidate:v1` task) and no subject is derived. Journeys and APIs typically place a `jwtValidate:v1` state at the start of each entry path and branch explicitly on `context.auth.jwt.problem` to enforce authentication.
-    - `optional`: a missing token is allowed and treated as anonymous. When no token is present, `context.auth.jwt` remains unset and no subject is derived. When a token is present but invalid, the task records a Problem and no subject is derived; journeys and APIs may treat this as an authentication failure.
-  - `anonymousSubjects`:
-    - Optional list of subject values that should be treated as anonymous even when the token is otherwise valid (for example, a nil UUID subject injected by some gateways).
-    - When the JWT `sub` matches one of these values, the engine MUST NOT derive `attributes.subjectId` from it.
+- JWT validation profiles define issuer/audience/JWKS settings and other claim constraints. The DSL does not define a
+  dedicated security policy block; validation and token sourcing details are engine configuration concerns.
 
 Subject mapping for journeys:
-- When JWT validation succeeds (via `jwtValidate:v1` and the configured profile) and `sub` is not in `anonymousSubjects`, the engine derives `attributes.subjectId` from the subject claim.
-- If there is no token (and the effective `mode` is `optional`) or only an “anonymous” token, then `attributes.subjectId` remains unset.
-- This ensures:
-  - Mixed-mode endpoints work without errors when called anonymously.
-  - Anonymous tokens never pollute “my journeys” views or per-subject limits.
+- The engine does **not** implicitly derive `attributes.subjectId` from JWT claims.
+- Journeys that want to bind a canonical owner identity SHOULD:
+  - Validate tokens explicitly via `jwtValidate:v1`, and
+  - Persist the chosen owner identity explicitly via a write-once attribute write (for example mapping
+    `context.auth.jwt.claims.sub` to `attributes.subjectId`).
+- When no authenticated subject is available (missing token, invalid token, or a subject treated as anonymous by the
+  journey), `attributes.subjectId` remains unset.
 
 This builds on ADR-0010 by still avoiding a first-class subject field and instead using generic attributes and JWT validation configuration.
 
@@ -226,9 +229,9 @@ We standardise a simple query model for listing journeys, backed by tags and att
 
 - Endpoint:
   - `GET /api/v1/journeys` – operator-oriented listing.
-  - A self-service listing endpoint (for example, `GET /api/v1/my/journeys`) that implicitly
-    filters by `attributes.subjectId` derived from the caller’s JWT (`sub`) is allowed as a
-    higher-level convenience but is not mandated by this ADR.
+  - This ADR does not define a dedicated self-service listing endpoint (for example `GET /api/v1/my/journeys`).
+    Any “my journeys” experience is provided via the same listing endpoint with platform-level authn/authz and
+    filtering semantics, or via future, explicitly specified API surfaces.
 - Filters (thin shims over fields/attributes):
   - `journeyName` – filters by journey name.
   - `phase` – `RUNNING`, `SUCCEEDED`, `FAILED`.
@@ -266,9 +269,8 @@ Pros:
     changes to core envelopes.
 - Avoids hard-coded numeric limits by externalising them into `MetadataLimits`, which can be
   tuned per engine configuration (per installation).
-- Mixed-mode JWT support (`mode: required|optional` and `anonymousSubjects`) allows journeys
-  to handle both authenticated and anonymous calls cleanly without confusing ownership or
-  “my journeys” semantics.
+- JWT validation task plugins allow journeys to handle both authenticated and anonymous calls cleanly without
+  confusing ownership or “my journeys” semantics.
 
 Cons:
 - Adds conceptual and implementation complexity:

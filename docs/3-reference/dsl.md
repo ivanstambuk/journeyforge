@@ -774,16 +774,19 @@ distinguishes:
     - `initiatedBy` – `user`, `system`, or `admin`.
     - Correlation ids such as `orderId`, `paymentIntentId`, `crmCaseId`.
 - Population:
-  - Attributes are populated by the engine based on explicit bindings declared under
-    `spec.metadata.bindings.attributes` (see 2g.iv), using values from:
-    - The start request payload.
-    - Named headers (for example, `X-Tenant-Id`, `X-Channel`).
-    - The W3C `baggage` header (key/value entries).
+  - Attributes may be populated by:
+    - Start-time metadata bindings declared under `spec.metadata.bindings.attributes` (see 2g.iv), using values from:
+      - The start request payload.
+      - Named headers (for example, `X-Tenant-Id`, `X-Channel`).
+      - The W3C `baggage` header (key/value entries).
+    - Explicit in-graph attribute writes via `transform.target.kind: attributes` (see §14), typically after
+      journey-authored authentication/authorisation logic (for example `jwtValidate:v1` followed by a `transform`
+      mapping `context.auth.jwt.claims.sub` to `attributes.subjectId`).
   - Clients do not send an `attributes` property in the start request; they provide only the
     normal JSON payload and headers.
 - Reserved keys:
-  - `subjectId` – identity of the caller/subject for this journey instance, when available
-    from configured metadata bindings (for example from an authenticated header or baggage value).
+  - `subjectId` – canonical owner identity for this journey instance, when available (for example derived by
+    journey-authored auth logic and/or provided by the platform via trusted headers/baggage).
   - `tenantId` – logical tenant identifier.
   - `channel` – origin channel.
   - `initiatedBy` – who initiated the journey (`user`, `system`, `admin`).
@@ -792,10 +795,12 @@ distinguishes:
     - Self-service queries (“my journeys”) via `subjectId`.
     - Multi-tenant and operator views via `tenantId` and `region`.
     - Correlation with external systems via `orderId`, `paymentIntentId`, `crmCaseId`, etc.
-  - For v1, attributes are immutable after the journey is started.
-- Limits:
-  - The maximum number of attribute keys and key/value lengths are controlled by
-    `MetadataLimits` (section 21).
+    - Indexed/discoverable lookup without searching inside arbitrary `context` payloads.
+  - For v1, attribute keys are **write-once**:
+    - Bindings and journeys MAY set an attribute key only when it is absent.
+    - Attempts to overwrite an existing key MUST be rejected (see §14 for the in-graph write behaviour).
+  - Limits:
+    - The maximum number of attribute keys and key/value lengths are controlled by `MetadataLimits` (section 21).
 
 #### 2.8.4 Metadata bindings (spec.metadata.bindings)
 
@@ -843,6 +848,8 @@ Semantics
     processing the start request (`/journeys/{journeyName}/start`) for `kind: Journey`.
   - Bindings do not reference `context`; they read directly from the start request payload
     and headers.
+  - Metadata bindings are one way to populate tags/attributes; journeys may also set attributes explicitly via
+    `transform.target.kind: attributes` (see §14).
 - Tag bindings:
   - `tags.fromPayload`:
     - Each entry is an object with a `path` field, a dot path evaluated against the start
@@ -2131,7 +2138,7 @@ transform:
         status: 'OK'
       }
   target:
-    kind: context                 # context | var
+    kind: context                 # context | var | attributes
     path: data.enriched           # used when kind == context; dot-path in context
   resultVar: enriched             # used when kind == var; name under context.resultVar
 next: <stateId>
@@ -2143,11 +2150,26 @@ Semantics
   - If `target.path` is provided, the mapper result MUST be a JSON object; it is written at `context.<path>` (overwriting any existing value).
   - If neither `target.path` nor `resultVar` is set, the mapper result MUST be a JSON object and replaces the entire `context`.
 - When `target.kind == var`, the mapper result MAY be any JSON value (object, array, string, number, boolean, or null) and is stored under `context.<resultVar>`; other context fields remain unchanged.
+- When `target.kind == attributes`, the mapper result MUST be a JSON object:
+  - Each top-level key/value is treated as an attribute entry to be written to `journey.attributes`.
+  - Attribute values MUST be strings; engines MUST coerce non-string JSON values to strings using the same rules as
+    `spec.metadata.bindings.attributes` (§2.8.4).
+  - Attribute key semantics are **write-once** (§2.8.3):
+    - For each key, when `journey.attributes` does not already contain that key, the engine writes it.
+    - When `journey.attributes` already contains that key, the engine MUST reject the write and fail the state with a
+      clear error (no silent overwrite).
+  - Successful writes MUST be persisted to the journey instance metadata and MUST be visible to:
+    - Subsequent state transitions in the same journey instance, and
+    - Journeys API reads and queries that expose/inspect attributes.
 
 Validation
 - `transform.mapper.lang` must be set to a supported expression engine id (for example `dataweave`).
 - Exactly one of (`target.path`, `resultVar`) may be omitted; if both are omitted, `context` replacement semantics apply.
 - `resultVar`, when used, must match `[A-Za-z_][A-Za-z0-9_]*`.
+- `target.kind: attributes`:
+  - MUST be rejected for `kind: Api` specs (there is no durable journey instance to attach metadata to).
+  - Must not be used in contexts that do not persist mutations to the journey instance (for example read-access guard
+    evaluation under `spec.access.read.guardRef`).
 
 ### 14.1 Transform & expression style guidance
 
@@ -3457,15 +3479,15 @@ Validation
 <a id="dsl-23-journey-access-binding"></a>
 ## 23. Journey Access Binding
 
-<a id="dsl-24-error-configuration"></a>
-## 24. Error configuration (spec.errors)
-
 This section summarises the minimal, normative rules for journey access binding. For background and rationale, see
 ADR-0014 (`docs/6-decisions/ADR-0014-journey-access-binding-and-session-semantics.md`).
 
 Rules:
-- The DSL does **not** define a dedicated access-binding block (for example `spec.access`, `spec.accessBinding`, or a
-  first-class `participants` structure). No such blocks are allowed in the generic DSL surface.
+- The DSL does **not** define a general-purpose, binding-level access-control policy model (for example a first-class
+  `participants` structure or implicit “protect this step” annotations). Mutating access control is expressed via
+  explicit journey-authored control flow (see below).
+- The DSL **does** define a minimal, reusable hook for Journeys API read access control via a guard subjourney (see
+  “Read access guard” below).
 - Journeys that need access control or subject/participant binding MUST model the required identity and attributes in
   ordinary `context` fields (for example `context.identity.*`, `context.participants.*`) and/or metadata, using the
   existing DSL constructs (`transform`, `choice`, `wait`, `webhook`, etc.).
@@ -3479,3 +3501,52 @@ Rules:
 - `journeyId` is a resume token only. Specs and implementations MUST NOT treat possession of a `journeyId` by itself as
   sufficient authorisation to read or mutate a journey; any additional access requirements MUST be modelled and enforced
   by journey logic as described above.
+
+### 23.1 Read access guard (`spec.access.read.guardRef`)
+
+Journeys MAY declare a reusable read-access guard that the engine evaluates for Journeys API read endpoints:
+- `GET /journeys/{journeyId}`
+- `GET /journeys/{journeyId}/result`
+
+Shape
+
+```yaml
+spec:
+  access:
+    read:
+      guardRef: <subjourneyId>      # optional; key under spec.subjourneys
+```
+
+Semantics
+- When `spec.access.read.guardRef` is present:
+  - The engine MUST evaluate the referenced local subjourney before serving Journeys API read responses.
+  - The guard is evaluated against a deep copy of the stored journey `context` (so guard execution does not persist
+    mutations to the journey instance by default).
+  - Auth task plugins (for example `jwtValidate:v1`, `mtlsValidate:v1`, `apiKeyValidate:v1`) MAY be executed inside
+    the guard subjourney; they read the current request (when available) and write auth results into the guard
+    evaluation context as usual (see §18.6–§18.8).
+  - The guard’s effective output is determined using the same rules as `type: subjourney` with `resultKind: output`
+    (§5.8): if the guard terminates in `succeed` with `outputVar`, that value is the output; otherwise the final guard
+    `context` is the output (deep copy).
+  - The guard output MUST be a JSON object with:
+    - `allowed: boolean` (required)
+    - `problem: <ProblemDetails>` (optional; intended for in-graph deny handling)
+  - When `allowed: true`, the engine proceeds to return the requested `JourneyStatus` / `JourneyOutcome`.
+  - When `allowed: false`, the engine MUST deny the read with HTTP 404 (concealment semantics):
+    - The response MUST be indistinguishable from the “journey does not exist” case.
+    - Implementations MUST NOT return the guard-provided `problem` body to the caller, because it can disclose the
+      existence of the journey instance or details of access policy.
+    - Implementations SHOULD either:
+      - return an empty body, or
+      - return a generic RFC 9457 Problem Details body describing “Not Found” (that does not mention access control).
+- When `spec.access.read.guardRef` is omitted, no journey-authored read guard is applied (platform/boundary controls may
+  still apply).
+
+Validation
+- `spec.access`, when present, MUST be an object.
+- `spec.access.read`, when present, MUST be an object.
+- `guardRef`, when present, MUST be a non-empty string that refers to a key under `spec.subjourneys`; unknown refs are
+  validation errors.
+
+<a id="dsl-24-error-configuration"></a>
+## 24. Error configuration (spec.errors)

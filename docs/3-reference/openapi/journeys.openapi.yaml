@@ -67,8 +67,7 @@ paths:
           required: false
           schema:
             type: string
-          description: Filters by attributes.subjectId (canonical owner identity), when
-            present.
+          description: "Filters by attributes.subjectId (canonical owner identity), when present.\n\nSelf-service note: servers MAY derive an effective subject filter from the authenticated caller identity and ignore any explicit subjectId query parameter for self-service callers."
         - in: query
           name: tenantId
           required: false
@@ -122,6 +121,8 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/JourneyStatus"
+        "404":
+          description: Not found (either the journey does not exist, or it is not visible to the caller).
       description: Get journey status
       operationId: journeys_journeys_journeyId_get
   /journeys/{journeyId}/result:
@@ -142,6 +143,8 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/JourneyOutcome"
+        "404":
+          description: Not found (either the journey does not exist, or it is not visible to the caller).
         "409":
           description: Journey not terminal yet
       description: Retrieve final outcome once completed

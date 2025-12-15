@@ -82,6 +82,7 @@ Who needs to decide what, and where/when (for example:
 - If there are more or fewer options than A/B/C, extend or shrink the list while keeping the same pattern (🅰️, 🅱️, 🅲, 🅳, …).
 - The Decision Card MUST include the **Context** section and it MUST be sufficient for an informed decision without follow-ups.
 - Do **not** add extra meta sections (no TL;DR, summary, criticism, etc.) beyond what is defined in the template.
+- **Workspace-first grounding:** the “Current behaviour / contract today” and “Key references” bullets MUST be based on the repository’s current authoritative documents (DSL reference, ADRs, feature specs, OpenAPI) and MUST cite concrete file paths/sections. Do not rely on chat memory as the primary source for these facts.
 
 ## 2. Relationship to `open-questions.md`
 

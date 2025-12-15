@@ -81,3 +81,19 @@
 - 2025-12-15: Added ADR-0032 and ADR-0033 to capture the inbound-auth “task plugins only” model and the external-input submission model (`context.payload` stashing + explicit post-submission routing via normal states). Tightened payload lifecycle by clearing `context.payload` while paused at `wait`/`webhook` states. Updated ADR-0013 wording to remove references to inline external-input branching.
 
 - 2025-12-15: Clarified that the DSL remains durable/normative for `kind: Journey` (wait/webhook/timer). Removed the “no persistence/resume across process restarts” bullet from DSL limitations and clarified that non-durable engines must reject unsupported durable constructs. Clarified that `spec.bindings.http.*.headersPassthrough` is request-scoped and does not persist across `wait`/`webhook` boundaries.
+
+- 2025-12-15: Reconciled journey access binding with Journeys API HTTP semantics by updating ADR-0014: access denial is expressed via in-graph control flow on `/start` and `/steps/{stepId}` (Journeys API stays 200-style for journey-defined outcomes), while HTTP status remapping (for example mapping auth failures to 401/403) remains available for `kind: Api` via `spec.bindings.http.apiResponses` and platform boundary auth is out of scope for DSL.
+
+- 2025-12-15: Standardised reusable access checks by adopting a guard subjourney model and adding a minimal Journeys API read-access guard hook (`spec.access.read.guardRef`) that evaluates against a snapshot of stored journey context (no persisted mutation by default). Aligned Feature 002 wording with ADR-0011 by removing references to a dedicated self-service listing endpoint and describing “my journeys” as a platform-filtered mode of the same listing endpoint.
+
+- 2025-12-15: Added a “workspace-first answers” rule for design decisions: before presenting options, consult and cite relevant DSL/ADR/spec sections (AGENTS.md, `docs/4-architecture/spec-guidelines/open-questions-format.md`).
+
+- 2025-12-15: Expanded shared vocabulary in `docs/0-overview/terminology.md` for access binding, guards, in-graph vs read interactions, external-input step endpoints, request segments, and context/payload lifetimes.
+
+- 2025-12-15: Confirmed that `journey.attributes.subjectId` remains the canonical owner identity for indexed queries (for example “my journeys” via `GET /journeys` with platform-derived subject filtering).
+
+- 2025-12-15: Chose concealment semantics for Journeys API read denial: when the read-access guard denies, return HTTP 404 (indistinguishable from “journey not found”) and document it in the DSL and generic Journeys OpenAPI.
+
+- 2025-12-15: Resolved subjectId sourcing: the engine does not derive `attributes.subjectId` from JWT claims; journeys set `journey.attributes.*` explicitly using write-once attribute writes (`transform.target.kind: attributes`, overwrites rejected), typically after a StartGuard subjourney runs auth task plugins and normalises identity into `context`.
+
+- 2025-12-15: Chose Journey DSL JSON Schema placement for lint/editor tooling: publish a single, versioned schema entrypoint under `docs/3-reference/` (`docs/3-reference/journeyforge-dsl-v1.schema.json`) that validates both `kind: Journey` and `kind: Api` and branches on `kind`.

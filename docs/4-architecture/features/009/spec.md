@@ -80,7 +80,7 @@ $ echo $?
 
 ## Interface & Contract Catalogue
 - JSON Schema:
-  - One or more schema files under `docs/3-reference/` (exact paths to be decided) describing the Journey DSL shape for `kind: Journey` and `kind: Api`.
+  - Primary entrypoint: `docs/3-reference/journeyforge-dsl-v1.schema.json` – validates both `kind: Journey` and `kind: Api` and branches on `kind` within a single schema (with shared shapes factored into `$defs` as needed).
 - Spectral (optional):
   - A ruleset file under `tools/` (for example `tools/lint/journey-spectral.yaml`) defining additional static rules for journey specs.
 - CLI:

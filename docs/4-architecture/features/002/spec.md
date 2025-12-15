@@ -15,7 +15,8 @@
 Introduce a metadata model and query surface for journeys that allows:
 - Workflow specs to declare definition‑level tags (`metadata.tags`) for classification and governance.
 - Journey instances to carry tags and attributes for identity, tenancy, and correlation.
-- The Journeys API to expose these fields and support filtered listing (for operators and self‑service “my journeys” flows).
+- The Journeys API to expose these fields and support filtered listing (for operators and “my journeys” experiences via
+  platform-level authn/authz and filtering on the same listing endpoint).
 
 This feature also defines configurable limits for tags/attributes via a `MetadataLimits` document, and standardises how subject identity is represented via `attributes.subjectId` without introducing a first‑class subject field into the DSL.
 
@@ -29,11 +30,11 @@ Primary references:
 - Add `metadata.tags` to the DSL for `kind: Journey` and `kind: Api`, with clear semantics and limits.
 - Introduce instance‑level `journey.tags` and `journey.attributes` in the engine’s journey model and Journeys API, with reserved keys for subject/tenant/correlation.
 - Provide a `MetadataLimits` configuration document to externalise limits for definition tags, instance tags, and attributes.
-- Define how subject identity (`attributes.subjectId`) is sourced safely (for example via authenticated headers/baggage) to support self-service and operator queries.
-- Add an operator‑oriented `GET /journeys` listing endpoint with filters over journey name, phase, tags, and selected attributes, and keep room for a self‑service “my journeys” endpoint built on top of `subjectId`.
+- Define how subject identity (`attributes.subjectId`) is sourced safely (via explicit, journey-authored auth logic and write-once attribute writes) to support self-service and operator queries.
+- Add an operator‑oriented `GET /journeys` listing endpoint with filters over journey name, phase, tags, and selected attributes, and enable a self‑service “my journeys” experience via the same endpoint with platform-level authn/authz and implicit subject filtering (no dedicated self-service endpoint in this version).
 
 ## Non-Goals
-- No append‑only enrichment APIs for tags/attributes in this increment (only v1 immutability is implemented; enrichment is directional).
+- No external enrichment APIs for tags/attributes in this increment; journeys use write-once semantics via bindings and in-graph attribute writes.
 - No shared/global metadata policies or reuse mechanism beyond journey‑local configuration; reuse will be considered only if duplication becomes a real problem.
 - No typed attribute system (all attribute values are strings) and no ad‑hoc query language beyond a small, fixed set of query parameters.
 - No separate “internal‑only” metadata channel; tags/attributes are observable metadata by design.
@@ -44,11 +45,11 @@ Primary references:
 |----|-------------|--------------|-----------------|--------------|--------------------|--------|
 | FR-002-01 | Support `metadata.tags` on journeys/APIs. | Specs can declare `metadata.tags: string[]` for classification; tags exported in docs/UIs. | Reject specs where `metadata.tags` is not an array of strings or exceeds `MetadataLimits.definitionTags.maxCount`. | Spec validation error with clear message. | Expose `metadata.tags` via reference docs and OpenAPI export. | ADR-0011 |
 | FR-002-02 | Record instance tags (`journey.tags`). | The engine derives instance tags from `metadata.tags` and spec-defined sourcing (payload/headers/baggage) and exposes them in `JourneyStatus`/`JourneyOutcome`. | Enforce `MetadataLimits.instanceTags.maxCount`/`maxLength` at validation/engine level. | Start or execution fails fast when tag limits are exceeded. | Log per-journey tag counts (debug/trace), no tag values at INFO. | ADR-0011 |
-| FR-002-03 | Record instance attributes (`journey.attributes`). | The engine populates attributes (subjectId, tenantId, channel, correlation ids) from configured sources and exposes them in `JourneyStatus`/`JourneyOutcome`. | Attribute keys/values validated against `MetadataLimits.attributes.*`; reserved keys validated for shape when present. | Start or execution fails fast when attribute limits are exceeded or reserved key types are violated. | Emit metrics on usage of reserved attributes (subjectId, tenantId, orderId, etc.). | ADR-0011 |
+| FR-002-03 | Record instance attributes (`journey.attributes`). | The engine persists attributes (subjectId, tenantId, channel, correlation ids) populated via metadata bindings and explicit in-graph attribute writes (write-once) and exposes them in `JourneyStatus`/`JourneyOutcome`. | Attribute keys/values validated against `MetadataLimits.attributes.*`; reserved keys validated for shape when present; attribute overwrites rejected. | Start or execution fails fast when attribute limits are exceeded or reserved key types are violated. | Emit metrics on usage of reserved attributes (subjectId, tenantId, orderId, etc.). | ADR-0011 |
 | FR-002-04 | Load and enforce `MetadataLimits`. | At startup, the engine loads a `MetadataLimits` document and uses it for validation; in its absence, uses documented defaults equivalent to the reference. | Static config validation rejects malformed `MetadataLimits`; spec validation uses loaded limits. | Startup fails with clear error if `MetadataLimits` is malformed or missing when required. | Log effective limits at startup; include limit breaches in error telemetry. | ADR-0011 |
-| FR-002-05 | Define subject identity sourcing contract. | `attributes.subjectId` can be derived at journey start via `spec.metadata.bindings.attributes` from platform-authenticated sources (for example a trusted header or W3C baggage key). When no subject identity is available, `attributes.subjectId` remains unset. | Validation ensures reserved attribute keys (including `subjectId`) are strings when present and that bindings refer to supported sources. | Journeys without `subjectId` simply do not appear in self-service “my journeys” queries. | Emit telemetry indicating whether `subjectId` is present (boolean), without recording its value at INFO. | ADR-0011, DSL §2.8 |
+| FR-002-05 | Define subject identity sourcing contract. | `attributes.subjectId` is set explicitly by journey-authored logic (typically a StartGuard subjourney that runs auth task plugins such as `jwtValidate:v1`/`mtlsValidate:v1`/`apiKeyValidate:v1` and then writes `attributes.subjectId` via `transform.target.kind: attributes`). When no subject identity is available, `attributes.subjectId` remains unset. | Validation ensures reserved attribute keys (including `subjectId`) are strings when present; attribute writes obey write-once semantics (overwrites rejected). | Journeys without `subjectId` simply do not appear in self-service “my journeys” queries. | Emit telemetry indicating whether `subjectId` is present (boolean), without recording its value at INFO. | ADR-0011, DSL §2.8, DSL §14 |
 | FR-002-06 | Provide operator journeys listing with filters. | `GET /api/v1/journeys` supports filters over `journeyName`, `phase`, `subjectId`, `tenantId`, `tag`, `orderId`, `paymentIntentId`, `crmCaseId`, returning `JourneyStatus` items with `tags` and `attributes`. | OpenAPI validation and contract tests ensure the schema matches DSL semantics. | Invalid filter values yield 4xx responses; unsupported combinations are rejected with clear errors. | Expose query usage metrics (which filters are common, result counts). | ADR-0011, journeys.openapi.yaml |
-| FR-002-07 | Enable “my journeys” via subjectId (directional). | A self‑service listing endpoint (for example `/api/v1/my/journeys`) may filter on `attributes.subjectId` using the caller’s authenticated subject identity from the transport boundary; the API layer hides or ignores explicit `subjectId` query params for self‑service callers. | End-to-end tests confirm that unauthenticated callers cannot access self-service listings and that only journeys with `attributes.subjectId` matching the caller are returned. | Requests from unauthenticated clients are rejected. | Log query usage in aggregate (no PII); ensure no subjectId is logged at INFO. | ADR-0011 |
+| FR-002-07 | Enable “my journeys” via subjectId (no dedicated endpoint). | The operator listing endpoint (`GET /api/v1/journeys`) MAY also support a self‑service “my journeys” experience by deriving an effective `subjectId` filter from the caller’s authenticated subject identity at the transport boundary; the API layer MUST NOT allow self‑service callers to query arbitrary subjects via an explicit `subjectId` parameter. | End-to-end tests confirm that unauthenticated callers cannot access self-service listings and that self-service callers receive only journeys whose `attributes.subjectId` matches their authenticated identity. | Requests from unauthenticated clients are rejected. | Log query usage in aggregate (no PII); ensure no subjectId is logged at INFO. | ADR-0011 |
 
 ## Primary Use Cases
 
@@ -60,12 +61,12 @@ Problem:
 - A signed-in user wants to list their active self-service journeys (for example, pending approvals, incomplete KYC flows).
 
 Proposed pattern:
-- On journey start, the engine:
-- Authenticates the caller at the transport boundary (gateway/ingress/service mesh) and provides a trusted subject identifier to the engine (for example via a header or W3C baggage key).
-  - Binds that identifier into `attributes.subjectId` via `spec.metadata.bindings.attributes` at start.
+- On journey start, the journey:
+  - Executes a StartGuard subjourney that runs auth task plugins (for example `jwtValidate:v1`) and normalises identity into `context` (for example `context.identity.subjectId`).
+  - Persists the canonical owner identity into `attributes.subjectId` via a write-once attribute write (`transform.target.kind: attributes`).
   - Optionally sets `attributes.initiatedBy = "user"` and adds a `self-service` tag.
 - The Journeys API exposes a query like:
-- `GET /api/v1/journeys?subjectId=<sub>&phase=RUNNING`
+- `GET /api/v1/journeys?phase=RUNNING` (with the effective subject filter derived from the authenticated caller)
 - Result items include:
   - `journeyId`
   - `journeyName`

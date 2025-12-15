@@ -40,6 +40,95 @@ consistent vocabulary.
   - Preferred term for the execution/data plane; avoid “runtime REST” wording.
   - Typical paths in docs/examples: `/api/v1/journeys/...`; legacy examples may still show `/runtime/...` as proper names—do not introduce new ones.
 
+## Access & interaction
+
+- **Journey access binding**
+  - The binding between a journey instance and the set of participants (subjects and roles) that are allowed to
+    interact with it over time, plus the rules that determine which participant may perform which operation at which
+    point in the journey.
+  - Access binding is *modelled by journey authors* using ordinary `context` fields (for example
+    `context.identity.*`, `context.participants.*`) and/or instance metadata (`attributes.*`), not by a generic,
+    binding-level security policy model in the DSL.
+
+- **Access check**
+  - Any journey-authored or platform-authored logic that decides whether a caller is allowed to perform an operation.
+  - In JourneyForge DSL discussions, “access check” typically means authn/authz expressed via task plugins +
+    predicates, not an implicit engine policy.
+
+- **Mutating interaction**
+  - An interaction that may advance or otherwise change a journey instance (for example:
+    `POST /api/v1/journeys/{journeyName}/start` or `POST /api/v1/journeys/{journeyId}/steps/{stepId}`).
+  - Mutating access control is expressed **in-graph** using explicit journey-authored control flow (tasks + `choice`
+    + routing).
+
+- **Read interaction** (read-only query)
+  - An interaction that reads journey instance state without advancing it (for example:
+    `GET /api/v1/journeys/{journeyId}` or `GET /api/v1/journeys/{journeyId}/result`).
+  - Read access control is expressed via a **read-access guard** (see below) and/or via platform/boundary controls.
+
+- **In-graph** (journey-authored control flow)
+  - Logic expressed directly in the journey state graph using normal state types (`task`, `choice`, `transform`,
+    `subjourney`, etc.).
+  - Example: `jwtValidate:v1` followed by a `choice` that routes to allow/deny branches.
+
+- **Guard** / **access guard**
+  - A reusable access check unit that returns an allow/deny decision (often along with Problem Details for deny).
+  - Guards are typically applied at external-input boundaries (start/step submissions) and for read endpoints.
+
+- **Guard subjourney**
+  - A local subjourney (`spec.subjourneys`) that exists primarily to implement a guard/access check.
+  - Guard internals run in the subjourney’s own context and only a minimal decision is returned to the caller.
+
+- **Read-access guard**
+  - An access guard evaluated by the engine for Journeys API read endpoints before returning `JourneyStatus` or
+    `JourneyOutcome`.
+  - In v1 discussions, the read-access guard is expressed as a guard subjourney referenced from
+    `spec.access.read.guardRef`.
+
+- **Deny semantics** (conceal vs explicit)
+  - How the engine responds when an access check denies:
+    - **Conceal**: respond as if the resource does not exist (commonly HTTP 404).
+    - **Explicit deny**: respond as “forbidden” (commonly HTTP 403).
+
+## External-input & request segments
+
+- **External-input state**
+  - A state that pauses a journey instance and requires a later submission to continue (`type: wait` or
+    `type: webhook`).
+
+- **External-input step endpoint**
+  - The HTTP subresource exposed for an external-input state:
+    `POST /api/v1/journeys/{journeyId}/steps/{stepId}`, where `stepId` equals the state id.
+
+- **Step submission**
+  - An HTTP request that targets an external-input step endpoint and supplies the step payload to resume execution.
+
+- **Request segment** (per-request execution segment)
+  - The slice of execution that occurs while processing one inbound request (a start request or a step submission),
+    running synchronously until the journey either:
+    - reaches the next external-input state, or
+    - terminates (`succeed`/`fail`).
+  - “Request-scoped” data is visible only within a request segment and is not persisted across external-input
+    boundaries.
+
+## Execution data & lifetimes
+
+- **Context**
+  - The mutable JSON object that represents a journey instance’s execution state.
+  - Persisted as part of the journey instance across `wait`/`webhook` boundaries, except for explicitly
+    request-scoped fields (see `context.payload`).
+
+- **Step payload** (`context.payload`)
+  - The validated request body of a start/step submission as stashed by the engine into `context.payload` for the
+    duration of the request segment.
+  - While a journey is paused at an external-input state, `context.payload` is absent; journeys that need to retain
+    any part of a submission across re-entry must explicitly copy selected fields into a stable `context` subtree.
+
+- **Durable vs request-scoped**
+  - **Durable**: data persisted with the journey instance (most of `context`, plus tags/attributes).
+  - **Request-scoped**: data that is available only while processing a single inbound request segment (for example
+    `context.payload` and header passthrough values).
+
 ## Behaviour – explicit vs implicit
 
 - **Explicit behaviour**

@@ -151,8 +151,9 @@ However:
 
 In other words:
 
-- Knowing a `journeyId` is necessary to access a journey instance.
-- It is not sufficient by itself when the journey’s access policy requires a subject or role.
+- Knowing a `journeyId` is necessary to identify a journey instance.
+- It is not sufficient by itself when the journey’s access policy requires a subject or role to perform a protected
+  interaction (for example advancing a journey via a step submission).
 
 ### 3. Introduce “journey access binding” as a first-class concept
 
@@ -165,8 +166,10 @@ JourneyForge will introduce **journey access binding** as a first-class architec
   - The set of participants (subjects and roles) that are allowed to interact with that journey,
   - Together with the rules that determine which participant may perform which operation at which point in the journey.
 
-Access binding is implemented entirely by journey logic using context-level data; this ADR explicitly does **not**
-introduce any new dedicated DSL block or top-level access-control surface.
+Access binding is implemented primarily by journey logic using context-level data. This ADR does **not** introduce a
+general-purpose access-control policy model in the DSL. Instead, it standardises access enforcement as:
+- Explicit, journey-authored control flow for mutating interactions, and
+- A minimal read-access guard hook for Journeys API read endpoints that reuses the same journey-authored logic.
 
 - Journeys store whatever subject and attribute information they need in `context` (for example
   `context.identity.*` or `context.participants.*`), using existing DSL constructs.
@@ -175,21 +178,24 @@ introduce any new dedicated DSL block or top-level access-control surface.
 - Participant slots such as `requester`, `approver`, `payer`, `observer` are modelling conventions expressed via
   ordinary context fields; the DSL does not define a special `participants` structure beyond that.
 
-The engine MUST evaluate access binding on every external call:
+Access binding enforcement is expressed via **journey-authored control flow**:
 
-- `POST /journeys/{journeyName}/start`
-- `POST /journeys/{journeyId}/steps/{stepId}`
-- `GET /journeys/{journeyId}`
-- `GET /journeys/{journeyId}/result`
-
-given:
-
-- The journey instance (including its access binding state).
-- The requested operation (route and step).
-- The caller’s identity (if any).
-
-If the binding rules deny access, the engine MUST respond with an appropriate error (for example `403` with a
-machine-readable error body consistent with the error model ADR).
+- For mutating operations (`/start` and `/steps/{stepId}`), journeys enforce access binding by executing explicit auth
+  checks and comparisons in the state graph (for example `jwtValidate:v1` / `mtlsValidate:v1` / `apiKeyValidate:v1`
+  tasks followed by `choice` and explicit allow/deny routing).
+- For Journeys API read operations (`GET /journeys/{journeyId}` and `GET /journeys/{journeyId}/result`), journeys MAY
+  declare a reusable read-access guard as a local subjourney and reference it via a minimal DSL hook (for example
+  `spec.access.read.guardRef`). The engine evaluates that guard against a snapshot of the stored journey context and
+  the current request, and denies the read when the guard indicates denial. Denial is surfaced as HTTP 404 to avoid
+  disclosing journey existence and MUST be indistinguishable from the “journey not found” case. Read-guard evaluation
+  MUST NOT persist mutations to the stored journey context by default.
+- The Journeys API HTTP status codes indicate the success/failure of the API call, not the business/access outcome:
+  journeys do not support per-journey HTTP status remapping for the Journeys API endpoints; denial is represented via
+  journey-defined outcome/error data (for example Problem Details written into `context` and projected in step
+  responses) and by remaining at or routing back to an external-input state. (`kind: Api` endpoints may use
+  `spec.bindings.http.apiResponses` to map selected failures to HTTP status codes such as 401/403.)
+- Transport/boundary enforcement (for example an API gateway returning `401/403`) remains a platform concern outside
+  the DSL; such errors are treated as transport/protocol failures rather than journey-defined outcomes.
 
 ### 4. Authentication remains external, identity flows are supported
 
@@ -207,7 +213,7 @@ These components present identity to JourneyForge via:
 JourneyForge:
 
 - Consumes that identity as input (e.g. via bindings into `context`).
-- Applies journey access binding rules using that identity.
+- Makes that identity available to journeys so they can apply access binding rules in-graph.
 - Does **not** issue browser sessions or general-purpose tokens.
 
 For **identity journeys** (for example authentication flows):
@@ -383,16 +389,18 @@ Let gateways or reverse proxies fully decide who can call which journey operatio
 
 ### Alternative 4 – Dedicated DSL block for access binding
 
-Introduce a new, dedicated DSL surface (for example `spec.access` or `spec.accessBinding`) to describe participants,
-roles, and per-step access rules declaratively.
+Introduce a new, dedicated DSL surface (for example `spec.accessBinding`) to describe participants, roles, and per-step
+access rules declaratively (beyond the minimal read-access guard hook used for Journeys API reads).
 
 **Reasons rejected:**
 
 - Conflicts with the intent of ADR-0010 to avoid a first-class, cross-journey subject concept in the generic DSL.
 - Adds a second, specialised access-control sub-DSL when the same behaviour can be expressed using existing constructs
   (context fields + DataWeave predicates in journey logic).
-- The decision owner explicitly requires access control and subject binding to be implemented by journeys themselves via
-  context data and comparisons in external-input steps, without introducing a new DSL access-binding block.
+- Access control and subject binding for mutating operations must be implemented by journeys themselves via context data
+  and comparisons in external-input steps. The only DSL-level hook in scope is a minimal read-access guard reference for
+  Journeys API reads (for example `spec.access.read.guardRef`), which reuses journey-authored logic rather than
+  introducing declarative participants/roles.
 
 ## Follow-ups
 
@@ -412,8 +420,10 @@ If this ADR is accepted, follow-up work includes:
 
 3. **Runtime enforcement**
    - Ensure the runtime:
-     - Evaluates access binding on all external-input operations.
-     - Emits structured error responses (aligned with the error model ADR) when access is denied.
+     - Makes inbound identity available to journeys (via request context and bindings) so journeys can perform access
+       binding checks in-graph on external-input operations.
+     - Keeps Journeys API HTTP semantics stable (no journey-defined HTTP status remapping); access denial is expressed
+       via journey outcomes and step responses, while boundary `401/403` remains platform-level.
 
 4. **Examples and templates**
    - Add example journeys and Arazzo workflows demonstrating:

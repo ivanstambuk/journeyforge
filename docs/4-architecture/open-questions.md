@@ -13,3 +13,4 @@ Hard rules:
 
 | ID | Owner | Question | Options (A preferred) | Status | Asked | Notes |
 |----|-------|----------|------------------------|--------|-------|-------|
+| Q-026 | Ivan | Schedule bindings management API: how do we expose listing and cancellation of schedule bindings (identifier and plane)? | A) Admin-plane Schedule resource with opaque `scheduleId` (recommended) B) Journeys API exposes `/schedules` and applies journey-style access control (guards) C) No API surface; schedules are managed only indirectly via journeys/plugins | Open | 2025-12-15 | Grounding: ADR-0017 defines internal `scheduleId` + identity key; Feature 001 notes mgmt endpoints are TBD. Decide what’s externally addressable and by whom. |

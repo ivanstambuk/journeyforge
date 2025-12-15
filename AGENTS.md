@@ -81,6 +81,7 @@ Single-line `expr: "..."` is still valid but should be avoided in new specs and 
     6. **Decision Card isolation:** when asking for a decision, the assistant MUST send a message that contains **only** the Decision Card (no additional background/explanations, no extra questions). If the human asks for background or a definition, answer that in a separate message and then re-send the Decision Card in the next message.
     7. **No “quick A/B” questions:** the assistant MUST NOT ask A/B (or multiple-choice) questions outside the Decision Card format. If a choice is needed, it MUST be tracked in `docs/4-architecture/open-questions.md` and asked as an isolated Decision Card. Purely factual clarifications (no options) are still allowed as short questions.
     8. **Decision Card context:** every Decision Card MUST include sufficient high/medium-level context (as defined by `docs/4-architecture/spec-guidelines/open-questions-format.md`) so the human can make an informed decision without follow-up questions.
+    9. **Workspace-first answers:** before presenting options for any design/spec/ADR decision, the assistant MUST consult the workspace as the source of truth (search + open the relevant DSL/ADR/spec sections) and base the Decision Card’s context on what the repository currently specifies, not on chat memory. The Decision Card’s “Current behaviour / contract today” and “Key references” bullets MUST cite the consulted file paths/sections.
 
 ### Owner preference – options-first for design
 
